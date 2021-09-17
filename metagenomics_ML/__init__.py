@@ -15,4 +15,4 @@ __author__ = "Nicolas de Montigny"
 __date__   = "20210601"
 __version__ = "0.1.0"
 
-__all__ = ['data', 'models', 'utils','simulation']
+__all__ = ['data', 'models', 'simulation', 'main', 'utils']

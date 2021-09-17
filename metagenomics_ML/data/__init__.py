@@ -13,4 +13,4 @@
 
 __author__ = "Nicolas de Montigny"
 
-__all__ = ['kmer_collections', 'seq_collections']
+__all__ = ['build_data', 'kmer_collections', 'seq_collections']

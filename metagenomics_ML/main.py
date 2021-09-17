@@ -1,19 +1,141 @@
 #!/usr/bin/env python
 
 from data.build_data import *
+from models.host_removal import *
+
+import pandas as pd
+
+import sys
+import configparser
+import os.path
+from os import makedirs
+from collections import defaultdict
+from pprint import pprint
 
 __author__ = "nicolas"
 
-# K-mers extraction + profiles
+# Part 0 - Initialisation / extraction of parameters from config file
+################################################################################
 
-#build_load_save_data(seq_file, cls_file, prefix, dataset, k=4, full_kmers=False, low_var_threshold=None)
+if __name__ == "__main__":
 
-# Testing
-#build_load_save_data("/home/nicolas/github/mlr_kgenomvir/data/viruses/HBV01/data.fa", "/home/nicolas/github/mlr_kgenomvir/data/viruses/HBV01/class.csv", "/home/nicolas/github/metagenomics_ML_exp/local/results/test/metagenomics_ML/", "HBV01", full_kmers=True, k=6)
+    if len(sys.argv) != 2:
+        print("Config file is missing ! ! !")
+        sys.exit()
+
+    print("Running {}".format(sys.argv[0]), flush=True)
+
+    # Get argument values from ini file
+    config_file = sys.argv[1]
+    config = configparser.ConfigParser(
+            interpolation=configparser.ExtendedInterpolation())
+
+    with open(config_file, "r") as cf:
+        config.read_file(cf)
+
+    # names
+    database = config.get("name", "database")
+    metagenome = config.get("name", "metagenome")
+
+    # io
+    database_seq_file = config.get("io", "database_seq_file")
+    database_cls_file = config.get("io", "database_cls_file")
+    metagenome_seq_file = config.get("io", "metagenome_seq_file")
+    outdir = config.get("io", "outdir")
+
+    # seq_rep
+    # main evaluation parameters
+    k_lenght = config.getint("seq_rep", "k")
+    fullKmers = config.getboolean("seq_rep", "full_kmers")
+    lowVarThreshold = config.get("seq_rep", "low_var_threshold", fallback=None)
+
+# MAYBE SOME NOT NEEDED
+    # evaluation
+    cv_folds = config.getint("evaluation", "cv_folds")
+    eval_metric = config.get("evaluation", "eval_metric")
+    avrg_metric = config.get("evaluation", "avrg_metric")
+
+    # classifier
+    bacteria_classifier = config.get("classifier", "binary_classifier")
+
+# MAYBE SOME NOT NEEDED
+    # settings
+    n_mainJobs = config.getint("settings", "n_main_jobs")
+    n_cvJobs = config.getint("settings", "n_cv_jobs")
+    verbose = config.getint("settings", "verbose")
+
+    bacteria_saving_mode = config.get("settings", "binary_save_mode")
+    saveData = config.getboolean("settings", "save_data")
+    saveModels = config.getboolean("settings", "save_models")
+    saveResults = config.getboolean("settings", "save_results")
+    plotResults = config.getboolean("settings", "plot_results")
+    randomState = config.getint("settings", "random_state")
+
+    # Check lowVarThreshold
+    if lowVarThreshold == "None":
+        lowVarThreshold = None
+    else:
+        lowVarThreshold = float(lowVarThreshold)
+
+    # Tags for prefix out
+    if fullKmers:
+        tag_kf = "F"
+    elif lowVarThreshold:
+        tag_kf = "V"
+    else:
+        tag_kf = "S"
+
+    # OutDir folder
+    outdir = os.path.join(outdir,metagenome)
+    makedirs(outdir, mode=0o700, exist_ok=True)
+    outdir = os.path.join(outdir,tag_kf)
+
+# Part 1 - K-mers profile extraction
+################################################################################
+
+    # Database
+    k_profile_database = build_load_save_data(database_seq_file,
+        database_cls_file,
+        outdir,
+        database,
+        k = k_lenght,
+        full_kmers = fullKmers,
+        low_var_threshold = lowVarThreshold
+    )
+
+    # Metagenome
+    k_profile_metagenome = build_load_save_data(metagenome_seq_file,
+        "metagenome",
+        outdir,
+        metagenome,
+        k = k_lenght,
+        full_kmers = fullKmers,
+        low_var_threshold = lowVarThreshold
+    )
+
+# Part 2 - Binary classification of bacteria / prokaryote sequences
+################################################################################
+
+    bacterial_metagenome = bacteria_extraction(k_profile_metagenome,
+        k_profile_database,
+        k_lenght,
+        outdir,
+        database,
+        classifier = bacteria_classifier,
+        verbose = verbose,
+        saving_mode = bacteria_saving_mode
+    )
+
+# Part 3 - Multiclass classification of bacterial sequences
+################################################################################
+
+# MAYBE ADD PARAMETERS FOR CLASSIFIERS
+
+# MAYBE ADD STEP FOR ABUNDANCE
 
 
-# Host removal / binary bacterial sequences extraction
+# Part 4 - Classification refinement / flexible classification
+################################################################################
 
-# Classification de séquences bactériennes
-
-# New sequences identification / classification refinement
+# Part 5 - (OPTIONAL) New sequences identification / clustering
+################################################################################

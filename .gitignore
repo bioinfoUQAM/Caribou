@@ -1,0 +1,4 @@
+# ignore testing output
+data/output
+data/
+metagenomics_ML/models/host_removal_supervised.py

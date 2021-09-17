@@ -120,7 +120,7 @@ class SeenKmersCollection(KmersCollection):
 
     def __init__(self, sequences, k=5, sparse=None,
             dtype=np.uint64, alphabet="ACGT"):
-        self.k = k
+        self.k = int(k)
         self.sparse = sparse
         self.dtype = dtype
         self.alphabet = alphabet
@@ -233,8 +233,9 @@ def build_kmers(seq_data, k, full_kmers=False, low_var_threshold=None,
 def build_kmers_Xy_data(seq_data, k, full_kmers=False, low_var_threshold=None,
         sparse=None, dtype=np.uint64):
 
-    X_data = build_kmers(seq_data, k, full_kmers, low_var_threshold,
-            sparse, dtype).data
+    collection = build_kmers(seq_data, k, full_kmers, low_var_threshold,sparse, dtype)
+    kmers_list = collection.kmers_list
+    X_data = collection.data
     y_data = np.asarray(seq_data.labels)
 
-    return X_data, y_data
+    return X_data, y_data, kmers_list

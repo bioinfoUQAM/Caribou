@@ -10,7 +10,7 @@ from Bio.SeqRecord import SeqRecord
 __all__ = ['SeqCollection']
 
 # From mlr_kgenomvir
-__author__ = "Amine Remita"
+__author__ = "Amine Remita" # Adapted by Nicolas de Montigny
 
 class SeqCollection(UserList):
 
@@ -41,40 +41,59 @@ class SeqCollection(UserList):
         self.labels = []
         self.label_map = {}
         self.label_ind = defaultdict(list)
+        self.ids = []
+        self.id_map = {}
+        self.id_ind = defaultdict(list)
 
         # If arguments are two files
         # Fasta file and annotation file
-        if isinstance(arg, tuple):
+        if isinstance(arg, tuple) and arg[1] != "community":
             self.data = self.read_bio_file(arg[0])
             self.label_map = self.read_class_file(arg[1])
-            self.__set_labels()
+            self.__set_labels(arg)
+            self.__set_ids()
+
+        elif isinstance(arg, tuple) and arg[1] == "community":
+            print("community")
+            self.data = self.read_bio_file(arg[0])
+            self.__set_labels(arg)
+            self.__set_ids()
+
 
         # If argument is a list of labeled seq records
         elif isinstance(arg, list):
             #self.data = arg
             self.data = copy.deepcopy(arg)
             self.__get_labels()
+            self.__set_ids()
 
         # If argument is SeqCollection object
         elif isinstance(arg, self.__class__):
             #self.data = arg.data[:]
             self.data = copy.deepcopy(arg.data)
             self.__get_labels()
+            self.__set_ids()
 
         # why?
         else:
             self.data = list(copy.deepcopy(arg))
             self.__get_labels()
+            self.__set_ids()
 
-    def __set_labels(self):
+    def __set_labels(self, arg):
         for ind, seqRecord in enumerate(self.data):
-            if seqRecord.id in self.label_map:
+            if seqRecord.id in self.label_map and arg[1] != "community":
                 seqRecord.label = self.label_map[seqRecord.id]
                 self.labels.append(self.label_map[seqRecord.id])
                 self.label_ind[seqRecord.label].append(ind)
 
+            elif arg[1] == "community" :
+                seqRecord.label = seqRecord.id
+                self.labels.append(seqRecord.id)
+                self.label_ind["UNKNOWN"].append(ind)
+
             else:
-                print("No label label for {}\n".format(seqRecord.id))
+                print("No label for {}\n".format(seqRecord.id))
                 self.labels.append("UNKNOWN")
                 self.label_ind["UNKNOWN"].append(ind)
 
@@ -87,6 +106,10 @@ class SeqCollection(UserList):
 
         for ind, seqRecord in enumerate(self.data):
             self.label_ind[seqRecord.label].append(ind)
+
+    def __set_ids(self):
+        for seqRecord in self.data:
+            self.ids.append(seqRecord.id)
 
     def __getitem__(self, ind):
         # TODO
@@ -121,8 +144,7 @@ class SeqCollection(UserList):
     def read_class_file(cls, my_file):
 
         with open(my_file, "r") as fh:
-            #return dict(map(lambda x: (x[0], x[1]), (line.rstrip("\n").split(sep)
-            return dict(map(lambda x: (x[0], x[1]), (re.split(r'[\t,;\s]', line.rstrip("\n"))
+            return dict(map(lambda x: (x[0], x[1]), (re.split(r'[\t\s,;:]', line.rstrip("\n"))
                         for line in fh if not line.startswith("#"))))
 
     @classmethod
@@ -209,23 +231,3 @@ class SeqCollection(UserList):
     def write(self, fasta_file, class_file):
        self.write_fasta(self.data, fasta_file)
        self.write_classes(self.label_map, class_file)
-
-if __name__ == "__main__":
-    cls_file = "../data/viruses/HBV/HBV_geo.csv"
-    seq_file = "../data/viruses/HBV/HBV_geo.fasta"
-
-    # clas = SeqCollection.read_class_file(cls_file, "\t")
-    # seqs = [ seq for seq in SeqCollection.read_bio_file(seq_file) if seq.id in clas]
-
-    # print(clas)
-    # with open("../data/viruses/HBV/HBV_geo.fasta", "w") as output_handle:
-    #    SeqIO.write(seqs, output_handle, "fasta")
-
-    #seqco = SeqCollection((seq_file, cls_file))
-    #print(seqco.data[0:3])
-    #print(type(seqco.data[0:3]))
-
-    # seqs = SeqCollection(seq for seq in SeqCollection.read_bio_file(seq_file))
-    # print(seqs)
-    # print(seqs.label_map)
-    # print(type(seqs))
