@@ -13,4 +13,4 @@
 
 __author__ = "Nicolas de Montigny"
 
-__all__ = ['classification','host_removal']
+__all__ = ['classification','bacteria_extraction']

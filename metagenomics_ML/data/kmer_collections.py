@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 import re
 from collections import defaultdict
 from itertools import product
+from Bio import SeqIO
 
 import numpy as np
 from scipy.sparse import csr_matrix, csc_matrix
@@ -15,7 +16,7 @@ __all__ = [ 'FullKmersCollection', 'SeenKmersCollection',
         'build_kmers', 'build_kmers_Xy_data']
 
 # From mlr_kgenomvir
-__author__ = "Amine Remita"
+__author__ = "Amine Remita" # Adapted by Nicolas de Montigny
 
 # #####
 # Helper functions
@@ -233,9 +234,26 @@ def build_kmers(seq_data, k, full_kmers=False, low_var_threshold=None,
 def build_kmers_Xy_data(seq_data, k, full_kmers=False, low_var_threshold=None,
         sparse=None, dtype=np.uint64):
 
-    collection = build_kmers(seq_data, k, full_kmers, low_var_threshold,sparse, dtype)
+    collection = build_kmers(seq_data, k, full_kmers, low_var_threshold, sparse, dtype)
     kmers_list = collection.kmers_list
     X_data = collection.data
     y_data = np.asarray(seq_data.labels)
 
     return X_data, y_data, kmers_list
+
+def build_kmers_X_data(seq_file, k, full_kmers=False, low_var_threshold=None,
+        sparse=None, dtype=np.uint64):
+
+    ids = []
+    sequences = []
+
+    with open(seq_file) as handle:
+        for record in SeqIO.parse(handle, "fasta"):
+            ids.append(record.id)
+            sequences.append(str(record.seq))
+
+    collection = build_kmers(sequences, k, full_kmers, low_var_threshold, sparse, dtype)
+    kmers_list = collection.kmers_list
+    X_data = collection.data
+
+    return X_data, kmers_list, ids

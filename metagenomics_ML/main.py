@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 from data.build_data import *
-from models.host_removal import *
+from models.bacteria_extraction import *
 
 import pandas as pd
 
@@ -64,7 +64,10 @@ if __name__ == "__main__":
     n_cvJobs = config.getint("settings", "n_cv_jobs")
     verbose = config.getint("settings", "verbose")
 
-    bacteria_saving_mode = config.get("settings", "binary_save_mode")
+    bacteria_saving = config.get("settings", "binary_save_others")
+    bacteria_cv = config.get("settings", "binary_cross_val")
+
+# Amine -> ideas to adapt saving
     saveData = config.getboolean("settings", "save_data")
     saveModels = config.getboolean("settings", "save_models")
     saveResults = config.getboolean("settings", "save_results")
@@ -93,9 +96,8 @@ if __name__ == "__main__":
 # Part 1 - K-mers profile extraction
 ################################################################################
 
-    # Database
-    k_profile_database = build_load_save_data(database_seq_file,
-        database_cls_file,
+    # Reference Database
+    k_profile_database = build_load_save_data((database_seq_file, database_cls_file),
         outdir,
         database,
         k = k_lenght,
@@ -103,9 +105,8 @@ if __name__ == "__main__":
         low_var_threshold = lowVarThreshold
     )
 
-    # Metagenome
+    # Metagenome to analyse
     k_profile_metagenome = build_load_save_data(metagenome_seq_file,
-        "metagenome",
         outdir,
         metagenome,
         k = k_lenght,
@@ -113,9 +114,10 @@ if __name__ == "__main__":
         low_var_threshold = lowVarThreshold
     )
 
+
 # Part 2 - Binary classification of bacteria / prokaryote sequences
 ################################################################################
-
+"""
     bacterial_metagenome = bacteria_extraction(k_profile_metagenome,
         k_profile_database,
         k_lenght,
@@ -123,8 +125,10 @@ if __name__ == "__main__":
         database,
         classifier = bacteria_classifier,
         verbose = verbose,
-        saving_mode = bacteria_saving_mode
+        saving = bacteria_saving,
+        cv = bacteria_cv
     )
+"""
 
 # Part 3 - Multiclass classification of bacterial sequences
 ################################################################################

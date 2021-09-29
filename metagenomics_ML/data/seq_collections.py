@@ -10,7 +10,7 @@ from Bio.SeqRecord import SeqRecord
 __all__ = ['SeqCollection']
 
 # From mlr_kgenomvir
-__author__ = "Amine Remita" # Adapted by Nicolas de Montigny
+__author__ = "Amine Remita"
 
 class SeqCollection(UserList):
 
@@ -47,15 +47,15 @@ class SeqCollection(UserList):
 
         # If arguments are two files
         # Fasta file and annotation file
-        if isinstance(arg, tuple) and arg[1] != "community":
+        if isinstance(arg, tuple):
             self.data = self.read_bio_file(arg[0])
             self.label_map = self.read_class_file(arg[1])
             self.__set_labels(arg)
             self.__set_ids()
 
-        elif isinstance(arg, tuple) and arg[1] == "community":
-            print("community")
+        elif isinstance(arg, tuple):
             self.data = self.read_bio_file(arg[0])
+# Argument pour pas de classe idem en bas
             self.__set_labels(arg)
             self.__set_ids()
 
@@ -82,15 +82,10 @@ class SeqCollection(UserList):
 
     def __set_labels(self, arg):
         for ind, seqRecord in enumerate(self.data):
-            if seqRecord.id in self.label_map and arg[1] != "community":
+            if seqRecord.id in self.label_map:
                 seqRecord.label = self.label_map[seqRecord.id]
                 self.labels.append(self.label_map[seqRecord.id])
                 self.label_ind[seqRecord.label].append(ind)
-
-            elif arg[1] == "community" :
-                seqRecord.label = seqRecord.id
-                self.labels.append(seqRecord.id)
-                self.label_ind["UNKNOWN"].append(ind)
 
             else:
                 print("No label for {}\n".format(seqRecord.id))

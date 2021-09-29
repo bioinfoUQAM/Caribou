@@ -1,4 +1,4 @@
 # ignore testing output
 data/output
+data/db_full
 data/metagenome/mock_raw_data
-metagenomics_ML/models/host_removal_supervised.py
