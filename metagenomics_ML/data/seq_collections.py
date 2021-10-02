@@ -1,8 +1,9 @@
-from os.path import splitext
+from os.path import splitext,dirname
 import re
 import copy
 import random
 from collections import UserList, defaultdict
+import gzip
 
 from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
@@ -48,28 +49,23 @@ class SeqCollection(UserList):
         # If arguments are two files
         # Fasta file and annotation file
         if isinstance(arg, tuple):
-            self.data = self.read_bio_file(arg[0])
-            self.label_map = self.read_class_file(arg[1])
-            self.__set_labels(arg)
-            self.__set_ids()
-
-        elif isinstance(arg, tuple):
-            self.data = self.read_bio_file(arg[0])
-# Argument pour pas de classe idem en bas
-            self.__set_labels(arg)
-            self.__set_ids()
-
-
+            try:
+                self.data = self.read_bio_file(arg[0])
+                self.label_map = self.read_class_file(arg[1])
+                self.__set_labels()
+                self.__set_ids()
+            except:
+                self.label_map = self.read_class_file(arg[1])
+                self.data = self.iterate_bio_file(arg[0])
+                
         # If argument is a list of labeled seq records
         elif isinstance(arg, list):
-            #self.data = arg
             self.data = copy.deepcopy(arg)
             self.__get_labels()
             self.__set_ids()
 
         # If argument is SeqCollection object
         elif isinstance(arg, self.__class__):
-            #self.data = arg.data[:]
             self.data = copy.deepcopy(arg.data)
             self.__get_labels()
             self.__set_ids()
@@ -80,7 +76,7 @@ class SeqCollection(UserList):
             self.__get_labels()
             self.__set_ids()
 
-    def __set_labels(self, arg):
+    def __set_labels(self):
         for ind, seqRecord in enumerate(self.data):
             if seqRecord.id in self.label_map:
                 seqRecord.label = self.label_map[seqRecord.id]
@@ -91,6 +87,15 @@ class SeqCollection(UserList):
                 print("No label for {}\n".format(seqRecord.id))
                 self.labels.append("UNKNOWN")
                 self.label_ind["UNKNOWN"].append(ind)
+
+    def __append_label(self, id, ind):
+        if id in self.label_map:
+            self.labels.append(self.label_map[id])
+            self.label_ind[self.label_map[id]].append(ind)
+        else:
+            print("No label for {}\n".format(id))
+            self.labels.append("UNKNOWN")
+            self.label_ind["UNKNOWN"].append(ind)
 
     def __get_labels(self):
 
@@ -105,6 +110,9 @@ class SeqCollection(UserList):
     def __set_ids(self):
         for seqRecord in self.data:
             self.ids.append(seqRecord.id)
+
+    def __append_id(self, id):
+        self.ids.append(id)
 
     def __getitem__(self, ind):
         # TODO
@@ -126,12 +134,40 @@ class SeqCollection(UserList):
 
         return self.__class__(self.data[ind])
 
+    # Write seqRecord informations to file to save on memory
+    def iterate_bio_file(self, my_file):
+        path, ext = splitext(my_file)
+        ext = ext.lstrip(".")
+
+        if ext in ["fa","fna"]:
+            ext = "fasta"
+        elif ext == "gz":
+            path, ext = splitext(path)
+            ext = ext.lstrip(".")
+            if ext in ["fa","fna"]:
+                ext = "fasta"
+
+        with gzip.open(my_file, "rt") as handle_in:
+            records = SeqIO.parse(handle_in, ext)
+            ind = 0
+            while True:
+                try:
+                    record = next(records)
+                    record.label = self.__append_label(record.id, ind)
+                    self.__append_id(record.id)
+                    ind += 1
+                except StopIteration:
+                    False
+
+        return my_file
+
     @classmethod
     def read_bio_file(cls, my_file):
         path, ext = splitext(my_file)
         ext = ext.lstrip(".")
 
-        if ext == "fa" : ext = "fasta"
+        if ext in ["fa","fna"]:
+            ext = "fasta"
 
         return list(seqRec for seqRec in SeqIO.parse(my_file, ext))
 

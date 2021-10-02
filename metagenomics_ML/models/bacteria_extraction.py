@@ -1,22 +1,21 @@
+
 import pandas as pd
 import numpy as np
 
 import sys
 import os
 
-from sklearn import metrics, model_selection
+from sklearn import model_selection
 from sklearn.preprocessing import StandardScaler
-from sklearn.svm import OneClassSVM
+from sklearn.svm import OneClassSVM, LinearSVC
 from sklearn.neighbors import LocalOutlierFactor
-from sklearn.svm import LinearSVC
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.neighbors import KNeighborsClassifier
-from data.build_data import load_Xy_data, save_Xy_data
 
 from keras.models import Sequential
 from keras.layers import Dense, LSTM
 
-from data.build_data import load_Xy_data, save_Xy_data
+from utils import training_cross_validation, load_Xy_data, save_Xy_data
 
 from joblib import dump, load
 
@@ -125,25 +124,33 @@ def extract_bacteria_multi(clf, k_mers, bacteria_kmers_file, virus_kmers_file, a
 def extract_bacteria_binary(clf, k_mers, bacteria_kmers_file, unclassified_kmers_file, verbose = 1, saving = 1):
     if verbose:
         print("Extracting binary predicted bacteria and unknowns")
+
     predict = clf.predict(k_mers)
     bacteria = pd.DataFrame(columns = k_mers.columns)
+
     if saving:
         unclassified = pd.DataFrame(columns = k_mers.columns)
+
         for i in range(len(predict)):
             if predict[i] == 1:
                 bacteria = bacteria.append(pd.DataFrame(k_mers.iloc[i]).transpose())
             elif predict[i] == -1:
                 unclassified = unclassified.append(pd.DataFrame(k_mers.iloc[i]).transpose())
+
         save_Xy_data(bacteria, bacteria_kmers_file)
         save_Xy_data(unclassified, unclassified_kmers_file)
+
     else:
         for i in range(len(predict)):
             if predict[i] == 1:
                 bacteria = bacteria.append(pd.DataFrame(k_mers.iloc[i]).transpose())
+
         save_Xy_data(bacteria, bacteria_kmers_file)
 
     return bacteria
 
+
+# POSSIBILITY OF ADDING SEMI-SUPERVISED
 def training(X_train, y_train, classifier = "multiSVM", verbose = 1, cv = 1):
     if classifier == "oneSVM":
         if verbose:
@@ -206,18 +213,3 @@ def build_LSTM():
     model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
 
     return model
-
-def training_cross_validation(y_pred_test, y_test, classifier):
-    print("Cross validating classifier : " + str(classifier))
-
-    print("y_pred_test : ")
-    print(y_pred_test)
-    print("y_test : ")
-    print(y_test)
-
-    print("Confidence matrix : ")
-    print(str(metrics.confusion_matrix(y_pred_test, y_test)))
-    print("Precision : " + str(metrics.precision_score(y_pred_test, y_test)))
-    print("Recall : " + str(metrics.recall_score(y_pred_test, y_test)))
-    print("F-score : " + str(metrics.f1_score(y_pred_test, y_test)))
-    print("AUC ROC : " + str(metrics.roc_auc_score(y_pred_test, y_test)))

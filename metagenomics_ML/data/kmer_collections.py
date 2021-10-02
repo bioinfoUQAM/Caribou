@@ -60,6 +60,21 @@ class KmersCollection(ABC):
 
         return self
 
+    def __compute_kmers_from_file(self, sequences):
+        with gzip.open(sequences, "rt") as handle:
+            records = SeqIO(handle, "fasta")
+            i = 0
+            while True:
+                try:
+                    record = next(records)
+                    self.ids.append(record.id)
+                    self._compute_kmers_of_sequence(record.seq._data, i)
+                    i += 1
+                except StopIteration:
+                    False
+
+        return self
+
     def __compute_kmers_from_strings(self, sequences):
         for i, seq in enumerate(sequences):
             self._compute_kmers_of_sequence(seq, i)
@@ -69,8 +84,10 @@ class KmersCollection(ABC):
 
     def _compute_kmers(self, sequences):
         if isinstance(sequences, SeqCollection):
-            self.__compute_kmers_from_collection(sequences)
-
+            if os.path.isfile(sequences.data):
+                self.__compute_kmers_from_file(sequences.data)
+            else:
+                self.__compute_kmers_from_collection(sequences)
         else:
             self.__compute_kmers_from_strings(sequences)
 
@@ -97,7 +114,7 @@ class FullKmersCollection(KmersCollection):
         self.alphabet = alphabet
         #
         self.ids = []
-        self.v_size = np.power(len(self.alphabet), self.k)
+        self.v_size = np.power(len(self.alphabet), int(self.k))
         self.data = np.zeros((len(sequences), self.v_size), dtype=self.dtype)
         self.kmers_list = ["".join(t) for t in product(alphabet, repeat=k)]
         #
@@ -107,11 +124,11 @@ class FullKmersCollection(KmersCollection):
     def _compute_kmers_of_sequence(self, sequence, ind):
         search = re.compile("^["+self.alphabet+"]+$").search
 
-        for i in range(len(sequence) - self.k + 1):
-            kmer = sequence[i:i + self.k]
+        for i in range(len(sequence) - int(self.k) + 1):
+            kmer = sequence[i:i + int(self.k)]
 
             if self.alphabet and bool(search(kmer)) or not self.alphabet:
-                ind_kmer = get_index_from_kmer(kmer, self.k)
+                ind_kmer = get_index_from_kmer(kmer, int(self.k))
                 self.data[ind][ind_kmer] += 1
 
         return self
@@ -139,8 +156,8 @@ class SeenKmersCollection(KmersCollection):
     def _compute_kmers_of_sequence(self, sequence, ind):
         search = re.compile("^["+self.alphabet+"]+$").search
 
-        for i in range(len(sequence) - self.k + 1):
-            kmer = sequence[i:i + self.k]
+        for i in range(len(sequence) - int(self.k) + 1):
+            kmer = sequence[i:i + int(self.k)]
 
             if self.alphabet and bool(search(kmer)) or not self.alphabet:
                 self.dict_data[kmer][ind] += 1

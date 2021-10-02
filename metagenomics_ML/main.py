@@ -2,6 +2,7 @@
 
 from data.build_data import *
 from models.bacteria_extraction import *
+from models.classification import *
 
 import pandas as pd
 
@@ -9,13 +10,13 @@ import sys
 import configparser
 import os.path
 from os import makedirs
-from collections import defaultdict
-from pprint import pprint
 
 __author__ = "nicolas"
 
 # Part 0 - Initialisation / extraction of parameters from config file
 ################################################################################
+
+# CHANGE PARAMETERS TO BE MORE PRECISE / INSTINCTIVE IN CONFIG FILE
 
 if __name__ == "__main__":
 
@@ -117,18 +118,18 @@ if __name__ == "__main__":
 
 # Part 2 - Binary classification of bacteria / prokaryote sequences
 ################################################################################
-"""
-    bacterial_metagenome = bacteria_extraction(k_profile_metagenome,
-        k_profile_database,
-        k_lenght,
-        outdir,
-        database,
-        classifier = bacteria_classifier,
-        verbose = verbose,
-        saving = bacteria_saving,
-        cv = bacteria_cv
-    )
-"""
+
+    for classifier in ["oneSVM","lof","multiSVM","forest","knn","lstm"]:
+        bacterial_metagenome = bacteria_extraction(k_profile_metagenome,
+            k_profile_database,
+            k_lenght,
+            outdir,
+            database,
+            classifier = bacteria_classifier,
+            verbose = verbose,
+            saving = bacteria_saving,
+            cv = bacteria_cv
+        )
 
 # Part 3 - Multiclass classification of bacterial sequences
 ################################################################################
@@ -137,9 +138,10 @@ if __name__ == "__main__":
 
 # MAYBE ADD STEP FOR ABUNDANCE
 
-
 # Part 4 - Classification refinement / flexible classification
 ################################################################################
+
+# convert identification en np.array/list/dict de nb reads pr chaque sp
 
 # Part 5 - (OPTIONAL) New sequences identification / clustering
 ################################################################################
