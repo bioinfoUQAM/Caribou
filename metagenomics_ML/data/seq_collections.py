@@ -1,9 +1,10 @@
-from os.path import splitext,dirname
 import re
 import copy
 import random
-from collections import UserList, defaultdict
 import gzip
+import tables as tb
+from os.path import splitext, dirname, isfile
+from collections import UserList, defaultdict
 
 from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
@@ -11,7 +12,15 @@ from Bio.SeqRecord import SeqRecord
 __all__ = ['SeqCollection']
 
 # From mlr_kgenomvir
-__author__ = "Amine Remita"
+__author__ = "Nicolas de Montigny"
+
+"""
+Module adapted from module seq_collections.py of
+mlr_kgenomvir package [Remita et al. 2021]
+
+Keeps SeqRecords in file instead parsing them to memory
+and adapted / added functions to do so.
+"""
 
 class SeqCollection(UserList):
 
@@ -45,19 +54,17 @@ class SeqCollection(UserList):
         self.ids = []
         self.id_map = {}
         self.id_ind = defaultdict(list)
+        self.length = 0
 
         # If arguments are two files
         # Fasta file and annotation file
         if isinstance(arg, tuple):
-            try:
-                self.data = self.read_bio_file(arg[0])
-                self.label_map = self.read_class_file(arg[1])
-                self.__set_labels()
-                self.__set_ids()
-            except:
-                self.label_map = self.read_class_file(arg[1])
-                self.data = self.iterate_bio_file(arg[0])
-                
+            self.label_map = self.read_class_file(arg[1])
+            self.data = self.read_bio_file(arg[0])
+
+        elif isfile(arg):
+            self.data = self.read_bio_file(arg)
+
         # If argument is a list of labeled seq records
         elif isinstance(arg, list):
             self.data = copy.deepcopy(arg)
@@ -92,6 +99,9 @@ class SeqCollection(UserList):
         if id in self.label_map:
             self.labels.append(self.label_map[id])
             self.label_ind[self.label_map[id]].append(ind)
+        elif not self.label_map:
+            self.labels.append("UNKNOWN")
+            self.label_ind["UNKNOWN"].append(ind)
         else:
             print("No label for {}\n".format(id))
             self.labels.append("UNKNOWN")
@@ -134,42 +144,46 @@ class SeqCollection(UserList):
 
         return self.__class__(self.data[ind])
 
-    # Write seqRecord informations to file to save on memory
-    def iterate_bio_file(self, my_file):
+    def read_bio_file(self, my_file):
         path, ext = splitext(my_file)
         ext = ext.lstrip(".")
 
         if ext in ["fa","fna"]:
             ext = "fasta"
+            with open(my_file, "r") as handle_in:
+                records = SeqIO.parse(handle_in, ext)
+                ind = 0
+                error = False
+                while not error:
+                    try:
+                        record = next(records)
+                        record.label = self.__append_label(record.id, ind)
+                        self.__append_id(record.id)
+                        ind += 1
+                    except StopIteration as e:
+                        error = True
+                self.length = ind
         elif ext == "gz":
             path, ext = splitext(path)
             ext = ext.lstrip(".")
             if ext in ["fa","fna"]:
                 ext = "fasta"
-
-        with gzip.open(my_file, "rt") as handle_in:
-            records = SeqIO.parse(handle_in, ext)
-            ind = 0
-            while True:
-                try:
-                    record = next(records)
-                    record.label = self.__append_label(record.id, ind)
-                    self.__append_id(record.id)
-                    ind += 1
-                except StopIteration:
-                    False
+            with gzip.open(my_file, "rt") as handle_in:
+                records = SeqIO.parse(handle_in, ext)
+                ind = 0
+                error = False
+                while not error:
+                    try:
+                        record = next(records)
+                        record.label = self.__append_label(record.id, ind)
+                        self.__append_id(record.id)
+                        ind += 1
+                    except StopIteration as e:
+                        error = True
+                self.length = ind
 
         return my_file
 
-    @classmethod
-    def read_bio_file(cls, my_file):
-        path, ext = splitext(my_file)
-        ext = ext.lstrip(".")
-
-        if ext in ["fa","fna"]:
-            ext = "fasta"
-
-        return list(seqRec for seqRec in SeqIO.parse(my_file, ext))
 
     @classmethod
     def read_class_file(cls, my_file):

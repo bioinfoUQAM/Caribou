@@ -14,7 +14,6 @@ from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier, Bagging
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.naive_bayes import MultinomialNB
 
-
 from utils import training_cross_validation, load_Xy_data, save_Xy_data
 
 from joblib import dump, load
@@ -42,16 +41,16 @@ def bacterial_classification(bacteria_k_mers, database_k_mers, k, prefix, datase
     y_train = pd.DataFrame(database_k_mers["y"].astype(np.int32), index = database_k_mers["ids"])
 
 # ADD TAXA RANKS
-        # Load classifier if already trained
-        if os.path.isfile(clf_file):
-            clf = load(clf_file)
-        else:
-            # Train/test classifier
-            clf = training(X_train, y_train, classifier = classifier, verbose = verbose)
-            dump(clf, clf_file)
+    # Load classifier if already trained
+    if os.path.isfile(clf_file):
+        clf = load(clf_file)
+    else:
+        # Train/test classifier
+        clf = training(X_train, y_train, classifier = classifier, verbose = verbose)
+        dump(clf, clf_file)
 
-        # Classify sequences into taxa / unclassified and return k-mers profiles + classification
-        classified, unclassified = classify(clf, k_mers, taxa, classified, unclassified, classified_file, unclassified_file, verbose = verbose, saving = saving)
+    # Classify sequences into taxa / unclassified and return k-mers profiles + classification
+    classified, unclassified = classify(clf, k_mers, taxa, classified, unclassified, classified_file, unclassified_file, verbose = verbose, saving = saving)
 
     return classified
 
@@ -83,9 +82,9 @@ def training(X_train, y_train, classifier = "multiSVM", verbose = 1):
         if verbose:
             print("Training multiclass classifier with Multinomial Naive Bayes")
         clf = MultinomialNB()
-    elif classifier == "regression":
+    elif classifier == "mlr":
         if verbose:
-            print("Training multiclass classifier with Logistic Regression")
+            print("Training multiclass classifier with Multiple Logistic Regression")
         clf = LogisticRegression(penalty = "l2", solver = "saga", multi_class = "multinomial", n_jobs = -1, random_state = 42)
     elif classifier == "bag":
         if verbose:
@@ -104,7 +103,7 @@ def training(X_train, y_train, classifier = "multiSVM", verbose = 1):
                                             ("forest",RandomForestClassifier(n_estimators = 100, random_state = 42)),
                                             ("knn",KNeighborsClassifier(random_state = 42)),
                                             ("NB",MultinomialNB()),
-                                            ("regression",LogisticRegression(penalty = "l2", solver = "saga", multi_class = "multinomial", random_state = 42)),
+                                            ("mlr",LogisticRegression(penalty = "l2", solver = "saga", multi_class = "multinomial", random_state = 42)),
                                             ("bagging",BaggingClassifier(KNeighborsClassifier(), random_state = 42)),
                                             ("boosting",AdaBoostClassifier(KNeighborsClassifier(), random_state = 42))],
                                             voting = "soft",
@@ -112,7 +111,7 @@ def training(X_train, y_train, classifier = "multiSVM", verbose = 1):
 #    elif classifier == "NN":
 #        print("possibility of using neural network from articles/invention")
     else:
-        print("Classifier type unknown !!! \n Models implemented at this moment are \n :  MetaVW (metaVW), Linear SVM (multiSVM), Random forest (forest), \nKNN clustering (knn), bagging (bag), Adaboost (boost), Multinomial Bayes (NB), Linear regression (regression) and Multiclassifiers concensus (consensus)")
+        print("Classifier type unknown !!! \n Models implemented at this moment are \n :  MetaVW (metaVW), Linear SVM (multiSVM), Random forest (forest), \nKNN clustering (knn), bagging (bag), Adaboost (boost), Multinomial Bayes (NB), Multiple Linear Regression (mlr) and Multiclassifiers concensus (consensus)")
         sys.exit()
 
     if cv:

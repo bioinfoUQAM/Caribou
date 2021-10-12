@@ -1,47 +1,51 @@
 
 import pandas as pd
 import numpy as np
+import tables as tb
 
 import sys
 import os
 
 from sklearn import model_selection
+from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
-from sklearn.svm import OneClassSVM, LinearSVC
+from sklearn.svm import LinearSVC
 from sklearn.neighbors import LocalOutlierFactor
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.neighbors import KNeighborsClassifier
+from sklearn.linear_model import SGDOneClassSVM
 
 from keras.models import Sequential
 from keras.layers import Dense, LSTM
 
-from utils import training_cross_validation, load_Xy_data, save_Xy_data
+from utils import *
+from data.generators import DataGenerator, DataGeneratorKeras
 
 from joblib import dump, load
 
 __author__ = "nicolas"
 
-def bacteria_extraction(metagenome_k_mers, database_k_mers, k, prefix, dataset, classifier = "multiSVM", verbose = 1, saving = 1, cv = 1):
-    bacteria_kmers_file = prefix + "_K{}_{}_Xy_bacteria_database_{}_data.hdf5.bz2".format(k, classifier, dataset)
+def bacteria_extraction(metagenome_k_mers, database_k_mers, k, prefix, dataset, classifier = "multiSVM", batch_size = 32, verbose = 1, saving = 1, cv = 1):
+    bacteria_kmers_file = prefix + "_K{}_{}_Xy_bacteria_database_{}_data.h5f".format(k, classifier, dataset)
 
     # Load extracted data if already exists or train and extract bacteria depending on chosen method
     if os.path.isfile(bacteria_kmers_file):
         bacteria = load_Xy_data(bacteria_kmers_file)
     else:
         if classifier in ["oneSVM","lof"]:
-            bacteria = bacteria_extraction_binary(metagenome_k_mers, database_k_mers, k, prefix, dataset, classifier, verbose, saving)
+            bacteria = bacteria_extraction_binary(metagenome_k_mers, database_k_mers, k, prefix, dataset, classifier, batch_size, verbose, saving, cv)
         else:
-            bacteria = bacteria_extraction_multi(metagenome_k_mers, database_k_mers, k, prefix, dataset, classifier, verbose, saving)
+            bacteria = bacteria_extraction_multi(metagenome_k_mers, database_k_mers, k, prefix, dataset, classifier, batch_size, verbose, saving, cv)
 
     return bacteria
 
-def bacteria_extraction_binary(metagenome_k_mers, database_k_mers, k, prefix, dataset, classifier = "multiSVM", verbose = 1, saving = 1, cv = 1):
-    bacteria_kmers_file = prefix + "_K{}_{}_Xy_bacteria_database_{}_data.hdf5.bz2".format(k, classifier, dataset)
-    unclassified_kmers_file = prefix + "_K{}_{}_Xy_unclassified_database_{}_data.hdf5.bz2".format(k, classifier, dataset)
+def bacteria_extraction_binary(metagenome_k_mers, database_k_mers, k, prefix, dataset, classifier = "oneSVM", batch_size = 32, verbose = 1, saving = 1, cv = 1):
+    bacteria_kmers_file = prefix + "_K{}_{}_Xy_bacteria_database_{}_data.h5f".format(k, classifier, dataset)
+    unclassified_kmers_file = prefix + "_K{}_{}_Xy_unclassified_database_{}_data.h5f".format(k, classifier, dataset)
     clf_file = prefix + "_K{}_{}_bacteria_binary_classifier_{}_model.joblib".format(k, classifier, dataset)
 
     # Get training dataset and assign to variables
-    X_train = pd.DataFrame(StandardScaler().fit_transform(database_k_mers["X"]), columns = database_k_mers["kmers_list"], index = database_k_mers["ids"])
+    X_train = database_k_mers["X"]
     y_train = pd.DataFrame(database_k_mers["y"], index = database_k_mers["ids"])
     y_train.loc[y_train[0] == "bacteria"] = 1
     y_train.loc[y_train[0] != 1] = -1
@@ -50,34 +54,36 @@ def bacteria_extraction_binary(metagenome_k_mers, database_k_mers, k, prefix, da
     if os.path.isfile(clf_file):
         clf = load(clf_file)
     else:
-        clf = training(X_train, y_train, classifier = classifier, verbose = verbose, cv = cv)
-        dump(clf, clf_file)
-
+        clf = training(X_train, y_train, database_k_mers, classifier = classifier, batch_size = batch_size, verbose = verbose, cv = cv)
+        #dump(clf, clf_file)
+    """
     # Classify sequences into bacteria / unclassified and return k-mers profiles for bacteria
     bacteria = extract_bacteria_binary(clf, pd.DataFrame(metagenome_k_mers["X"], columns = metagenome_k_mers["kmers_list"], index = metagenome_k_mers["ids"]), bacteria_kmers_file, unclassified_kmers_file, verbose = verbose, saving = saving)
 
     return bacteria
-
+    """
 def bacteria_extraction_multi(metagenome_k_mers, database_k_mers, k, prefix, dataset, classifier = "multiSVM", verbose = 1, saving = 1, cv = 1):
-    bacteria_kmers_file = prefix + "_K{}_{}_Xy_bacteria_database_{}_data.hdf5.bz2".format(k, classifier, dataset)
-    virus_kmers_file = prefix + "_K{}_{}_Xy_virus_database_{}_data.hdf5.bz2".format(k, classifier, dataset)
-    animals_kmers_file = prefix + "_K{}_{}_Xy_animals_database_{}_data.hdf5.bz2".format(k, classifier, dataset)
-    plants_kmers_file = prefix + "_K{}_{}_Xy_plants_database_{}_data.hdf5.bz2".format(k, classifier, dataset)
-    fungi_kmers_file = prefix + "_K{}_{}_Xy_fungi_database_{}_data.hdf5.bz2".format(k, classifier, dataset)
-    protists_kmers_file = prefix + "_K{}_{}_Xy_protists_database_{}_data.hdf5.bz2".format(k, classifier, dataset)
+    bacteria_kmers_file = prefix + "_K{}_{}_Xy_bacteria_database_{}_data.h5f".format(k, classifier, dataset)
+    virus_kmers_file = prefix + "_K{}_{}_Xy_virus_database_{}_data.h5f".format(k, classifier, dataset)
+    animals_kmers_file = prefix + "_K{}_{}_Xy_animals_database_{}_data.h5f".format(k, classifier, dataset)
+    plants_kmers_file = prefix + "_K{}_{}_Xy_plants_database_{}_data.h5f".format(k, classifier, dataset)
+    fungi_kmers_file = prefix + "_K{}_{}_Xy_fungi_database_{}_data.h5f".format(k, classifier, dataset)
+    protists_kmers_file = prefix + "_K{}_{}_Xy_protists_database_{}_data.h5f".format(k, classifier, dataset)
     clf_file = prefix + "_K{}_{}_bacteria_multi_classifier_{}_model.joblib".format(k, classifier, dataset)
 
     # Get training dataset and assign to variables
-    X_train = pd.DataFrame(StandardScaler().fit_transform(database_k_mers["X"]), columns = database_k_mers["kmers_list"], index = database_k_mers["ids"])
-    y_train = pd.DataFrame(database_k_mers["y"].astype(np.int32), index = database_k_mers["ids"])
+    X_train = database_k_mers["X"]
+    y_train = pd.DataFrame(database_k_mers["y"][0], index = database_k_mers["ids"])
 
     # If classifier exists load it or train if not
     if os.path.isfile(clf_file):
         clf = load(clf_file)
     else:
-        clf = training(X_train, y_train, classifier = classifier, verbose = verbose, cv = cv)
-        dump(clf, clf_file)
+        clf = training(X_train, y_train, database_k_mers, classifier = classifier, batch_size = batch_size, verbose = verbose, cv = cv)
+        #dump(clf, clf_file)
 
+# FINISH ADAPTING FOR DATASTREAM
+    """
     # Classify sequences into known classes and return k-mers profiles for bacteria
     bacteria = extract_bacteria_multi(clf, pd.DataFrame(metagenome_k_mers["X"], columns = metagenome_k_mers["kmers_list"], index = metagenome_k_mers["ids"]), bacteria_kmers_file, virus_kmers_file, animals_kmers_file, plants_kmers_file, fungi_kmers_file, protists_kmers_file, verbose = verbose, saving = saving)
 
@@ -148,18 +154,20 @@ def extract_bacteria_binary(clf, k_mers, bacteria_kmers_file, unclassified_kmers
         save_Xy_data(bacteria, bacteria_kmers_file)
 
     return bacteria
-
-
+"""
+# USE SKLEARN partial_fit / MINI-BATCH PARAMETERS https://scikit-learn.org/stable/auto_examples/applications/plot_out_of_core_classification.html#sphx-glr-auto-examples-applications-plot-out-of-core-classification-py
+    # classes=list(np.unique(y_train))
 # POSSIBILITY OF ADDING SEMI-SUPERVISED
-def training(X_train, y_train, classifier = "multiSVM", verbose = 1, cv = 1):
+def training(X_train, y_train, kmers, classifier = "multiSVM", batch_size = 32, verbose = 1, cv = 1):
     if classifier == "oneSVM":
         if verbose:
             print("Training binary bacterial extractor with One Class SVM")
-        clf = OneClassSVM(gamma = 'scale', kernel = "rbf", nu = 0.5)
-    elif classifier == "lof":
-        if verbose:
-            print("Training binary bacterial extractor with Local Outlier Factor")
-        clf = LocalOutlierFactor(contamination = 0.5, novelty = True, n_jobs = -1)
+        # gamma = 2, nu = 0.05
+        clf = SGDOneClassSVM(nu = 0.05, random_state = 42, tol = 1e-4)
+#    elif classifier == "lof":
+#        if verbose:
+#            print("Training binary bacterial extractor with Local Outlier Factor")
+#        clf = LocalOutlierFactor(contamination = 0.5, novelty = True, n_jobs = -1)
     elif classifier == "multiSVM":
         if verbose:
             print("Training multiclass bacterial extractor with Linear SVM")
@@ -180,27 +188,22 @@ def training(X_train, y_train, classifier = "multiSVM", verbose = 1, cv = 1):
         print("Classifier type unknown !!! \n Models implemented at this moment are \n binary extractors :  One Class SVM (oneSVM) and Local Outlier Factor (lof) \n multiclass extractors : Linear SVM (multiSVM), Random forest (forest), KNN clustering (knn) and LSTM RNN (lstm)")
         sys.exit()
 
-    if cv:
-        if classifier == "lstm":
-            clf.fit(X_train, y_train, epochs=100, batch_size=27)
-            y_pred_test = clf.predict_generator(X_test)
-        else:
-            X_train, X_test, y_train, y_test = model_selection.train_test_split(X_train, y_train, test_size = 0.2, random_state = 42)
-            clf.fit(X_train, y_train)
-            y_pred_test = clf.predict(X_test)
+    # Scale X_train dataset
+    scaleX(X_train, y_train, batch_size, kmers, nb_classes = 6 if classifier != "oneSVM" else 1)
 
+# TESTER GENERATORS
+# Voir si peut utiliser celui de Keras avec sklearn classifiers
+    if cv:
+        y_pred_test, clf = fit_predict_cv(X_train, y_train, batch_size, kmers, classifier, clf, nb_classes = 6 if classifier != "oneSVM" else 1, cv = cv, shuffle = True)
         training_cross_validation(y_pred_test, list(y_test[0]), classifier)
+
     else:
-        if classifier == "lstm":
-            clf.fit(X_train, y_train, epochs=100, batch_size=27)
-        else:
-            clf.fit(X_train, y_train)
+        clf = fit_model(X_train, y_train, batch_size, kmers, classifier, clf, nb_classes = 6 if classifier != "oneSVM" else 1, cv = cv, shuffle = True)
 
     return clf
 
 # From Seeker train_model.py line 69
 def build_LSTM():
-    """Build the LSTM model for sequence classification."""
     # Initialize a sequential model
     model = Sequential()
 

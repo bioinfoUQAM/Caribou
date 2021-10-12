@@ -1,4 +1,6 @@
 # ignore testing output
-data/output
-data/db_full
+data/output/
+data/db_full/
 data/metagenome/mock_raw_data
+data/db_full_20/
+data/metagenome/

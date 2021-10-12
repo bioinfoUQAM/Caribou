@@ -1,12 +1,17 @@
 from .seq_collections import SeqCollection
 
-from abc import ABC, abstractmethod
 import re
+import os
+import gzip
+
+from abc import ABC, abstractmethod
 from collections import defaultdict
 from itertools import product
 from Bio import SeqIO
+from os.path import splitext
 
 import numpy as np
+import tables as tb
 from scipy.sparse import csr_matrix, csc_matrix
 from sklearn.feature_selection import VarianceThreshold
 
@@ -16,7 +21,15 @@ __all__ = [ 'FullKmersCollection', 'SeenKmersCollection',
         'build_kmers', 'build_kmers_Xy_data']
 
 # From mlr_kgenomvir
-__author__ = "Amine Remita" # Adapted by Nicolas de Montigny
+__author__ = "Nicolas de Montigny"
+
+"""
+Module adapted from module kmer_collections.py of
+mlr_kgenomvir package [Remita et al. 2021]
+
+Save kmers directly to drive instead of memory and
+adapted / added functions to do so.
+"""
 
 # #####
 # Helper functions
@@ -60,18 +73,44 @@ class KmersCollection(ABC):
 
         return self
 
+#TESTER SI FONCTIONNE BIEN ET NE RESTE PAS EN LOOP INFINIE
     def __compute_kmers_from_file(self, sequences):
-        with gzip.open(sequences, "rt") as handle:
-            records = SeqIO(handle, "fasta")
-            i = 0
-            while True:
-                try:
-                    record = next(records)
-                    self.ids.append(record.id)
-                    self._compute_kmers_of_sequence(record.seq._data, i)
-                    i += 1
-                except StopIteration:
-                    False
+        path, ext = splitext(sequences)
+        ext = ext.lstrip(".")
+
+        if ext in ["fa","fna"]:
+            ext = "fasta"
+            with open(sequences, "rt") as handle:
+                records = SeqIO.parse(handle, "fasta")
+                i = 0
+                error = False
+                while not error:
+                    try:
+                        record = next(records)
+                        self.ids.append(record.id)
+                        self._compute_kmers_of_sequence(record.seq._data, i)
+                        i += 1
+                    except StopIteration as e:
+                        error = True
+
+        elif ext == "gz":
+            path, ext = splitext(path)
+            ext = ext.lstrip(".")
+            if ext in ["fa","fna"]:
+                ext = "fasta"
+
+            with gzip.open(sequences, "rt") as handle:
+                records = SeqIO.parse(handle, "fasta")
+                i = 0
+                error = False
+                while not error:
+                    try:
+                        record = next(records)
+                        self.ids.append(record.id)
+                        self._compute_kmers_of_sequence(record.seq._data, i)
+                        i += 1
+                    except StopIteration as e:
+                        error = True
 
         return self
 
@@ -106,20 +145,22 @@ class KmersCollection(ABC):
 
 class FullKmersCollection(KmersCollection):
 
-    def __init__(self, sequences, k=5, sparse=None,
+    def __init__(self, sequences, Xy_file, length, k=5, sparse=None,
             dtype=np.uint64, alphabet="ACGT"):
         self.k = k
         self.sparse = sparse
         self.dtype = dtype
         self.alphabet = alphabet
+        self.Xy_file = tb.open_file(Xy_file, "w")
+        self.length = length
         #
         self.ids = []
         self.v_size = np.power(len(self.alphabet), int(self.k))
-        self.data = np.zeros((len(sequences), self.v_size), dtype=self.dtype)
+        self.data = self.Xy_file.create_carray("/", "data", obj = np.zeros((self.length, self.v_size)))
         self.kmers_list = ["".join(t) for t in product(alphabet, repeat=k)]
         #
         self._compute_kmers(sequences)
-        self._convert_to_sparse_matrix()
+        self.Xy_file.close()
 
     def _compute_kmers_of_sequence(self, sequence, ind):
         search = re.compile("^["+self.alphabet+"]+$").search
@@ -129,29 +170,31 @@ class FullKmersCollection(KmersCollection):
 
             if self.alphabet and bool(search(kmer)) or not self.alphabet:
                 ind_kmer = get_index_from_kmer(kmer, int(self.k))
-                self.data[ind][ind_kmer] += 1
+                self.data[ind,ind_kmer] += 1
 
         return self
 
 
 class SeenKmersCollection(KmersCollection):
 
-    def __init__(self, sequences, k=5, sparse=None,
+    def __init__(self, sequences, Xy_file, length, k=5, sparse=None,
             dtype=np.uint64, alphabet="ACGT"):
         self.k = int(k)
         self.sparse = sparse
         self.dtype = dtype
         self.alphabet = alphabet
+        self.Xy_file = tb.open_file(Xy_file, "w")
+        self.length = length
         #
         self.ids = []
         self.v_size = 0
-        self.data = []
-        self.dict_data = defaultdict(lambda: [0]*len(sequences))
+        self.dict_data = defaultdict(lambda: [0]*self.length)
         self.kmers_list = []
+        self.data = "array"
         #
         self._compute_kmers(sequences)
         self.__construct_data()
-        self._convert_to_sparse_matrix()
+        self.Xy_file.close()
 
     def _compute_kmers_of_sequence(self, sequence, ind):
         search = re.compile("^["+self.alphabet+"]+$").search
@@ -169,48 +212,52 @@ class SeenKmersCollection(KmersCollection):
         self.kmers_list = list(self.dict_data)
         self.v_size = len(self.kmers_list)
 
-        # Convert to numpy
-        self.data = np.array([ self.dict_data[x] for x in self.dict_data ],
-                dtype=self.dtype).T
+        # Convert to numpy array and write directly to disk
+        self.data = self.Xy_file.create_carray("/", "data", obj = np.array([ self.dict_data[x] for x in self.dict_data ],dtype=self.dtype).T)
 
         return self
 
 
 class VarKmersCollection(SeenKmersCollection):
 
-    def __init__(self, sequences, low_var_threshold=0.0, k=5, sparse=None,
+    def __init__(self, sequences, Xy_file, length = 0, low_var_threshold=0.01, k=5, sparse=None,
             dtype=np.uint64, alphabet="ACGT"):
-        super().__init__(sequences, k=k, sparse=sparse,
+        super().__init__(sequences, Xy_file = Xy_file, length = length, k=k, sparse=sparse,
                 dtype=dtype, alphabet=alphabet)
 
         # Kmer selection based on variance
         selection = VarianceThreshold(threshold=low_var_threshold)
-        self.data = selection.fit_transform(self.data)
+        with tb.open_file(Xy_file, "r") as handle:
+            self.data = selection.fit_transform(handle.get_node("/", "data").read())
 
         # update kmer list
         self.v_size = self.data.shape[1]
         _support = selection.get_support()
         self.kmers_list = [ kmer for i, kmer in enumerate(self.kmers_list) if _support[i] ]
+        with tb.open_file(Xy_file, "w") as handle:
+            self.data = handle.create_carray("/", "data", obj = np.array(self.data,dtype=self.dtype))
 
 
 class GivenKmersCollection(KmersCollection):
 
-    def __init__(self, sequences, kmers_list, sparse=None,
+    def __init__(self, sequences, Xy_file, length, kmers_list, sparse=None,
             dtype=np.uint64, alphabet="ACGT"):
         self.sparse = sparse
         self.dtype = dtype
         self.alphabet = alphabet
         self.kmers_list = kmers_list
+        self.Xy_file = tb.open_file(Xy_file, "w")
+        self.length = length
         #
         self.k = len(self.kmers_list[0])
         self.__construct_kmer_indices()
         #
         self.ids = []
         self.v_size = len(self.kmers_list)
-        self.data = np.zeros((len(sequences), self.v_size), dtype=self.dtype)
+        self.data = self.Xy_file.create_carray("/", "data", obj = np.zeros(self.length, self.v_size), dtype=self.dtype)
         #
         self._compute_kmers(sequences)
-        self._convert_to_sparse_matrix()
+        self.Xy_file.close()
 
     def _compute_kmers_of_sequence(self, sequence, ind):
         for i in range(len(sequence) - self.k + 1):
@@ -218,7 +265,7 @@ class GivenKmersCollection(KmersCollection):
 
             if kmer in self.kmers_indices:
                 ind_kmer = self.kmers_indices[kmer]
-                self.data[ind][ind_kmer] += 1
+                self.data[ind,ind_kmer] += 1
 
         return self
 
@@ -232,45 +279,38 @@ class GivenKmersCollection(KmersCollection):
 # Data build functions
 # ####################
 
-def build_kmers(seq_data, k, full_kmers=False, low_var_threshold=None,
+def build_kmers(seq_data, k, Xy_file, length = 0, full_kmers=False, low_var_threshold=None,
         sparse=None, dtype=np.uint64):
 
     if full_kmers:
         return FullKmersCollection(
-                seq_data, k=k, sparse=sparse, dtype=dtype)
+                seq_data, Xy_file, length, k=k, sparse=sparse, dtype=dtype)
 
     elif low_var_threshold:
         return VarKmersCollection(
-                seq_data, low_var_threshold=low_var_threshold,
+                seq_data, Xy_file, length, low_var_threshold=low_var_threshold,
                 k=k, sparse=sparse, dtype=dtype)
     else:
         return SeenKmersCollection(
-                seq_data, k=k, sparse=sparse, dtype=dtype)
+                seq_data, Xy_file, length, k=k, sparse=sparse, dtype=dtype)
 
 
-def build_kmers_Xy_data(seq_data, k, full_kmers=False, low_var_threshold=None,
+def build_kmers_Xy_data(seq_data, k, Xy_file, length = 0, full_kmers=False, low_var_threshold=None,
         sparse=None, dtype=np.uint64):
 
-    collection = build_kmers(seq_data, k, full_kmers, low_var_threshold, sparse, dtype)
+    collection = build_kmers(seq_data, k, Xy_file, length, full_kmers, low_var_threshold, sparse, dtype)
     kmers_list = collection.kmers_list
     X_data = collection.data
     y_data = np.asarray(seq_data.labels)
 
     return X_data, y_data, kmers_list
 
-def build_kmers_X_data(seq_file, k, full_kmers=False, low_var_threshold=None,
+def build_kmers_X_data(seq_data, k, X_file, length = 0, full_kmers=False, low_var_threshold=None,
         sparse=None, dtype=np.uint64):
 
-    ids = []
-    sequences = []
-
-    with open(seq_file) as handle:
-        for record in SeqIO.parse(handle, "fasta"):
-            ids.append(record.id)
-            sequences.append(str(record.seq))
-
-    collection = build_kmers(sequences, k, full_kmers, low_var_threshold, sparse, dtype)
+    collection = build_kmers(seq_data, k, X_file, length, full_kmers, low_var_threshold, sparse, dtype)
     kmers_list = collection.kmers_list
     X_data = collection.data
+    ids = collection.ids
 
     return X_data, kmers_list, ids

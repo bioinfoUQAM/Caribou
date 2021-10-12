@@ -64,6 +64,7 @@ if __name__ == "__main__":
     n_mainJobs = config.getint("settings", "n_main_jobs")
     n_cvJobs = config.getint("settings", "n_cv_jobs")
     verbose = config.getint("settings", "verbose")
+    training_batch_size = config.getint("settings", "training_batch_size")
 
     bacteria_saving = config.get("settings", "binary_save_others")
     bacteria_cv = config.get("settings", "binary_cross_val")
@@ -115,20 +116,20 @@ if __name__ == "__main__":
         low_var_threshold = lowVarThreshold
     )
 
-
 # Part 2 - Binary classification of bacteria / prokaryote sequences
 ################################################################################
 
-    for classifier in ["oneSVM","lof","multiSVM","forest","knn","lstm"]:
-        bacterial_metagenome = bacteria_extraction(k_profile_metagenome,
-            k_profile_database,
-            k_lenght,
-            outdir,
-            database,
-            classifier = bacteria_classifier,
-            verbose = verbose,
-            saving = bacteria_saving,
-            cv = bacteria_cv
+#    for classifier in ["oneSVM","lof","multiSVM","forest","knn","lstm"]:
+    bacterial_metagenome = bacteria_extraction(k_profile_metagenome,
+        k_profile_database,
+        k_lenght,
+        outdir,
+        database,
+        classifier = bacteria_classifier,
+        batch_size = training_batch_size,
+        verbose = verbose,
+        saving = bacteria_saving,
+        cv = bacteria_cv
         )
 
 # Part 3 - Multiclass classification of bacterial sequences
