@@ -37,10 +37,13 @@ if __name__ == "__main__":
     # names
     database = config.get("name", "database")
     metagenome = config.get("name", "metagenome")
+    host = config.get("name", "host")
 
     # io
     database_seq_file = config.get("io", "database_seq_file")
     database_cls_file = config.get("io", "database_cls_file")
+    host_seq_file = config.get("io", "host_seq_file")
+    host_cls_file = config.get("io", "host_cls_file")
     metagenome_seq_file = config.get("io", "metagenome_seq_file")
     outdir = config.get("io", "outdir")
 
@@ -98,39 +101,53 @@ if __name__ == "__main__":
 # Part 1 - K-mers profile extraction
 ################################################################################
 
-    # Reference Database
-    k_profile_database = build_load_save_data((database_seq_file, database_cls_file),
-        outdir,
-        database,
-        k = k_lenght,
-        full_kmers = fullKmers,
-        low_var_threshold = lowVarThreshold
-    )
+    for k_length in range(4,20):
+        if host != "none":
+            # Reference Database and Host
+            k_profile_database = build_load_save_data((database_seq_file, database_cls_file),
+                (host_seq_file, host_cls_file),
+                outdir,
+                database,
+                k = k_lenght,
+                full_kmers = fullKmers,
+                low_var_threshold = lowVarThreshold
+            )
+        else:
+            # Reference Database Only
+            k_profile_database = build_load_save_data((database_seq_file, database_cls_file),
+                host,
+                outdir,
+                database,
+                k = k_lenght,
+                full_kmers = fullKmers,
+                low_var_threshold = lowVarThreshold
+            )
 
-    # Metagenome to analyse
-    k_profile_metagenome = build_load_save_data(metagenome_seq_file,
-        outdir,
-        metagenome,
-        k = k_lenght,
-        full_kmers = fullKmers,
-        low_var_threshold = lowVarThreshold
-    )
-
-# Part 2 - Binary classification of bacteria / prokaryote sequences
-################################################################################
-
-#    for classifier in ["oneSVM","lof","multiSVM","forest","knn","lstm"]:
-    bacterial_metagenome = bacteria_extraction(k_profile_metagenome,
-        k_profile_database,
-        k_lenght,
-        outdir,
-        database,
-        classifier = bacteria_classifier,
-        batch_size = training_batch_size,
-        verbose = verbose,
-        saving = bacteria_saving,
-        cv = bacteria_cv
+        # Metagenome to analyse
+        k_profile_metagenome = build_load_save_data(metagenome_seq_file,
+            "none",
+            outdir,
+            metagenome,
+            k = k_lenght,
+            full_kmers = fullKmers,
+            low_var_threshold = lowVarThreshold
         )
+
+    # Part 2 - Binary classification of bacteria / prokaryote sequences
+    ################################################################################
+
+    #    for classifier in ["oneSVM","lof","multiSVM","forest","knn","lstm"]:
+        bacterial_metagenome = bacteria_extraction(k_profile_metagenome,
+            k_profile_database,
+            k_lenght,
+            outdir,
+            database,
+            classifier = bacteria_classifier,
+            batch_size = training_batch_size,
+            verbose = verbose,
+            saving = bacteria_saving,
+            cv = bacteria_cv
+            )
 
 # Part 3 - Multiclass classification of bacterial sequences
 ################################################################################

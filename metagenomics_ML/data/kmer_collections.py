@@ -127,6 +127,12 @@ class KmersCollection(ABC):
                 self.__compute_kmers_from_file(sequences.data)
             else:
                 self.__compute_kmers_from_collection(sequences)
+        elif isinstance(sequences, tuple):
+            if os.path.isfile(sequences[0].data) and os.path.isfile(sequences[1].data):
+                self.__compute_kmers_from_file(sequences[0].data)
+                self.__compute_kmers_from_file(sequences[1].data)
+            else:
+                self.__compute_kmers_from_file(sequences[0].data)
         else:
             self.__compute_kmers_from_strings(sequences)
 
@@ -301,7 +307,10 @@ def build_kmers_Xy_data(seq_data, k, Xy_file, length = 0, full_kmers=False, low_
     collection = build_kmers(seq_data, k, Xy_file, length, full_kmers, low_var_threshold, sparse, dtype)
     kmers_list = collection.kmers_list
     X_data = collection.data
-    y_data = np.asarray(seq_data.labels)
+    if seq_data[1] == "none":
+        y_data = np.asarray(seq_data[0].labels)
+    else:
+        y_data = np.append(np.asarray(seq_data[0].labels), np.asarray(seq_data[1].labels))
 
     return X_data, y_data, kmers_list
 

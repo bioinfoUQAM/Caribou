@@ -25,6 +25,10 @@ from joblib import dump, load
 
 __author__ = "nicolas"
 
+# FINISH ADAPTING FOR DATASTREAM
+# ADAPT FOR BACT VS HOST OR ONE-CLASS + VERIF AU DÉBUT
+# USE METHODS USED IN ARTICLES OPENED IN CHROME
+
 def bacteria_extraction(metagenome_k_mers, database_k_mers, k, prefix, dataset, classifier = "multiSVM", batch_size = 32, verbose = 1, saving = 1, cv = 1):
     bacteria_kmers_file = prefix + "_K{}_{}_Xy_bacteria_database_{}_data.h5f".format(k, classifier, dataset)
 
@@ -82,7 +86,6 @@ def bacteria_extraction_multi(metagenome_k_mers, database_k_mers, k, prefix, dat
         clf = training(X_train, y_train, database_k_mers, classifier = classifier, batch_size = batch_size, verbose = verbose, cv = cv)
         #dump(clf, clf_file)
 
-# FINISH ADAPTING FOR DATASTREAM
     """
     # Classify sequences into known classes and return k-mers profiles for bacteria
     bacteria = extract_bacteria_multi(clf, pd.DataFrame(metagenome_k_mers["X"], columns = metagenome_k_mers["kmers_list"], index = metagenome_k_mers["ids"]), bacteria_kmers_file, virus_kmers_file, animals_kmers_file, plants_kmers_file, fungi_kmers_file, protists_kmers_file, verbose = verbose, saving = saving)

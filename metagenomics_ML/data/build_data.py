@@ -11,7 +11,7 @@ import pickle
 
 __author__ = "nicolas"
 
-def build_load_save_data(file, prefix, dataset, k=4, full_kmers=False, low_var_threshold=None):
+def build_load_save_data(file, hostfile, prefix, dataset, k=4, full_kmers=False, low_var_threshold=None):
 
     # Generate the names of files
     Xy_file = prefix + "_K{}_Xy_genome_{}_data.h5f".format(k,dataset)
@@ -25,23 +25,35 @@ def build_load_save_data(file, prefix, dataset, k=4, full_kmers=False, low_var_t
         if isinstance(file, tuple):
 # To accelerate testing with bigger database
             if not os.path.isfile("/home/nicolas/github/metagenomics_ML/data/output/mock/seq_data.txt"):
-               print("seq_data")
-               seq_data = SeqCollection((list(file)[0], list(file)[1]))
-               with open("/home/nicolas/github/metagenomics_ML/data/output/mock/seq_data.txt", "wb") as handle:
+                print("seq_data")
+                seq_data = SeqCollection((list(file)[0], list(file)[1]))
+                with open("/home/nicolas/github/metagenomics_ML/data/output/mock/seq_data.txt", "wb") as handle:
                     pickle.dump(seq_data, handle)
+                if isinstance(hostfile, tuple):
+                    seq_data_host = SeqCollection((list(hostfile)[0], list(hostfile)[1]))
+                    with open("/home/nicolas/github/metagenomics_ML/data/output/mock/seq_data_host.txt", "wb") as handle:
+                        pickle.dump(seq_data_host, handle)
             else:
                 with open("/home/nicolas/github/metagenomics_ML/data/output/mock/seq_data.txt", "rb") as handle:
                     seq_data = pickle.load(handle)
+                if isinstance(hostfile, tuple):
+                    with open("/home/nicolas/github/metagenomics_ML/data/output/mock/seq_data_host.txt", "rb") as handle:
+                        seq_data_host = pickle.load(handle)
 
-            print("Xy_data")
             # Build Xy_data to drive
-            data = build_Xy_data(seq_data, k, Xy_file, seq_data.length, full_kmers, low_var_threshold)
+            if isinstance(hostfile, tuple):
+                print("Xy_data with host")
+                data = build_Xy_data((seq_data, seq_data_host), k, Xy_file, seq_data.length, full_kmers, low_var_threshold)
+            else:
+                print("Xy_data without host")
+                data = build_Xy_data(seq_data, k, Xy_file, seq_data.length, full_kmers, low_var_threshold)
+
             save_Xy_data(data, data_file)
 
         else:
+            # Build X_data to drive
             print("X_data")
             seq_data = SeqCollection(file)
-            # Build X_data to drive
             data = build_X_data(seq_data, k, Xy_file, seq_data.length, full_kmers, low_var_threshold)
             save_Xy_data(data, data_file)
     return data
@@ -60,7 +72,10 @@ def build_Xy_data(seq_data, k, Xy_file, length = 0, full_kmers = False, low_var_
     data["X"] = str(Xy_file)
     data["y"] = y
     data["kmers_list"] = kmers
-    data["ids"] = seq_data.ids
+    if seq_data[1] == "none":
+        data["ids"] = seq_data[0].ids
+    else:
+        data["ids"] = np.append(seq_data[0].ids, seq_data[1].ids)
 
     return data
 

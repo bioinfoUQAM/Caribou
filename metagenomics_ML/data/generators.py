@@ -49,20 +49,21 @@ class DataGenerator():
 
     def iter_minibatch(self):
         start = 0
-        X, y = self.get_minibatch(self.positions_list[0:self.batch_size])
+        end = self.batch_size
         while start < self.len_array:
             if start < (self.len_array - self.batch_size):
+                X, y = self.get_minibatch(self.positions_list[start:end])
                 yield X, y
                 start = start + self.batch_size
-                X, y = cls.get_minibatch(self.positions_list[start:self.batch_size])
+                end = end + self.batch_size
             else:
-                X, y = cls.get_minibatch(self.positions_list[start:self.len_array])
-                start = self.len_array
+                X, y = self.get_minibatch(self.positions_list[start:end])
                 yield X, y
+                start = self.len_array
 
     def get_minibatch(self, positions):
-        X = pd.DataFrame(self.array.read()[positions], index = self.kmers["ids"][positions], columns = self.kmers["kmers_list"])
-        y = self.labels.iloc[positions][0]
+        X = pd.DataFrame(self.array.read()[positions[0]:positions[-1]], index = self.kmers["ids"][positions[0]:positions[-1]], columns = self.kmers["kmers_list"])
+        y = self.labels.iloc[positions[0]:positions[-1]][0]
         return X, y
 
 class DataGeneratorKeras(keras.utils.Sequence):
