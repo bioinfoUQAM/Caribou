@@ -4,13 +4,19 @@ import numpy as np
 import tables as tb
 
 import os
+import sys
 
 from sklearn import metrics
 from sklearn.preprocessing import StandardScaler
 
 from data.generators import DataGenerator
 
+import warnings
+
 __author__ = "nicolas"
+
+# Ignore warnings
+warnings.filterwarnings("ignore")
 
 # Load data from file
 def load_Xy_data(Xy_file):
@@ -19,44 +25,31 @@ def load_Xy_data(Xy_file):
             return f['data'].tolist()
 
 # Save data to file
-def save_Xy_data(data,Xy_file):
+def save_Xy_data(data, Xy_file):
     if type(data) == pd.core.frame.DataFrame:
-        data.to_hdf(Xy_file, key='df', mode='w', complevel = 9, complib = 'bzip2')
+        with tb.open_file(Xy_file, "a") as handle:
+            array = handle.create_carray("/", "data", obj = np.array(data,dtype=np.float32))
     elif type(data) == dict:
         np.savez(Xy_file, data=data)
 
 # Model training cross-validation stats
 def training_cross_validation(y_pred_test, y_test, classifier):
     print("Cross validating classifier : " + str(classifier))
-
-    print("y_pred_test : ")
-    print(y_pred_test)
-    print("y_test : ")
-    print(y_test)
-
     print("Confidence matrix : ")
-    print(str(metrics.confusion_matrix(y_pred_test, y_test)))
-    print("Precision : " + str(metrics.precision_score(y_pred_test, y_test)))
-    print("Recall : " + str(metrics.recall_score(y_pred_test, y_test)))
-    print("F-score : " + str(metrics.f1_score(y_pred_test, y_test)))
-    print("AUC ROC : " + str(metrics.roc_auc_score(y_pred_test, y_test)))
+    print(metrics.confusion_matrix(y_pred_test, y_test))
+    print("Precision : {}".format(str(metrics.precision_score(y_pred_test, y_test))))
+    print("Recall : {}".format(str(metrics.recall_score(y_pred_test, y_test))))
+    print("F-score : {}".format(str(metrics.f1_score(y_pred_test, y_test))))
+    #print("AUC ROC : {}".format(str(metrics.roc_auc_score(y_pred_test, y_test))))
 
-def fit_predict_cv(X_train, y_train, batch_size, kmers, classifier, clf, nb_classes, cv = 1, shuffle = True):
-    if classifier == "lstm":
+def fit_predict_cv(X_train, y_train, batch_size, kmers, ids, classifier, clf, cv = 1, shuffle = True, verbose = True):
+    # Scale X_train dataset
+    scaleX(X_train, y_train, batch_size, kmers, ids, verbose)
 
-        train_generator, val_generator, test_generator = iter_generator_keras(X_train, y_train, batch_size, kmers, nb_classes = nb_classes, cv = cv, shuffle = shuffle)
-        clf.fit_generator(generator = train_generator,
-                            validation_data = val_generator,
-                            use_multiprocessing = True,
-                            workers = os.cpu_count())
-
-        y_pred_test = clf.predict_generator(generator = test_generator,
-                                            use_multiprocessing = True,
-                                            workers = os.cpu_count())
-    else:
+    if classifier in ["onesvm","linearsvm"]:
         X_test = pd.DataFrame()
         y_test = pd.DataFrame()
-        generator = DataGenerator(X_train, y_train, batch_size, kmers, nb_classes = nb_classes, cv = cv, shuffle = shuffle)
+        generator = DataGenerator(X_train, y_train, batch_size, kmers, ids, cv = cv, shuffle = shuffle)
         for i, (X, y) in enumerate(generator.iterator_train):
                 clf.partial_fit(X, y)
         for i, (X, y) in enumerate(generator.iterator_test):
@@ -67,31 +60,110 @@ def fit_predict_cv(X_train, y_train, batch_size, kmers, classifier, clf, nb_clas
                 else:
                     X_test.append(X)
                     y_test.append(y)
-            except Error as e:
+            except:
                 print("File too large to cross validate on RAM")
                 sys.exit()
-
+        generator.handle.close()
         y_pred_test = clf.predict(X_test)
-    return y_pred_test, clf
 
-def fit_model(X_train, y_train, batch_size, kmers, classifier, clf, nb_classes, cv = 1, shuffle = True):
-    if classifier == "lstm":
-        train_generator, val_generator = iter_generator_keras(X_train, y_train, batch_size, kmers, nb_classes = nb_classes, cv = cv, shuffle = shuffle)
+    elif classifier in ["virnet","seeker"]:
+        train_generator, val_generator, test_generator = iter_generator_keras(X_train, y_train, batch_size, kmers, nb_classes = 2, cv = cv, shuffle = shuffle)
+        clf.fit_generator(generator = train_generator,
+                            validation_data = val_generator,
+                            use_multiprocessing = True,
+                            workers = os.cpu_count())
+
+        y_pred_test, y_test = clf.predict_generator(generator = test_generator,
+                                            use_multiprocessing = True,
+                                            workers = os.cpu_count())
+
+    return y_pred_test, y_test, clf
+
+def fit_model(X_train, y_train, batch_size, kmers, classifier, clf, cv = 1, shuffle = True, verbose = True):
+    # Scale X_train dataset
+    scaleX(X_train, y_train, batch_size, kmers, ids, verbose)
+
+    if classifier in ["onesvm","linearsvm"]:
+        generator = DataGenerator(X_train, y_train, batch_size, kmers, cv = cv, shuffle = shuffle)
+        for i, (X, y) in enumerate(generator.iterator):
+            clf.partial_fit(X, y)
+            generator.handle.close()
+    elif classifier in ["virnet","seeker"]:
+        train_generator, val_generator = iter_generator_keras(X_train, y_train, batch_size, kmers, nb_classes = 2, cv = cv, shuffle = shuffle)
         clf.fit_generator(generator = train_generator,
                             validation_data = val_generator,
                             use_multiprocessing = True,
                             workers = os.cpu_count())
         clf.fit(X, y, epochs = 100, batch_size = 32)
-    else:
-        generator = DataGenerator(X_train, y_train, batch_size, kmers, nb_classes = nb_classes, cv = cv, shuffle = shuffle)
-        for i, (X, y) in enumerate(generator.iterator):
-            clf.partial_fit(X, y)
 
     return clf
 
-def scaleX(X_train, y_train, batch_size, kmers, nb_classes, cv = 0, shuffle = False):
-    generator = DataGenerator(X_train, y_train, batch_size, kmers, nb_classes, cv = cv, shuffle = shuffle)
-    for i, (X, y) in enumerate(generator.iterator):
-        StandardScaler().partial_fit(X)
-    with tb.open_file(X_train, "w") as handle:
-        handle.root.data = handle.create_carray("/", "data", obj = np.array(StandardScaler().transform(handle.root.data.read()),dtype=np.int32))
+def model_predict(clf, X, kmers_list, ids, classifier, verbose = True):
+    predict = np.empty(len(ids))
+    y = pd.Series(range(len(ids)))
+    # Scale dataset
+    scaleX(X, y, 32, kmers_list, ids, verbose)
+
+    if classifier in ["onesvm","linearsvm"]:
+        generator = DataGenerator(X, y, 1, kmers_list, ids, cv = 0, shuffle = False)
+        for i, (X, y) in enumerate(generator.iterator):
+            predict[i] = clf.predict(X)
+        generator.handle.close()
+    elif classifier in ["virnet","seeker"]:
+        generator = iter_generator_keras(X, y, 1, kmers_list, nb_classes = 2, cv = 0, shuffle = False, training = False)
+        predict = clf.predict_generator(generator = generator,
+                                        use_multiprocessing = True,
+                                        workers = os.cpu_count())
+
+    return predict
+
+def save_predicted_kmers(positions_list, y, kmers_list, ids, infile, outfile):
+    data = False
+    generator = DataGenerator(infile, y, 1, kmers_list, ids, cv = 0, shuffle = False)
+    with tb.open_file(outfile, "a") as handle:
+        for i, (X, y) in enumerate(generator.iterator):
+            if i in positions_list and not data:
+                data = handle.create_earray("/", "data", obj = np.array(X))
+            elif i in positions_list and data:
+                data.append(np.array(X))
+    generator.handle.close()
+
+
+def scaleX(X_train, y_train, batch_size, kmers, ids, cv = 0, shuffle = False, verbose = True):
+    try:
+        generator = DataGenerator(X_train, y_train, batch_size, kmers, ids, cv = 0, shuffle = False)
+        for i, (X, y) in enumerate(generator.iterator):
+            scaler = StandardScaler().partial_fit(X)
+        generator.handle.close()
+        with tb.open_file(X_train, "a") as handle:
+            handle.root.scaled = handle.create_carray("/", "scaled", obj = np.array(scaler.transform(handle.root.data.read()),dtype=np.float32))
+    except tb.exceptions.NodeError:
+        if verbose:
+            print("Data already scaled")
+
+def merge_database_host(database_data, host_data):
+    merged_data = dict()
+
+    path, ext = os.path.splitext(database_data["X"])
+    merged_file = "{}_host_merged{}".format(path, ext)
+
+    merged_data["X"] = merged_file
+    merged_data["y"] = np.concatenate((database_data["y"], host_data["y"]))
+    merged_data["ids"] = database_data["ids"] + host_data["ids"]
+    merged_data["kmers_list"] = list(set(database_data["kmers_list"]).union(host_data["kmers_list"]))
+    merged_data["taxas"] = max(database_data["taxas"], host_data["taxas"], key = len)
+
+    generator_database = DataGenerator(database_data["X"], database_data["y"], 32, database_data["kmers_list"], database_data["ids"], cv = 0, shuffle = False)
+    generator_host = DataGenerator(host_data["X"], host_data["y"], 32, host_data["kmers_list"], host_data["ids"], cv = 0, shuffle = False)
+    if not os.path.isfile(merged_file):
+        data = False
+        with tb.open_file(merged_file, "a") as handle:
+            for (X_d, y_d), (X_h, y_h) in zip(generator_database.iterator, generator_host.iterator):
+                if not data:
+                    data = handle.create_earray("/", "data", obj = np.array(pd.merge(X_d, X_h, how = "outer")))
+                else:
+                    data.append(np.array(pd.merge(X_d, X_h, how = "outer")))
+        generator_database.handle.close()
+        generator_host.handle.close()
+
+    return merged_data

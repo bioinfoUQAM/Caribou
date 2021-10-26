@@ -49,7 +49,7 @@ if __name__ == "__main__":
 
     # seq_rep
     # main evaluation parameters
-    k_lenght = config.getint("seq_rep", "k")
+    k_length = config.getint("seq_rep", "k")
     fullKmers = config.getboolean("seq_rep", "full_kmers")
     lowVarThreshold = config.get("seq_rep", "low_var_threshold", fallback=None)
 
@@ -60,7 +60,7 @@ if __name__ == "__main__":
     avrg_metric = config.get("evaluation", "avrg_metric")
 
     # classifier
-    bacteria_classifier = config.get("classifier", "binary_classifier")
+    bacteria_classifier = config.get("classifier", "binary_classifier").lower()
 
 # MAYBE SOME NOT NEEDED
     # settings
@@ -69,8 +69,9 @@ if __name__ == "__main__":
     verbose = config.getint("settings", "verbose")
     training_batch_size = config.getint("settings", "training_batch_size")
 
-    bacteria_saving = config.get("settings", "binary_save_others")
-    bacteria_cv = config.get("settings", "binary_cross_val")
+    bacteria_saving_host = config.get("settings", "binary_save_host")
+    bacteria_saving_unclassified = config.get("settings", "binary_save_unclassified")
+    bacteria_cv = config.getint("settings", "binary_cross_val")
 
 # Amine -> ideas to adapt saving
     saveData = config.getboolean("settings", "save_data")
@@ -101,53 +102,68 @@ if __name__ == "__main__":
 # Part 1 - K-mers profile extraction
 ################################################################################
 
-    for k_length in range(4,20):
-        if host != "none":
-            # Reference Database and Host
-            k_profile_database = build_load_save_data((database_seq_file, database_cls_file),
-                (host_seq_file, host_cls_file),
-                outdir,
-                database,
-                k = k_lenght,
-                full_kmers = fullKmers,
-                low_var_threshold = lowVarThreshold
-            )
-        else:
-            # Reference Database Only
-            k_profile_database = build_load_save_data((database_seq_file, database_cls_file),
-                host,
-                outdir,
-                database,
-                k = k_lenght,
-                full_kmers = fullKmers,
-                low_var_threshold = lowVarThreshold
-            )
-
-        # Metagenome to analyse
-        k_profile_metagenome = build_load_save_data(metagenome_seq_file,
-            "none",
+    if host != "none":
+        # Reference Database and Host
+        k_profile_database, k_profile_host = build_load_save_data((database_seq_file, database_cls_file),
+            (host_seq_file, host_cls_file),
             outdir,
-            metagenome,
-            k = k_lenght,
+            database,
+            k = k_length,
+            full_kmers = fullKmers,
+            low_var_threshold = lowVarThreshold
+        )
+    else:
+        # Reference Database Only
+        k_profile_database = build_load_save_data((database_seq_file, database_cls_file),
+            host,
+            outdir,
+            database,
+            k = k_length,
             full_kmers = fullKmers,
             low_var_threshold = lowVarThreshold
         )
 
-    # Part 2 - Binary classification of bacteria / prokaryote sequences
-    ################################################################################
+    # Metagenome to analyse
+    k_profile_metagenome = build_load_save_data(metagenome_seq_file,
+        "none",
+        outdir,
+        metagenome,
+        k = k_length,
+        full_kmers = fullKmers,
+        low_var_threshold = lowVarThreshold
+    )
 
-    #    for classifier in ["oneSVM","lof","multiSVM","forest","knn","lstm"]:
-        bacterial_metagenome = bacteria_extraction(k_profile_metagenome,
-            k_profile_database,
-            k_lenght,
-            outdir,
-            database,
-            classifier = bacteria_classifier,
-            batch_size = training_batch_size,
-            verbose = verbose,
-            saving = bacteria_saving,
-            cv = bacteria_cv
-            )
+# Part 2 - Binary classification of bacteria / prokaryote sequences
+################################################################################
+
+# TESTER OTHER CLASSIFIERS
+    for bacteria_classifier in ["linearsvm","virnet","seeker"]:
+        if host == "none":
+            bacterial_metagenome = bacteria_extraction(k_profile_metagenome,
+                k_profile_database,
+                k_length,
+                outdir,
+                database,
+                classifier = bacteria_classifier,
+                batch_size = training_batch_size,
+                verbose = verbose,
+                cv = bacteria_cv,
+                saving_host = bacteria_saving_host,
+                saving_unclassified = bacteria_saving_unclassified
+                )
+        else:
+            bacterial_metagenome = bacteria_extraction(k_profile_metagenome,
+                (k_profile_database, k_profile_host),
+                k_length,
+                outdir,
+                database,
+                classifier = bacteria_classifier,
+                batch_size = training_batch_size,
+                verbose = verbose,
+                cv = bacteria_cv,
+                saving_host = bacteria_saving_host,
+                saving_unclassified = bacteria_saving_unclassified
+                )
 
 # Part 3 - Multiclass classification of bacterial sequences
 ################################################################################

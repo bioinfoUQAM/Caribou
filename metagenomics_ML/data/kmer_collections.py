@@ -11,6 +11,7 @@ from Bio import SeqIO
 from os.path import splitext
 
 import numpy as np
+import pandas as pd
 import tables as tb
 from scipy.sparse import csr_matrix, csc_matrix
 from sklearn.feature_selection import VarianceThreshold
@@ -127,12 +128,6 @@ class KmersCollection(ABC):
                 self.__compute_kmers_from_file(sequences.data)
             else:
                 self.__compute_kmers_from_collection(sequences)
-        elif isinstance(sequences, tuple):
-            if os.path.isfile(sequences[0].data) and os.path.isfile(sequences[1].data):
-                self.__compute_kmers_from_file(sequences[0].data)
-                self.__compute_kmers_from_file(sequences[1].data)
-            else:
-                self.__compute_kmers_from_file(sequences[0].data)
         else:
             self.__compute_kmers_from_strings(sequences)
 
@@ -220,10 +215,9 @@ class SeenKmersCollection(KmersCollection):
 
         # Convert to numpy array and write directly to disk
         self.data = self.Xy_file.create_carray("/", "data", obj = np.array([ self.dict_data[x] for x in self.dict_data ],dtype=self.dtype).T)
-
         return self
 
-
+# ADAPT WITH GENERATOR/EARRAY
 class VarKmersCollection(SeenKmersCollection):
 
     def __init__(self, sequences, Xy_file, length = 0, low_var_threshold=0.01, k=5, sparse=None,
@@ -240,7 +234,7 @@ class VarKmersCollection(SeenKmersCollection):
         self.v_size = self.data.shape[1]
         _support = selection.get_support()
         self.kmers_list = [ kmer for i, kmer in enumerate(self.kmers_list) if _support[i] ]
-        with tb.open_file(Xy_file, "w") as handle:
+        with tb.open_file(Xy_file, "a") as handle:
             self.data = handle.create_carray("/", "data", obj = np.array(self.data,dtype=self.dtype))
 
 
@@ -307,10 +301,7 @@ def build_kmers_Xy_data(seq_data, k, Xy_file, length = 0, full_kmers=False, low_
     collection = build_kmers(seq_data, k, Xy_file, length, full_kmers, low_var_threshold, sparse, dtype)
     kmers_list = collection.kmers_list
     X_data = collection.data
-    if seq_data[1] == "none":
-        y_data = np.asarray(seq_data[0].labels)
-    else:
-        y_data = np.append(np.asarray(seq_data[0].labels), np.asarray(seq_data[1].labels))
+    y_data = np.array(seq_data.labels)
 
     return X_data, y_data, kmers_list
 

@@ -3,6 +3,7 @@ import copy
 import random
 import gzip
 import tables as tb
+import pandas as pd
 from os.path import splitext, dirname, isfile
 from collections import UserList, defaultdict
 
@@ -55,11 +56,12 @@ class SeqCollection(UserList):
         self.id_map = {}
         self.id_ind = defaultdict(list)
         self.length = 0
+        self.taxas = []
 
         # If arguments are two files
         # Fasta file and annotation file
         if isinstance(arg, tuple):
-            self.label_map = self.read_class_file(arg[1])
+            self.labels, self.taxas = self.read_class_file(arg[1])
             self.data = self.read_bio_file(arg[0])
 
         elif isfile(arg):
@@ -97,7 +99,8 @@ class SeqCollection(UserList):
 
     def __append_label(self, id, ind):
         if id in self.label_map:
-            self.labels.append(self.label_map[id])
+            self.labels[ind,:]
+            #self.labels.append(self.label_map[id])
             self.label_ind[self.label_map[id]].append(ind)
         elif not self.label_map:
             self.labels.append("UNKNOWN")
@@ -152,17 +155,14 @@ class SeqCollection(UserList):
             ext = "fasta"
             with open(my_file, "r") as handle_in:
                 records = SeqIO.parse(handle_in, ext)
-                ind = 0
                 error = False
                 while not error:
                     try:
                         record = next(records)
-                        record.label = self.__append_label(record.id, ind)
                         self.__append_id(record.id)
-                        ind += 1
                     except StopIteration as e:
                         error = True
-                self.length = ind
+                self.length = len(self.ids)
         elif ext == "gz":
             path, ext = splitext(path)
             ext = ext.lstrip(".")
@@ -170,27 +170,22 @@ class SeqCollection(UserList):
                 ext = "fasta"
             with gzip.open(my_file, "rt") as handle_in:
                 records = SeqIO.parse(handle_in, ext)
-                ind = 0
                 error = False
                 while not error:
                     try:
                         record = next(records)
-                        record.label = self.__append_label(record.id, ind)
                         self.__append_id(record.id)
-                        ind += 1
                     except StopIteration as e:
                         error = True
-                self.length = ind
+                self.length = len(self.ids)
 
         return my_file
 
 
     @classmethod
     def read_class_file(cls, my_file):
-
-        with open(my_file, "r") as fh:
-            return dict(map(lambda x: (x[0], x[1]), (re.split(r'[\t\s,;:]', line.rstrip("\n"))
-                        for line in fh if not line.startswith("#"))))
+        csv = pd.read_csv(my_file, header = 0)
+        return csv.iloc[:,1:].to_numpy(), list(csv.iloc[:,1:].columns)
 
     @classmethod
     def write_fasta(cls, data, out_fasta):

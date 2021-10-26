@@ -16,14 +16,21 @@ def build_load_save_data(file, hostfile, prefix, dataset, k=4, full_kmers=False,
     # Generate the names of files
     Xy_file = prefix + "_K{}_Xy_genome_{}_data.h5f".format(k,dataset)
     data_file = prefix + "_K{}_Xy_genome_{}_data.npz".format(k,dataset)
+    Xy_file_host = prefix + "_K{}_Xy_genome_{}_host_data.h5f".format(k,dataset)
+    data_file_host = prefix + "_K{}_Xy_genome_{}_host_data.npz".format(k,dataset)
 
     # Load file if already exists
-    if os.path.isfile(data_file):
+    if os.path.isfile(data_file) and os.path.isfile(data_file_host) and isinstance(hostfile, tuple):
         data = load_Xy_data(data_file)
-
+        data_host = load_Xy_data(data_file_host)
+        return data, data_host
+    elif os.path.isfile(data_file):
+        data = load_Xy_data(data_file)
+        return data
     else:
         if isinstance(file, tuple):
 # To accelerate testing with bigger database
+# Possibility of adding option for user
             if not os.path.isfile("/home/nicolas/github/metagenomics_ML/data/output/mock/seq_data.txt"):
                 print("seq_data")
                 seq_data = SeqCollection((list(file)[0], list(file)[1]))
@@ -42,21 +49,25 @@ def build_load_save_data(file, hostfile, prefix, dataset, k=4, full_kmers=False,
 
             # Build Xy_data to drive
             if isinstance(hostfile, tuple):
-                print("Xy_data with host")
-                data = build_Xy_data((seq_data, seq_data_host), k, Xy_file, seq_data.length, full_kmers, low_var_threshold)
-            else:
-                print("Xy_data without host")
+                print("Xy_data with host with k = {}".format(k))
                 data = build_Xy_data(seq_data, k, Xy_file, seq_data.length, full_kmers, low_var_threshold)
-
-            save_Xy_data(data, data_file)
+                save_Xy_data(data, data_file)
+                data_host = build_Xy_data(seq_data_host, k, Xy_file_host, seq_data_host.length, full_kmers, low_var_threshold)
+                save_Xy_data(data_host, data_file_host)
+                return data, data_host
+            else:
+                print("Xy_data without host with k = {}".format(k))
+                data = build_Xy_data(seq_data, k, Xy_file, seq_data.length, full_kmers, low_var_threshold)
+                save_Xy_data(data, data_file)
+                return data
 
         else:
             # Build X_data to drive
-            print("X_data")
+            print("X_data with k = {}".format(k))
             seq_data = SeqCollection(file)
             data = build_X_data(seq_data, k, Xy_file, seq_data.length, full_kmers, low_var_threshold)
             save_Xy_data(data, data_file)
-    return data
+            return data
 
 # Build kmers collections with known classes
 def build_Xy_data(seq_data, k, Xy_file, length = 0, full_kmers = False, low_var_threshold = None):
@@ -72,10 +83,8 @@ def build_Xy_data(seq_data, k, Xy_file, length = 0, full_kmers = False, low_var_
     data["X"] = str(Xy_file)
     data["y"] = y
     data["kmers_list"] = kmers
-    if seq_data[1] == "none":
-        data["ids"] = seq_data[0].ids
-    else:
-        data["ids"] = np.append(seq_data[0].ids, seq_data[1].ids)
+    data["ids"] = seq_data.ids
+    data["taxas"] = seq_data.taxas
 
     return data
 
@@ -93,5 +102,6 @@ def build_X_data(seq_data, k, X_file, length = 0, full_kmers = False, low_var_th
     data["X"] = str(X_file)
     data["kmers_list"] = kmers
     data["ids"] = ids
+    data["taxas"] = seq_data.taxas
 
     return data
