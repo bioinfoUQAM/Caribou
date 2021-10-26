@@ -124,14 +124,18 @@ def training(X_train, y_train, kmers, ids, classifier = "onesvm", batch_size = 3
         if verbose:
             print("Training bacterial / host classifier with Linear SVM")
         clf = SGDClassifier(early_stopping = True, n_jobs = -1)
-    elif classifier == "virnet":
+    elif classifier == "attention":
         if verbose:
             print("Training bacterial / host classifier based on VirNet method")
-        clf = build_virnet()
-    elif classifier == "seeker":
+        clf = build_attention()
+    elif classifier == "lstm":
         if verbose:
             print("Training bacterial / host classifier based on Seeker LSTM method")
-        clf = build_seeker()
+        clf = build_LSTM()
+    elif classifier == "cnn":
+        if verbose:
+            print("Training bacterial / host classifier based on Seeker LSTM method")
+        clf = build_CNN()
     else:
         print("Classifier type unknown !!! \n Models implemented at this moment are \n bacteria isolator :  One Class SVM (onesvm)\n bacteria/host classifiers : Linear SVM (multiSVM), Random forest (forest), KNN clustering (knn) and LSTM RNN (lstm)")
         sys.exit()

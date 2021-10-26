@@ -59,8 +59,11 @@ if __name__ == "__main__":
     eval_metric = config.get("evaluation", "eval_metric")
     avrg_metric = config.get("evaluation", "avrg_metric")
 
-    # classifier
-    bacteria_classifier = config.get("classifier", "binary_classifier").lower()
+    # choose classifier based on host presence or not
+    if host == "none":
+        bacteria_classifier = "onesvm"
+    else:
+         bacteria_classifier = "linearsvm"
 
 # MAYBE SOME NOT NEEDED
     # settings
@@ -137,7 +140,7 @@ if __name__ == "__main__":
 ################################################################################
 
 # TESTER OTHER CLASSIFIERS
-    for bacteria_classifier in ["linearsvm","virnet","seeker"]:
+    for bacteria_classifier in ["linearsvm","attention","lstm","cnn"]:
         if host == "none":
             bacterial_metagenome = bacteria_extraction(k_profile_metagenome,
                 k_profile_database,

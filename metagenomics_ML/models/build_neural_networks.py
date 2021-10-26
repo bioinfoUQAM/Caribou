@@ -3,9 +3,9 @@ import math
 
 from keras.optimizers import Adam
 from keras.models import Model, Sequential
-from keras.layers import Dense, Input, LSTM, Embedding, Dropout
+from keras.layers import Dense, Input, LSTM, Embedding, Dropout, Conv2D
 
-from models.virnet import AttentionWeightedAverage
+from models.attentionLayer import AttentionWeightedAverage
 
 __author__ = "nicolas"
 
@@ -13,7 +13,7 @@ def build_gradl():
 # MUST BUILD NEURAL NETWORK FROM READING ARTICLE TO IMPLEMENT
     print("Possibility")
 
-def build_virnet(kmers_length):
+def build_attention(kmers_length):
     """
     Function extracted from module virnet/NNClassifier.py of
     VirNet package [Abdelkareem et al. 2018]
@@ -32,7 +32,7 @@ def build_virnet(kmers_length):
 
     return model
 
-def build_seeker():
+def build_LSTM():
     """
     Function extracted from module seeker/train_model/train_model.py of
     Seeker package [Auslander et al. 2020]
@@ -42,6 +42,24 @@ def build_seeker():
 
     # Add LSTM layer
     model.add(LSTM(5, input_shape=(NUC_COUNT, 1000)))
+
+    # Add Dense NN layer
+    model.add(Dense(1, activation='tanh'))
+
+    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+
+    return model
+
+def build_CNN():
+    """
+    Function extracted from module seeker/train_model/train_model.py of
+    Seeker package [Auslander et al. 2020]
+    """
+    # Initialize a sequential model
+    model = Sequential()
+
+    # Add LSTM layer
+    model.add(Conv2D(5, input_shape=(NUC_COUNT, 1000)))
 
     # Add Dense NN layer
     model.add(Dense(1, activation='tanh'))
