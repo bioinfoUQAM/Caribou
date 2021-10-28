@@ -77,7 +77,7 @@ def extract_bacteria_sequences(clf, X, kmers_list, ids, classifier, bacteria_kme
                 unclassified.append(i)
         save_predicted_kmers(bacteria, pd.Series(range(len(ids))), kmers_list, ids, X, bacteria_kmers_file)
         save_predicted_kmers(unclassified, pd.Series(range(len(ids))), kmers_list, ids, X, unclassified_kmers_file)
-    elif classifier != "onesvm" and saving_host and saving_unclassified:
+    elif classifier not in ["onesvm","linearsvm"] and saving_host and saving_unclassified:
         if verbose:
             print("Extracting predicted bacteria, host and unclassified sequences")
         for i in range(len(predict)):
@@ -86,7 +86,7 @@ def extract_bacteria_sequences(clf, X, kmers_list, ids, classifier, bacteria_kme
             elif predict[i] == -1:
                 host.append(i)
             elif (-1 < predict[i] < 1):
-                unclassified.append()
+                unclassified.append(i)
         save_predicted_kmers(bacteria, pd.Series(range(len(ids))), kmers_list, ids, X, bacteria_kmers_file)
         save_predicted_kmers(host, pd.Series(range(len(ids))), kmers_list, ids, X, host_kmers_file)
         save_predicted_kmers(unclassified, pd.Series(range(len(ids))), kmers_list, ids, X, unclassified_kmers_file)
@@ -123,19 +123,23 @@ def training(X_train, y_train, kmers, ids, classifier = "onesvm", batch_size = 3
     elif classifier == "linearsvm":
         if verbose:
             print("Training bacterial / host classifier with Linear SVM")
-        clf = SGDClassifier(early_stopping = True, n_jobs = -1)
+        clf = SGDClassifier(early_stopping = False, n_jobs = -1)
     elif classifier == "attention":
         if verbose:
-            print("Training bacterial / host classifier based on VirNet method")
-        clf = build_attention()
+            print("Training bacterial / host classifier based on Attention Weighted Neural Network")
+        clf = build_attention(len(kmers))
     elif classifier == "lstm":
         if verbose:
-            print("Training bacterial / host classifier based on Seeker LSTM method")
-        clf = build_LSTM()
+            print("Training bacterial / host classifier based on LSTM Neural Network")
+        clf = build_LSTM(len(kmers))
     elif classifier == "cnn":
         if verbose:
-            print("Training bacterial / host classifier based on Seeker LSTM method")
-        clf = build_CNN()
+            print("Training bacterial / host classifier based on Convolutional Neural Network")
+        clf = build_CNN(len(kmers))
+    elif classifier == "deeplstm":
+        if verbose:
+            print("Training bacterial / host classifier based on Deep LSTM Neural Network")
+        clf = build_deepLSTM(len(kmers))
     else:
         print("Classifier type unknown !!! \n Models implemented at this moment are \n bacteria isolator :  One Class SVM (onesvm)\n bacteria/host classifiers : Linear SVM (multiSVM), Random forest (forest), KNN clustering (knn) and LSTM RNN (lstm)")
         sys.exit()
@@ -149,7 +153,7 @@ def training(X_train, y_train, kmers, ids, classifier = "onesvm", batch_size = 3
     """
 
     if cv:
-        y_pred_test, y_test, clf = fit_predict_cv(X_train, y_train, batch_size, kmers, ids, classifier, clf, cv = cv, shuffle = True, verbose = verbose)
+        y_pred_test, y_test, clf = fit_predict_cv(X_train, y_train, batch_size, kmers, ids, classifier, clf, cv = cv, verbose = verbose)
         training_cross_validation(y_pred_test, list(y_test[0]), classifier)
     else:
         clf = fit_model(X_train, y_train, batch_size, kmers, ids, classifier, clf, cv = cv, shuffle = True, verbose = verbose)

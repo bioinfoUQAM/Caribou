@@ -4,5 +4,5 @@ data/db_full/
 data/metagenome/mock_raw_data
 data/db_full_20/
 data/metagenome/
-data/fasta2class.sh
 data/random_name.py
+data/build_data_scripts/submitCCdatagen_NM.sh

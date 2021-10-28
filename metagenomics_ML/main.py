@@ -6,12 +6,24 @@ from models.classification import *
 
 import pandas as pd
 
+from tensorflow.compat.v1 import ConfigProto, Session
+from tensorflow.compat.v1.keras.backend import set_session
+from tensorflow.config import list_physical_devices
+
 import sys
 import configparser
 import os.path
 from os import makedirs
 
 __author__ = "nicolas"
+
+# GPU & CPU setup
+################################################################################
+gpus = list_physical_devices('GPU')
+if gpus:
+    config = ConfigProto(device_count={'GPU': len(gpus), 'CPU': os.cpu_count()})
+    sess = Session(config=config)
+    set_session(sess);
 
 # Part 0 - Initialisation / extraction of parameters from config file
 ################################################################################
@@ -140,7 +152,8 @@ if __name__ == "__main__":
 ################################################################################
 
 # TESTER OTHER CLASSIFIERS
-    for bacteria_classifier in ["linearsvm","attention","lstm","cnn"]:
+    for bacteria_classifier in ["linearsvm","attention","lstm","cnn","deeplstm"]:
+        print("Testing classifier {}".format(bacteria_classifier))
         if host == "none":
             bacterial_metagenome = bacteria_extraction(k_profile_metagenome,
                 k_profile_database,

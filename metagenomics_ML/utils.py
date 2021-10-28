@@ -9,7 +9,9 @@ import sys
 from sklearn import metrics
 from sklearn.preprocessing import StandardScaler
 
-from data.generators import DataGenerator
+from data.generators import DataGenerator, iter_generator_keras
+
+from keras.callbacks import CSVLogger, ModelCheckpoint, EarlyStopping
 
 import warnings
 
@@ -51,7 +53,8 @@ def fit_predict_cv(X_train, y_train, batch_size, kmers, ids, classifier, clf, cv
         y_test = pd.DataFrame()
         generator = DataGenerator(X_train, y_train, batch_size, kmers, ids, cv = cv, shuffle = shuffle)
         for i, (X, y) in enumerate(generator.iterator_train):
-                clf.partial_fit(X, y)
+            clf.partial_fit(X, y, classes = np.array([-1,1]))
+# ADD SAVING OPTIONS AFTER TRAINING MODEL
         for i, (X, y) in enumerate(generator.iterator_test):
             try:
                 if X_test.empty and y_test.empty:
@@ -66,36 +69,54 @@ def fit_predict_cv(X_train, y_train, batch_size, kmers, ids, classifier, clf, cv
         generator.handle.close()
         y_pred_test = clf.predict(X_test)
 
-    elif classifier in ["virnet","seeker"]:
-        train_generator, val_generator, test_generator = iter_generator_keras(X_train, y_train, batch_size, kmers, nb_classes = 2, cv = cv, shuffle = shuffle)
-        clf.fit_generator(generator = train_generator,
-                            validation_data = val_generator,
-                            use_multiprocessing = True,
-                            workers = os.cpu_count())
+    elif classifier in ["attention","lstm","cnn","deeplstm"]:
+# ADD SAVING OPTIONS AFTER TRAINING MODEL
+        #modelcheckpoint = ModelCheckpoint(filepath=modelsPath,monitor='val_accuracy', verbose=1, save_best_only=True, mode='auto')
+        early = EarlyStopping(monitor='loss', mode='min', verbose=1, patience=10)
+        train_generator, val_generator, test_generator = iter_generator_keras(X_train, y_train, batch_size, kmers, ids, nb_classes = 2, cv = cv, shuffle = shuffle)
+        clf.fit(x = train_generator,
+                validation_data = val_generator,
+                epochs = 100,
+                callbacks = early,
+                use_multiprocessing = True,
+                workers = os.cpu_count())
 
-        y_pred_test, y_test = clf.predict_generator(generator = test_generator,
-                                            use_multiprocessing = True,
-                                            workers = os.cpu_count())
+        predict = clf.predict(x = test_generator,
+                           use_multiprocessing = True,
+                           workers = os.cpu_count())
 
+        y_pred_test = np.round(predict.copy())
+        y_test = pd.DataFrame(np.zeros((len(y_pred_test),1), dtype = int))
+        for i in range(len(y_pred_test)):
+            y_test.iloc[i,0] = test_generator.labels[test_generator.positions_list[i]]
+        train_generator.handle.close()
+        val_generator.handle.close()
+        test_generator.handle.close()
     return y_pred_test, y_test, clf
 
-def fit_model(X_train, y_train, batch_size, kmers, classifier, clf, cv = 1, shuffle = True, verbose = True):
+def fit_model(X_train, y_train, batch_size, kmers, ids, classifier, clf, cv = 1, shuffle = True, verbose = True):
     # Scale X_train dataset
     scaleX(X_train, y_train, batch_size, kmers, ids, verbose)
 
     if classifier in ["onesvm","linearsvm"]:
         generator = DataGenerator(X_train, y_train, batch_size, kmers, cv = cv, shuffle = shuffle)
-        for i, (X, y) in enumerate(generator.iterator):
-            clf.partial_fit(X, y)
-            generator.handle.close()
-    elif classifier in ["virnet","seeker"]:
-        train_generator, val_generator = iter_generator_keras(X_train, y_train, batch_size, kmers, nb_classes = 2, cv = cv, shuffle = shuffle)
-        clf.fit_generator(generator = train_generator,
-                            validation_data = val_generator,
-                            use_multiprocessing = True,
-                            workers = os.cpu_count())
-        clf.fit(X, y, epochs = 100, batch_size = 32)
+        for i, (X, y) in enumerate(generator.iterator_train):
+            clf.partial_fit(X, y, classes = np.array([-1,1]))
+        generator.handle.close()
+# ADD SAVING OPTIONS AFTER TRAINING MODEL
+    elif classifier in ["attention","lstm","cnn","deeplstm"]:
+# ADD SAVING OPTIONS AFTER TRAINING MODEL
+        early = EarlyStopping(monitor='loss', mode='min', verbose=1, patience=10)
+        train_generator, val_generator = iter_generator_keras(X_train, y_train, batch_size, kmers, ids, nb_classes = 2, cv = cv, shuffle = shuffle)
+        clf.fit(x = train_generator,
+                validation_data = val_generator,
+                epochs = 100,
+                callbacks = early,
+                use_multiprocessing = True,
+                workers = os.cpu_count())
 
+        train_generator.handle.close()
+        val_generator.handle.close()
     return clf
 
 def model_predict(clf, X, kmers_list, ids, classifier, verbose = True):
@@ -109,13 +130,14 @@ def model_predict(clf, X, kmers_list, ids, classifier, verbose = True):
         for i, (X, y) in enumerate(generator.iterator):
             predict[i] = clf.predict(X)
         generator.handle.close()
-    elif classifier in ["virnet","seeker"]:
-        generator = iter_generator_keras(X, y, 1, kmers_list, nb_classes = 2, cv = 0, shuffle = False, training = False)
-        predict = clf.predict_generator(generator = generator,
-                                        use_multiprocessing = True,
-                                        workers = os.cpu_count())
-
-    return predict
+    elif classifier in ["attention","lstm","cnn","deeplstm"]:
+        generator = iter_generator_keras(X, y, 1, kmers_list, ids, nb_classes = 2, cv = 0, shuffle = False, training = False)
+        predict = clf.predict(x = generator,
+                              use_multiprocessing = True,
+                              workers = os.cpu_count())
+        generator.handle.close()
+        y_pred = np.round(predict.copy())
+    return y_pred
 
 def save_predicted_kmers(positions_list, y, kmers_list, ids, infile, outfile):
     data = False

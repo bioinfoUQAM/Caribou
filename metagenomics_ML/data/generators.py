@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import tables as tb
 
-import keras
+from tensorflow.keras.utils import Sequence, to_categorical
 
 __author__ = "nicolas"
 
@@ -53,8 +53,8 @@ class DataGenerator():
     def iter_minibatch(self, positions):
         start = 0
         end = self.batch_size
-        while start < self.len_array:
-            if start < (self.len_array - self.batch_size):
+        while start < len(positions):
+            if start < (len(positions) - self.batch_size):
                 X, y = self.get_minibatch(positions[start:end])
                 yield X, y
                 start = start + self.batch_size
@@ -62,7 +62,7 @@ class DataGenerator():
             else:
                 X, y = self.get_minibatch(positions[start:self.len_array])
                 yield X, y
-                start = self.len_array
+                start = len(positions)
 
     def get_minibatch(self, positions):
         X = pd.DataFrame(columns = self.kmers)
@@ -77,10 +77,10 @@ class DataGenerator():
 
         return X, y
 
-class DataGeneratorKeras(keras.utils.Sequence):
-    def __init__(self, array, positions_list, labels, batch_size, kmers, nb_classes, cv = 0, shuffle = True):
+class DataGeneratorKeras(Sequence):
+    def __init__(self, array, labels, positions_list, batch_size, kmers, ids, nb_classes, cv = 0, shuffle = True):
         # Initialization
-        handle = tb.open_file(array, "r")
+        self.handle = tb.open_file(array, "r")
         try:
             self.array = self.handle.root.scaled
         except:
@@ -92,62 +92,50 @@ class DataGeneratorKeras(keras.utils.Sequence):
         self.cv = cv
         self.shuffle = shuffle
         #
-        self.len_array = array.nrows
-        self.positions_list = positions_list
-        self.list_IDs = kmers["ids"]
-        #
-        self.shuffle()
-        iter_generator()
-        handle.close()
+        self.len_array = self.array.nrows
+        self.positions_list = list(positions_list)
+        self.list_IDs = ids
 
-    def shuffle(self):
-        # Update indexes and shuffle position after each epoch
-        self.positions_list = np.arange(len(self.positions_list))
-        if self.shuffle:
-            np.random.shuffle(self.positions_list)
-
-    def __data_generation(self, list_IDs_temp):
+    def __data_generation(self, list_pos_temp):
         # Generate data
         # X : (n_samples, *dim, n_channels)
-        X = np.empty((self.batch_size, len(self.kmer["kmers_list"])))
+        X = np.empty((self.batch_size, len(self.kmers)))
         y = np.empty((self.batch_size), dtype=int)
 
         # Generate data
-        for i, ID in enumerate(list_pos_temp):
+        for i, pos in enumerate(list_pos_temp):
             # Store sample
-            X[i,:] = self.array.read()[ID,:]
+            X[i,] = self.array.read()[pos,]
 
             # Store class
-            y[i] = self.labels[ID]
+            y[i] = self.labels[pos]
 
-        return X, keras.utils.to_categorical(y, num_labels=self.n_labels)
+        return X, y
 
     def __len__(self):
         # Batches/epoch
-        return int(np.floor(self.len_array / self.batch_size))
+        return int(np.floor(len(self.positions_list) / self.batch_size))
 
     def __getitem__(self, index):
         # Generate a batch of data + indexes
-        indexes = self.positions_list[index*self.batch_size:(index+1)*self.batch_size]
-
-        # Find list of IDs
-        list_pos_temp = [self.position_list[k] for k in indexes]
+        list_pos_temp = self.positions_list[index*self.batch_size:(index+1)*self.batch_size]
 
         # Generate data
         X, y = self.__data_generation(list_pos_temp)
 
         return X, y
 
-# #####
+# ####################
 # Data build functions
 # ####################
 
-def iter_generator_keras(array, labels, batch_size, kmers, nb_classes, cv = 0, shuffle = True, training = True):
+def iter_generator_keras(array, labels, batch_size, kmers, ids, nb_classes, cv = 0, shuffle = True, training = True):
     params = {'batch_size': batch_size,
-                'n_classes': nb_classes,
-                'kmers': kmers,
-                'cv': cv,
-                'shuffle': shuffle}
+              'nb_classes': nb_classes,
+              'kmers': kmers,
+              'ids': ids,
+              'cv': cv,
+              'shuffle': shuffle}
 
     if cv and training:
         positions_list = np.array(range(len(labels)))
@@ -162,6 +150,7 @@ def iter_generator_keras(array, labels, batch_size, kmers, nb_classes, cv = 0, s
         iterator_train = DataGeneratorKeras(array, labels, training_positions, **params)
         iterator_val = DataGeneratorKeras(array, labels, validating_positions, **params)
         iterator_test = DataGeneratorKeras(array, labels, testing_positions, **params)
+
         return iterator_train, iterator_val, iterator_test
 
     elif not cv and training:
