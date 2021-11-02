@@ -6,22 +6,23 @@ import os
 
 from sklearn.linear_model import SGDOneClassSVM, SGDClassifier
 
+from keras.models import load_model
+
 from utils import *
 from models.build_neural_networks import *
 
-from joblib import dump, load
+from joblib import load
 
 __author__ = "nicolas"
-
-# TRIES TO TRAIN TWICE...
-# TESTER GENERATORS
-# Voir si peut utiliser celui de Keras avec sklearn classifiers
 
 def bacteria_extraction(metagenome_k_mers, database_k_mers, k, prefix, dataset, classifier = "onesvm", batch_size = 32, verbose = 1, cv = 1, saving_host = 1, saving_unclassified = 1):
     bacteria_kmers_file = "{}_K{}_{}_Xy_bacteria_database_{}_data.h5f".format(prefix, k, classifier, dataset)
     host_kmers_file = prefix + "_K{}_{}_Xy_host_database_{}_data.h5f".format(k, classifier, dataset)
     unclassified_kmers_file = prefix + "_K{}_{}_Xy_unclassified_database_{}_data.h5f".format(k, classifier, dataset)
-    clf_file ="{}_K{}_{}_bacteria_binary_classifier_{}_model.joblib".format(prefix, k, classifier, dataset)
+    if classifier in ["onesvm","linearsvm"]:
+        clf_file ="{}_K{}_{}_bacteria_binary_classifier_{}_model.joblib".format(prefix, k, classifier, dataset)
+    else:
+        clf_file ="{}_K{}_{}_bacteria_binary_classifier_{}_model".format(prefix, k, classifier, dataset)
 
     if verbose:
         print("Extracting bacteria sequences from data")
@@ -49,20 +50,21 @@ def bacteria_extraction(metagenome_k_mers, database_k_mers, k, prefix, dataset, 
             sys.exit()
 
         # If classifier exists load it or train if not
-        if os.path.isfile(clf_file):
+        if os.path.isfile(clf_file) and classifier in ["onsvm","linearsvm"]:
             clf = load(clf_file)
+        elif os.path.isfile(clf_file) and classifier in ["attention","lstm","cnn","deeplstm"]:
+            clf = load_model(clf_file)
         else:
-            clf = training(X_train, y_train, database_k_mers["kmers_list"], database_k_mers["ids"], classifier = classifier, batch_size = batch_size, verbose = verbose, cv = cv)
-            #dump(clf, clf_file)
+            clf = training(X_train, y_train, database_k_mers["kmers_list"], k, database_k_mers["ids"], classifier = classifier, batch_size = batch_size, verbose = verbose, cv = cv, model_file = clf_file)
 
         # Classify sequences into bacteria / unclassified / host and build k-mers profiles for bacteria
-        bacteria = extract_bacteria_sequences(clf, metagenome_k_mers["X"], metagenome_k_mers["kmers_list"], metagenome_k_mers["ids"], classifier, bacteria_kmers_file, host_kmers_file, unclassified_kmers_file, verbose = verbose, saving_host = saving_host, saving_unclassified = saving_unclassified)
+        bacteria = extract_bacteria_sequences(clf_file, metagenome_k_mers["X"], metagenome_k_mers["kmers_list"], metagenome_k_mers["ids"], classifier, bacteria_kmers_file, host_kmers_file, unclassified_kmers_file, verbose = verbose, saving_host = saving_host, saving_unclassified = saving_unclassified)
 
     return bacteria
 
-def extract_bacteria_sequences(clf, X, kmers_list, ids, classifier, bacteria_kmers_file, host_kmers_file, unclassified_kmers_file, verbose = 1, saving_host = 1, saving_unclassified = 1):
+def extract_bacteria_sequences(clf_file, X, kmers_list, ids, classifier, bacteria_kmers_file, host_kmers_file, unclassified_kmers_file, verbose = 1, saving_host = 1, saving_unclassified = 1):
 
-    predict = model_predict(clf, X, kmers_list, ids, classifier, verbose)
+    predict = model_predict(clf_file, X, kmers_list, ids, classifier, verbose)
     bacteria = []
     host = []
     unclassified = []
@@ -83,9 +85,9 @@ def extract_bacteria_sequences(clf, X, kmers_list, ids, classifier, bacteria_kme
         for i in range(len(predict)):
             if predict[i] == 1:
                 bacteria.append(i)
-            elif predict[i] == -1:
+            elif predict[i] == 0:
                 host.append(i)
-            elif (-1 < predict[i] < 1):
+            elif predict[i] == -1:
                 unclassified.append(i)
         save_predicted_kmers(bacteria, pd.Series(range(len(ids))), kmers_list, ids, X, bacteria_kmers_file)
         save_predicted_kmers(host, pd.Series(range(len(ids))), kmers_list, ids, X, host_kmers_file)
@@ -115,7 +117,7 @@ def extract_bacteria_sequences(clf, X, kmers_list, ids, classifier, bacteria_kme
 
     return bacteria
 
-def training(X_train, y_train, kmers, ids, classifier = "onesvm", batch_size = 32, verbose = 1, cv = 1):
+def training(X_train, y_train, kmers, k, ids, classifier = "onesvm", batch_size = 32, verbose = 1, cv = 1, model_file = None):
     if classifier == "onesvm":
         if verbose:
             print("Training bacterial extractor with One Class SVM")
@@ -131,15 +133,15 @@ def training(X_train, y_train, kmers, ids, classifier = "onesvm", batch_size = 3
     elif classifier == "lstm":
         if verbose:
             print("Training bacterial / host classifier based on LSTM Neural Network")
-        clf = build_LSTM(len(kmers))
+        clf = build_LSTM(len(kmers), batch_size)
     elif classifier == "cnn":
         if verbose:
             print("Training bacterial / host classifier based on Convolutional Neural Network")
-        clf = build_CNN(len(kmers))
+        clf = build_CNN(len(kmers), k, batch_size)
     elif classifier == "deeplstm":
         if verbose:
             print("Training bacterial / host classifier based on Deep LSTM Neural Network")
-        clf = build_deepLSTM(len(kmers))
+        clf = build_deepLSTM(len(kmers), batch_size)
     else:
         print("Classifier type unknown !!! \n Models implemented at this moment are \n bacteria isolator :  One Class SVM (onesvm)\n bacteria/host classifiers : Linear SVM (multiSVM), Random forest (forest), KNN clustering (knn) and LSTM RNN (lstm)")
         sys.exit()
@@ -153,9 +155,9 @@ def training(X_train, y_train, kmers, ids, classifier = "onesvm", batch_size = 3
     """
 
     if cv:
-        y_pred_test, y_test, clf = fit_predict_cv(X_train, y_train, batch_size, kmers, ids, classifier, clf, cv = cv, verbose = verbose)
+        y_pred_test, y_test, clf = fit_predict_cv(X_train, y_train, batch_size, kmers, ids, classifier, clf, cv = cv, verbose = verbose, model_file = model_file)
         training_cross_validation(y_pred_test, list(y_test[0]), classifier)
     else:
-        clf = fit_model(X_train, y_train, batch_size, kmers, ids, classifier, clf, cv = cv, shuffle = True, verbose = verbose)
+        clf = fit_model(X_train, y_train, batch_size, kmers, ids, classifier, clf, cv = cv, shuffle = True, verbose = verbose, model_file = model_file)
 
     return clf

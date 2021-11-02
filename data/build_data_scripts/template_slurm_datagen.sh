@@ -23,9 +23,9 @@ CLS_FILE_BACT=[path/to/file/containing/information/of/classes/related/to/sequenc
 
 OUT_DIR=[path/to/directory/where/outputs/will/be/writen]
 
-sh ./generateFastaList.sh -d $FASTA_DIR_BACT -o $LIST_FILES_BACT
+sh $SLURM_SUBMIT_DIR/generateFastaList.sh -d $FASTA_DIR_BACT -o $LIST_FILES_BACT
 
-sh ./fasta2class_bact.sh -d $FASTA_DIR_BACT -i $LIST_FILES_BACT -c $CLS_FILE_BACT -o $OUTDIR
+sh $SLURM_SUBMIT_DIR/fasta2class_bacteria.sh -d $FASTA_DIR_BACT -i $LIST_FILES_BACT -c $CLS_FILE_BACT -o $OUTDIR
 
 
 
@@ -34,6 +34,6 @@ FASTA_DIR_HOST=[path/to/directory/containing/subdirs/or/fastas/to/merge/for/host
 
 LIST_FILES_HOST=[path/to/file/containing/path/to/files/to/be/merged/for/host/if/there/is/one]
 
-sh ./generateFastaList.sh -d $FASTA_DIR_HOST -o $LIST_FILES_HOST
+sh $SLURM_SUBMIT_DIR/generateFastaList.sh -d $FASTA_DIR_HOST -o $LIST_FILES_HOST
 
-sh ./fasta2class_host.sh -d $FASTA_DIR_HOST -i $LIST_FILES_HOST -o $OUT_DIR
+sh $SLURM_SUBMIT_DIR/fasta2class_host.sh -d $FASTA_DIR_HOST -i $LIST_FILES_HOST -o $OUT_DIR

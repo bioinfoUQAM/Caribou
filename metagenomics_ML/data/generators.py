@@ -78,7 +78,7 @@ class DataGenerator():
         return X, y
 
 class DataGeneratorKeras(Sequence):
-    def __init__(self, array, labels, positions_list, batch_size, kmers, ids, nb_classes, cv = 0, shuffle = True):
+    def __init__(self, array, labels, positions_list, batch_size, kmers, ids, classifier, shuffle = True):
         # Initialization
         self.handle = tb.open_file(array, "r")
         try:
@@ -88,13 +88,20 @@ class DataGeneratorKeras(Sequence):
         self.labels = labels
         self.batch_size = batch_size
         self.kmers = kmers
-        self.nb_classes = nb_classes
-        self.cv = cv
+        self.classifier = classifier
         self.shuffle = shuffle
         #
         self.len_array = self.array.nrows
         self.positions_list = list(positions_list)
         self.list_IDs = ids
+        self.on_epoch_end()
+
+    # Shuffle list of positions of array
+    def on_epoch_end(self):
+        # Update indexes and shuffle position after each epoch
+        self.positions_list = np.arange(len(self.positions_list))
+        if self.shuffle:
+            np.random.shuffle(self.positions_list)
 
     def __data_generation(self, list_pos_temp):
         # Generate data
@@ -110,6 +117,13 @@ class DataGeneratorKeras(Sequence):
             # Store class
             y[i] = self.labels[pos]
 
+
+        if self.classifier in ["lstm","deeplstm"]:
+            X = X.reshape(1, self.batch_size, len(self.kmers))
+            y = y.reshape(1, self.batch_size, 1)
+        elif self.classifier == "cnn":
+            X = X.reshape(1,1,1, self.batch_size, len(self.kmers))
+            y = y.reshape(1,1,1, self.batch_size, 1)
         return X, y
 
     def __len__(self):
@@ -129,20 +143,21 @@ class DataGeneratorKeras(Sequence):
 # Data build functions
 # ####################
 
-def iter_generator_keras(array, labels, batch_size, kmers, ids, nb_classes, cv = 0, shuffle = True, training = True):
+def iter_generator_keras(array, labels, batch_size, kmers, ids, cv, classifier, shuffle = True, training = True):
     params = {'batch_size': batch_size,
-              'nb_classes': nb_classes,
               'kmers': kmers,
               'ids': ids,
-              'cv': cv,
+              'classifier': classifier,
               'shuffle': shuffle}
 
     if cv and training:
         positions_list = np.array(range(len(labels)))
         np.random.shuffle(positions_list)
+
         training_length = int(len(labels)*0.8)
         validating_length = int(training_length*0.2)
         training_length = int(training_length*0.8)
+
         training_positions = positions_list[:training_length]
         validating_positions = positions_list[training_length:(training_length + validating_length)]
         testing_positions = positions_list[(training_length + validating_length):]

@@ -26,4 +26,6 @@ then
   """
 fi
 
-echo $DIR/$(find $DIR -maxdepth 10 -type f) >> $OUTFILE
+for i in $(find $DIR -maxdepth 10 -type f); do
+  echo $i >> $OUTFILE
+done

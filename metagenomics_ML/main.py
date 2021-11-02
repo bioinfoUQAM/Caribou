@@ -152,7 +152,7 @@ if __name__ == "__main__":
 ################################################################################
 
 # TESTER OTHER CLASSIFIERS
-    for bacteria_classifier in ["linearsvm","attention","lstm","cnn","deeplstm"]:
+    for bacteria_classifier in ["attention","lstm","cnn","deeplstm"]:
         print("Testing classifier {}".format(bacteria_classifier))
         if host == "none":
             bacterial_metagenome = bacteria_extraction(k_profile_metagenome,

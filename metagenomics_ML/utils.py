@@ -11,7 +11,10 @@ from sklearn.preprocessing import StandardScaler
 
 from data.generators import DataGenerator, iter_generator_keras
 
-from keras.callbacks import CSVLogger, ModelCheckpoint, EarlyStopping
+from keras.callbacks import ModelCheckpoint, EarlyStopping
+from keras.models import load_model
+
+from joblib import dump, load
 
 import warnings
 
@@ -42,9 +45,8 @@ def training_cross_validation(y_pred_test, y_test, classifier):
     print("Precision : {}".format(str(metrics.precision_score(y_pred_test, y_test))))
     print("Recall : {}".format(str(metrics.recall_score(y_pred_test, y_test))))
     print("F-score : {}".format(str(metrics.f1_score(y_pred_test, y_test))))
-    #print("AUC ROC : {}".format(str(metrics.roc_auc_score(y_pred_test, y_test))))
 
-def fit_predict_cv(X_train, y_train, batch_size, kmers, ids, classifier, clf, cv = 1, shuffle = True, verbose = True):
+def fit_predict_cv(X_train, y_train, batch_size, kmers, ids, classifier, clf, cv = 1, shuffle = True, verbose = True, model_file = None):
     # Scale X_train dataset
     scaleX(X_train, y_train, batch_size, kmers, ids, verbose)
 
@@ -54,7 +56,7 @@ def fit_predict_cv(X_train, y_train, batch_size, kmers, ids, classifier, clf, cv
         generator = DataGenerator(X_train, y_train, batch_size, kmers, ids, cv = cv, shuffle = shuffle)
         for i, (X, y) in enumerate(generator.iterator_train):
             clf.partial_fit(X, y, classes = np.array([-1,1]))
-# ADD SAVING OPTIONS AFTER TRAINING MODEL
+            dump(clf, model_file)
         for i, (X, y) in enumerate(generator.iterator_test):
             try:
                 if X_test.empty and y_test.empty:
@@ -67,20 +69,21 @@ def fit_predict_cv(X_train, y_train, batch_size, kmers, ids, classifier, clf, cv
                 print("File too large to cross validate on RAM")
                 sys.exit()
         generator.handle.close()
+        clf = load(model_file)
         y_pred_test = clf.predict(X_test)
 
     elif classifier in ["attention","lstm","cnn","deeplstm"]:
-# ADD SAVING OPTIONS AFTER TRAINING MODEL
-        #modelcheckpoint = ModelCheckpoint(filepath=modelsPath,monitor='val_accuracy', verbose=1, save_best_only=True, mode='auto')
+        modelcheckpoint = ModelCheckpoint(filepath=model_file,monitor='val_accuracy', verbose=1, save_best_only=True, mode='auto')
         early = EarlyStopping(monitor='loss', mode='min', verbose=1, patience=10)
-        train_generator, val_generator, test_generator = iter_generator_keras(X_train, y_train, batch_size, kmers, ids, nb_classes = 2, cv = cv, shuffle = shuffle)
-        clf.fit(x = train_generator,
+        train_generator, val_generator, test_generator = iter_generator_keras(X_train, y_train, batch_size, kmers, ids, cv, classifier, shuffle = shuffle, training = True)
+        clf.fit(train_generator,
                 validation_data = val_generator,
                 epochs = 100,
-                callbacks = early,
+                callbacks = [modelcheckpoint,early],
                 use_multiprocessing = True,
                 workers = os.cpu_count())
 
+        clf = load_model(model_file)
         predict = clf.predict(x = test_generator,
                            use_multiprocessing = True,
                            workers = os.cpu_count())
@@ -88,13 +91,16 @@ def fit_predict_cv(X_train, y_train, batch_size, kmers, ids, classifier, clf, cv
         y_pred_test = np.round(predict.copy())
         y_test = pd.DataFrame(np.zeros((len(y_pred_test),1), dtype = int))
         for i in range(len(y_pred_test)):
-            y_test.iloc[i,0] = test_generator.labels[test_generator.positions_list[i]]
+            if classifier not in ["lstm","deeplstm"]:
+                y_test.iloc[i,0] = test_generator.labels[test_generator.positions_list[i]]
+            else:
+                y_test.iloc[i,0] = test_generator.labels[test_generator.positions_list[i]]
         train_generator.handle.close()
         val_generator.handle.close()
         test_generator.handle.close()
     return y_pred_test, y_test, clf
 
-def fit_model(X_train, y_train, batch_size, kmers, ids, classifier, clf, cv = 1, shuffle = True, verbose = True):
+def fit_model(X_train, y_train, batch_size, kmers, ids, classifier, clf, cv = 1, shuffle = True, verbose = True, model_file = None):
     # Scale X_train dataset
     scaleX(X_train, y_train, batch_size, kmers, ids, verbose)
 
@@ -103,15 +109,15 @@ def fit_model(X_train, y_train, batch_size, kmers, ids, classifier, clf, cv = 1,
         for i, (X, y) in enumerate(generator.iterator_train):
             clf.partial_fit(X, y, classes = np.array([-1,1]))
         generator.handle.close()
-# ADD SAVING OPTIONS AFTER TRAINING MODEL
+        dump(clf, model_file)
     elif classifier in ["attention","lstm","cnn","deeplstm"]:
-# ADD SAVING OPTIONS AFTER TRAINING MODEL
+        modelcheckpoint = ModelCheckpoint(filepath=model_file,monitor='val_accuracy', verbose=1, save_best_only=True, mode='auto')
         early = EarlyStopping(monitor='loss', mode='min', verbose=1, patience=10)
-        train_generator, val_generator = iter_generator_keras(X_train, y_train, batch_size, kmers, ids, nb_classes = 2, cv = cv, shuffle = shuffle)
-        clf.fit(x = train_generator,
+        train_generator, val_generator = iter_generator_keras(X_train, y_train, batch_size, kmers, ids, cv, classifier, shuffle = shuffle)
+        clf.fit(train_generator,
                 validation_data = val_generator,
                 epochs = 100,
-                callbacks = early,
+                callbacks = [modelcheckpoint,early],
                 use_multiprocessing = True,
                 workers = os.cpu_count())
 
@@ -119,7 +125,7 @@ def fit_model(X_train, y_train, batch_size, kmers, ids, classifier, clf, cv = 1,
         val_generator.handle.close()
     return clf
 
-def model_predict(clf, X, kmers_list, ids, classifier, verbose = True):
+def model_predict(model_file, X, kmers_list, ids, classifier, verbose = True):
     predict = np.empty(len(ids))
     y = pd.Series(range(len(ids)))
     # Scale dataset
@@ -127,11 +133,13 @@ def model_predict(clf, X, kmers_list, ids, classifier, verbose = True):
 
     if classifier in ["onesvm","linearsvm"]:
         generator = DataGenerator(X, y, 1, kmers_list, ids, cv = 0, shuffle = False)
+        clf = load(model_file)
         for i, (X, y) in enumerate(generator.iterator):
             predict[i] = clf.predict(X)
         generator.handle.close()
     elif classifier in ["attention","lstm","cnn","deeplstm"]:
-        generator = iter_generator_keras(X, y, 1, kmers_list, ids, nb_classes = 2, cv = 0, shuffle = False, training = False)
+        generator = iter_generator_keras(X, y, 1, kmers_list, ids, 0, classifier, shuffle = False, training = False)
+        clf = load_model(model_file)
         predict = clf.predict(x = generator,
                               use_multiprocessing = True,
                               workers = os.cpu_count())

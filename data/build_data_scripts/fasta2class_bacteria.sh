@@ -1,7 +1,7 @@
 #!/bin/bash
 
 HELP=0
-while getopts d:i:c:o:hdirectoryinputclassesoutputhelp option; do
+while getopts d:i:c:o:h option; do
   case "${option}" in
     d) DIR=${OPTARG};;
     directory) DIR=${OPTARG};;
@@ -35,8 +35,8 @@ fi
 declare -a list_ids=()
 #ARRAY_NAME+=(NEW_ITEM1)
 
-fasta_file=$DIR/data_bacteria.fa.gz
-cls_file=$DIR/class_bacteria.csv
+fasta_file=$OUTDIR/data_bacteria.fa.gz
+cls_file=$OUTDIR/class_bacteria.csv
 echo "id","species","genus","family","order","class","phylum","domain" >> $cls_file
 
 for i in $(seq $(wc -c $FASTA_LIST | awk '{print $1}')); do
