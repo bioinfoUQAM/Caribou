@@ -1,5 +1,5 @@
 from setuptools import setup, find_packages
-from mlr_kgenomvir import __version__
+from metagenomics_ML import __version__
 
 _version = __version__
 
