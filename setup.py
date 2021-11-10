@@ -10,7 +10,7 @@ with open("requirements.txt", "r") as fh:
         INSTALL_REQUIRES.append(line.rstrip())
 
 setup(
-    name='AF_metagenomics',
+    name='metagenomics_ML',
     version=_version,
     description='Alignment-free bacterial classification in metagenomic shotguns',
     author='Nicolas de Montigny',

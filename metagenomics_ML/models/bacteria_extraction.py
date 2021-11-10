@@ -9,13 +9,14 @@ from sklearn.linear_model import SGDOneClassSVM, SGDClassifier
 from keras.models import load_model
 
 from utils import *
+from models.models_utils import *
 from models.build_neural_networks import *
 
 from joblib import load
 
 __author__ = "nicolas"
 
-def bacteria_extraction(metagenome_k_mers, database_k_mers, k, prefix, dataset, classifier = "onesvm", batch_size = 32, verbose = 1, cv = 1, saving_host = 1, saving_unclassified = 1):
+def bacteria_extraction(metagenome_k_mers, database_k_mers, k, prefix, dataset, classifier = "deeplstm", batch_size = 32, verbose = 1, cv = 1, saving_host = 1, saving_unclassified = 1):
     bacteria_kmers_file = "{}_K{}_{}_Xy_bacteria_database_{}_data.h5f".format(prefix, k, classifier, dataset)
     host_kmers_file = prefix + "_K{}_{}_Xy_host_database_{}_data.h5f".format(k, classifier, dataset)
     unclassified_kmers_file = prefix + "_K{}_{}_Xy_unclassified_database_{}_data.h5f".format(k, classifier, dataset)
@@ -50,17 +51,49 @@ def bacteria_extraction(metagenome_k_mers, database_k_mers, k, prefix, dataset, 
             sys.exit()
 
         # If classifier exists load it or train if not
-        if os.path.isfile(clf_file) and classifier in ["onsvm","linearsvm"]:
+        if os.path.isfile(clf_file) and classifier in ["onesvm","linearsvm"]:
             clf = load(clf_file)
-        elif os.path.isfile(clf_file) and classifier in ["attention","lstm","cnn","deeplstm"]:
+        elif os.path.isfile(clf_file) and classifier in ["attention","lstm","deeplstm"]:
             clf = load_model(clf_file)
         else:
-            clf = training(X_train, y_train, database_k_mers["kmers_list"], k, database_k_mers["ids"], classifier = classifier, batch_size = batch_size, verbose = verbose, cv = cv, model_file = clf_file)
+            clf = training(X_train, y_train, database_k_mers["kmers_list"], k, database_k_mers["ids"], classifier = classifier, batch_size = batch_size, verbose = verbose, cv = cv, clf_file = clf_file)
 
         # Classify sequences into bacteria / unclassified / host and build k-mers profiles for bacteria
         bacteria = extract_bacteria_sequences(clf_file, metagenome_k_mers["X"], metagenome_k_mers["kmers_list"], metagenome_k_mers["ids"], classifier, bacteria_kmers_file, host_kmers_file, unclassified_kmers_file, verbose = verbose, saving_host = saving_host, saving_unclassified = saving_unclassified)
 
     return bacteria
+
+def training(X_train, y_train, kmers, k, ids, classifier = "deeplstm", batch_size = 32, verbose = 1, cv = 1, clf_file = None):
+    if classifier == "onesvm":
+        if verbose:
+            print("Training bacterial extractor with One Class SVM")
+        clf = SGDOneClassSVM(nu = 0.05, tol = 1e-4)
+    elif classifier == "linearsvm":
+        if verbose:
+            print("Training bacterial / host classifier with Linear SVM")
+        clf = SGDClassifier(early_stopping = False, n_jobs = -1)
+    elif classifier == "attention":
+        if verbose:
+            print("Training bacterial / host classifier based on Attention Weighted Neural Network")
+        clf = build_attention(len(kmers))
+    elif classifier == "lstm":
+        if verbose:
+            print("Training bacterial / host classifier based on LSTM Neural Network")
+        clf = build_LSTM(len(kmers), batch_size)
+    elif classifier == "deeplstm":
+        if verbose:
+            print("Training bacterial / host classifier based on Deep LSTM Neural Network")
+        clf = build_deepLSTM(len(kmers), batch_size)
+    else:
+        print("Bacteria extractor unknown !!!\n\tModels implemented at this moment are :\n\tBacteria isolator :  One Class SVM (onesvm)\n\tBacteria/host classifiers : Linear SVM (linearsvm)\n\tNeural networks : Attention (attention), LSTM (lstm) and Deep LSTM (deeplstm)")
+        sys.exit()
+
+    if cv:
+        clf = fit_predict_cv(X_train, y_train, batch_size, kmers, ids, classifier, clf, cv = cv, verbose = verbose, clf_file = clf_file)
+    else:
+        clf = fit_model(X_train, y_train, batch_size, kmers, ids, classifier, clf, cv = cv, shuffle = True, verbose = verbose, clf_file = clf_file)
+
+    return clf
 
 def extract_bacteria_sequences(clf_file, X, kmers_list, ids, classifier, bacteria_kmers_file, host_kmers_file, unclassified_kmers_file, verbose = 1, saving_host = 1, saving_unclassified = 1):
 
@@ -116,48 +149,3 @@ def extract_bacteria_sequences(clf_file, X, kmers_list, ids, classifier, bacteri
     bacteria["ids"] = ids
 
     return bacteria
-
-def training(X_train, y_train, kmers, k, ids, classifier = "onesvm", batch_size = 32, verbose = 1, cv = 1, model_file = None):
-    if classifier == "onesvm":
-        if verbose:
-            print("Training bacterial extractor with One Class SVM")
-        clf = SGDOneClassSVM(nu = 0.05, tol = 1e-4)
-    elif classifier == "linearsvm":
-        if verbose:
-            print("Training bacterial / host classifier with Linear SVM")
-        clf = SGDClassifier(early_stopping = False, n_jobs = -1)
-    elif classifier == "attention":
-        if verbose:
-            print("Training bacterial / host classifier based on Attention Weighted Neural Network")
-        clf = build_attention(len(kmers))
-    elif classifier == "lstm":
-        if verbose:
-            print("Training bacterial / host classifier based on LSTM Neural Network")
-        clf = build_LSTM(len(kmers), batch_size)
-    elif classifier == "cnn":
-        if verbose:
-            print("Training bacterial / host classifier based on Convolutional Neural Network")
-        clf = build_CNN(len(kmers), k, batch_size)
-    elif classifier == "deeplstm":
-        if verbose:
-            print("Training bacterial / host classifier based on Deep LSTM Neural Network")
-        clf = build_deepLSTM(len(kmers), batch_size)
-    else:
-        print("Classifier type unknown !!! \n Models implemented at this moment are \n bacteria isolator :  One Class SVM (onesvm)\n bacteria/host classifiers : Linear SVM (multiSVM), Random forest (forest), KNN clustering (knn) and LSTM RNN (lstm)")
-        sys.exit()
-
-    """
-    # Maybe implement if have time / useful
-    elif classifier == "gradl":
-        if verbose:
-            print("Training bacterial extractor based on GRaDL method")
-            clf = build_gradl()
-    """
-
-    if cv:
-        y_pred_test, y_test, clf = fit_predict_cv(X_train, y_train, batch_size, kmers, ids, classifier, clf, cv = cv, verbose = verbose, model_file = model_file)
-        training_cross_validation(y_pred_test, list(y_test[0]), classifier)
-    else:
-        clf = fit_model(X_train, y_train, batch_size, kmers, ids, classifier, clf, cv = cv, shuffle = True, verbose = verbose, model_file = model_file)
-
-    return clf

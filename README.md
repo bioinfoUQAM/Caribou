@@ -4,6 +4,30 @@ Alignment-free bacterial identification and classification in metagenomics seque
 ## Installation of dependencies
 To install gpu on your machine if necessary, refer to tensorflow's help on installing gpus : https://www.tensorflow.org/install/gpu
 
+To install package in a new python virtual environment through pip, make sure that python is installed first.
+Modify the first line to choose where to pu your virtual environment on your drive.
+In linux command shell, execute the following commands :
+
+```
+ENV_DIR=/path/to/your/environment/folder
+
+python3 -m venv $ENV_DIR/metagenomics_ML
+
+source $ENV_DIR/metagenomics_ML/bin/activate
+
+pip install --no-index --upgrade pip
+
+pip install /home/nicolas/github/metagenomics_ML
+```
+
+To access your virtual environment later on you will only need to run the following two commands
+
+```
+ENV_DIR=/path/to/your/environment/folder
+
+source $ENV_DIR/metagenomics_ML/bin/activate
+```
+
 ## Testing data
 Mock community used for testing found in database Mockrobiota from Kozich et al.
 

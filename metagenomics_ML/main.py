@@ -73,9 +73,9 @@ if __name__ == "__main__":
 
     # choose classifier based on host presence or not
     if host == "none":
-        bacteria_classifier = "onesvm"
+        binary_classifier = "onesvm"
     else:
-         bacteria_classifier = "linearsvm"
+         binary_classifier = "attention"
 
 # MAYBE SOME NOT NEEDED
     # settings
@@ -84,9 +84,9 @@ if __name__ == "__main__":
     verbose = config.getint("settings", "verbose")
     training_batch_size = config.getint("settings", "training_batch_size")
 
-    bacteria_saving_host = config.get("settings", "binary_save_host")
-    bacteria_saving_unclassified = config.get("settings", "binary_save_unclassified")
-    bacteria_cv = config.getint("settings", "binary_cross_val")
+    binary_saving_host = config.get("settings", "binary_save_host")
+    binary_saving_unclassified = config.get("settings", "binary_save_unclassified")
+    binary_cv = config.getint("settings", "binary_cross_val")
 
 # Amine -> ideas to adapt saving
     saveData = config.getboolean("settings", "save_data")
@@ -151,41 +151,46 @@ if __name__ == "__main__":
 # Part 2 - Binary classification of bacteria / prokaryote sequences
 ################################################################################
 
-# TESTER OTHER CLASSIFIERS
-    for bacteria_classifier in ["attention","lstm","cnn","deeplstm"]:
-        print("Testing classifier {}".format(bacteria_classifier))
-        if host == "none":
-            bacterial_metagenome = bacteria_extraction(k_profile_metagenome,
-                k_profile_database,
-                k_length,
-                outdir,
-                database,
-                classifier = bacteria_classifier,
-                batch_size = training_batch_size,
-                verbose = verbose,
-                cv = bacteria_cv,
-                saving_host = bacteria_saving_host,
-                saving_unclassified = bacteria_saving_unclassified
-                )
-        else:
-            bacterial_metagenome = bacteria_extraction(k_profile_metagenome,
-                (k_profile_database, k_profile_host),
-                k_length,
-                outdir,
-                database,
-                classifier = bacteria_classifier,
-                batch_size = training_batch_size,
-                verbose = verbose,
-                cv = bacteria_cv,
-                saving_host = bacteria_saving_host,
-                saving_unclassified = bacteria_saving_unclassified
-                )
+    if host == "none":
+        bacterial_metagenome = bacteria_extraction(k_profile_metagenome,
+            k_profile_database,
+            k_length,
+            outdir,
+            database,
+            classifier = binary_classifier,
+            batch_size = training_batch_size,
+            verbose = verbose,
+            cv = binary_cv,
+            saving_host = binary_saving_host,
+            saving_unclassified = binary_saving_unclassified
+            )
+    else:
+        bacterial_metagenome = bacteria_extraction(k_profile_metagenome,
+            (k_profile_database, k_profile_host),
+            k_length,
+            outdir,
+            database,
+            classifier = binary_classifier,
+            batch_size = training_batch_size,
+            verbose = verbose,
+            cv = binary_cv,
+            saving_host = binary_saving_host,
+            saving_unclassified = binary_saving_unclassified
+            )
 
 # Part 3 - Multiclass classification of bacterial sequences
 ################################################################################
 
 # MAYBE ADD PARAMETERS FOR CLASSIFIERS
-
+    """
+    classification = bacterial_classification(bacterial_metagenome,
+        k_profile_database,
+        k,
+        prefix,
+        dataset,
+        classifier = ,
+        verbose = verbose)
+    """
 # MAYBE ADD STEP FOR ABUNDANCE
 
 # Part 4 - Classification refinement / flexible classification

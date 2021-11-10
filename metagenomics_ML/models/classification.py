@@ -1,150 +1,131 @@
-
 import pandas as pd
-import numpy as np
 
 import sys
 import os
 
-from sklearn import model_selection
-from sklearn.preprocessing import StandardScaler
-from sklearn.svm import OneClassSVM, LinearSVC
-from sklearn.linear_model import SGDClassifier, LogisticRegression
-from sklearn.neighbors import LocalOutlierFactor
-from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier, BaggingClassifier, VotingClassifier
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.naive_bayes import MultinomialNB
+from sklearn.linear_model import SGDOneClassSVM, SGDClassifier
+from sklearn.cluster import MiniBatchKMeans
 
-from utils import training_cross_validation, load_Xy_data, save_Xy_data
+from keras.models import load_model
 
-from joblib import dump, load
+from utils import *
+from models.models_utils import *
+from models.build_neural_networks import *
+
+from joblib import load
 
 __author__ = "nicolas"
 
-def bacterial_classification(bacteria_k_mers, database_k_mers, k, prefix, dataset, classifier = "svm", verbose = 1):
+def bacterial_classification(metagenome_k_mers, database_k_mers, k, prefix, dataset, classifier = "deeplstm", batch_size = 32, verbose = 1, cv = 1):
 # RECURSIVITY / LOOP FOR TAXA RANK (FLEX) CLASSIFICATION OF unclassified
-# Adapt code to accept taxa changes
-#    for taxa in ["species","genus","family","order"]:
-    taxa = "species"
+    for taxa in database_k_mers["taxas"]:
+        classified_kmers_file = "{}_K{}_{}_Xy_classified_{}_database_{}_data.hdf5.bz2".format(prefix, k, classifier, taxa, dataset) # Pandas df en output?
+        unclassified_kmers_file = "{}_K{}_{}_Xy_unclassified_{}_database_{}_data.hdf5.bz2".format(prefix, k, classifier, taxa, dataset)
+# CHANGE NAMES DEPENDING ON CLASSIFIERS USED
+        if classifier in ["onesvm","linearsvm"]:
+            clf_file = "{}_K{}_{}_bacteria_identification_classifier_{}_model.joblib".format(prefix, k, classifier, dataset)
+        else:
+            clf_file = "{}_K{}_{}_bacteria_identification_classifier_{}_model".format(prefix, k, classifier, dataset)
 
-    classified_file = prefix + "_K{}_{}_Xy_classified_{}_database_{}_data.hdf5.bz2".format(k, classifier, taxa, dataset) # Pandas df en output?
-    unclassified_file = prefix + "_K{}_{}_Xy_unclassified_{}_database_{}_data.hdf5.bz2".format(k, classifier, taxa, dataset)
-    clf_file = prefix + "_K{}_{}_bacteria_identification_classifier_{}_model.joblib".format(k, classifier, dataset)
+        if verbose:
+            print("Training classifier with bacteria sequences at {} level".format(taxa))
 
-    clf = {}
-    classified = pd.DataFrame(columns = ["species","genus","family","order"], index = database_k_mers["ids"])
-    unclassified = pd.DataFrame(np.zeros((4, len(database_k_mers["ids"]))), columns = ["species","genus","family","order"], index = database_k_mers["ids"]) # Add 1 if not classified at this taxa
+        # Load extracted data if already exists or train and classify bacteria depending on chosen method and taxonomic rank
+        if os.path.isfile(classified_kmers_file) and os.path.isfile(unclassified_kmers_file):
+            classified = load_Xy_data(classified_kmers_file)
+            unclassified = load_Xy_data(unclassified_kmers_file)
+        else:
+            # Get training dataset and assign to variables
+            X_train = database_k_mers["X"]
+# PROBABLY NEED TO CONVERT CLASSES TO NUMBERS FOR CLASSIFICATION
+            y_train = pd.DataFrame(database_k_mers["y"], index = database_k_mers["ids"], columns = database_k_mers["taxas"]).loc[:,taxa]
 
-    # Get training dataset
-    X_train = pd.DataFrame(StandardScaler().fit_transform(database_k_mers["X"]), columns = database_k_mers["kmers_list"], index = database_k_mers["ids"])
-# NEED MORE RANKS FOR Y LABELS -> SPECIFY RANK IN LOOP
-# Need to find a way to get them from DB and add to class.csv
-    y_train = pd.DataFrame(database_k_mers["y"].astype(np.int32), index = database_k_mers["ids"])
+        # If classifier exists load it or train if not
+# CHANGE NAMES DEPENDING ON CLASSIFIERS USED
+        if os.path.isfile(clf_file) and classifier in ["onesvm","linearsvm"]:
+            clf = load(clf_file)
+# CHANGE NAMES DEPENDING ON CLASSIFIERS USED
+        elif os.path.isfile(clf_file) and classifier in ["attention","lstm","deeplstm"]:
+            clf = load_model(clf_file)
+        else:
+            clf = training()
 
-# ADD TAXA RANKS
-    # Load classifier if already trained
-    if os.path.isfile(clf_file):
-        clf = load(clf_file)
-    else:
-        # Train/test classifier
-        clf = training(X_train, y_train, classifier = classifier, verbose = verbose)
-        dump(clf, clf_file)
+        # Classify sequences into taxa and build k-mers profiles classified data
+        classified = extract_bacteria_sequences()
 
-    # Classify sequences into taxa / unclassified and return k-mers profiles + classification
-    classified, unclassified = classify(clf, k_mers, taxa, classified, unclassified, classified_file, unclassified_file, verbose = verbose, saving = saving)
+# MAYBE SEND DIRECTLY TO OUTPUTING FUNCTIONS
 
+# NOT SURE IF RETURN CLASSIFIED DATA OR ONLY SAVED TO DISK
     return classified
 
-
-# If class is really unknown and can be anything not from three defined classes, then you better look at anomaly detection methods.
-# For example, for your each incoming data first classify if it is anomaly and then if it is not classify it into three well-defined classes.
-# Pretty much universal and starting method for anomaly detection is one class SVM.
-def training(X_train, y_train, classifier = "multiSVM", verbose = 1):
+def training(X_train, y_train, kmers, k, ids, classifier = "ridge", batch_size = 32, verbose = 1, cv = 1, clf_file = None):
 # NEED TO TUNE HYPERPARAMETERS
-    if classifier == "metaVW":
+    if classifier == "ridge":
         if verbose:
             print("Training multiclass classifier with Ridge regression and SGD squared loss")
-        #clf = Ridge(random_state = 42)
         clf = SGDClassifier(loss = "squared_error", n_jobs = -1, random_state = 42)
-    elif classifier == "multiSVM":
+    elif classifier == "svm":
         if verbose:
             print("Training multiclass classifier with Linear SVM and SGD hinge loss")
-        #clf = LinearSVC(dual = False, random_state = 42)
         clf = SGDClassifier(loss = "hinge", n_jobs = -1, random_state = 42)
-    elif classifier == "forest":
-        if verbose:
-            print("Training multiclass classifier with Random Forest")
-        clf = RandomForestClassifier(n_estimators = 100, random_state = 42, n_jobs = -1)
-    elif classifier == "knn":
-        if verbose:
-            print("Training multiclass classifier with K Nearest Neighbors")
-        clf = KNeighborsClassifier(random_state = 42, n_jobs = -1)
-    elif classifier == "NB":
-        if verbose:
-            print("Training multiclass classifier with Multinomial Naive Bayes")
-        clf = MultinomialNB()
     elif classifier == "mlr":
         if verbose:
             print("Training multiclass classifier with Multiple Logistic Regression")
-        clf = LogisticRegression(penalty = "l2", solver = "saga", multi_class = "multinomial", n_jobs = -1, random_state = 42)
-    elif classifier == "bag":
+# PROBABILITY
+        clf = SGDClassifier(loss = 'log', n_jobs = -1, random_state = 42)
+    elif classifier == "kmeans":
         if verbose:
-            print("Training multiclass classifier with K Nearest Neighbors with bagging ensemble method")
-        clf = BaggingClassifier(KNeighborsClassifier(), random_state = 42, n_jobs = -1)
-    elif classifier == "boost":
+            print("Training multiclass classifier with K Means")
+        clf = MiniBatchKMeans(nclusters = len(np.unique(y_train)), batch_size = batch_size, random_state = 42)
+    elif classifier == "mnb":
         if verbose:
-            print("Training multiclass classifier with K Nearest Neighbors with boosting ensemble method")
-        clf = AdaBoostClassifier(KNeighborsClassifier(), random_state = 42)
-    elif classifier == "consensus":
+            print("Training multiclass classifier with Multinomial Naive Bayes")
+# PROBABILITY
+        clf = MultinomialNB()
+    elif classifier == "lstm_attention":
         if verbose:
-            print("Training voting multiclass classifier with all other available classifiers")
-# USE TUNED HYPERPARAMETERS FROM OTHER TECHNIQUES
-        clf = VotingClassifier(estimators = [("metaVW",SGDClassifier(loss = "squared_error", random_state = 42)),
-                                            ("multiSVM",SGDClassifier(loss = "hinge", random_state = 42)),
-                                            ("forest",RandomForestClassifier(n_estimators = 100, random_state = 42)),
-                                            ("knn",KNeighborsClassifier(random_state = 42)),
-                                            ("NB",MultinomialNB()),
-                                            ("mlr",LogisticRegression(penalty = "l2", solver = "saga", multi_class = "multinomial", random_state = 42)),
-                                            ("bagging",BaggingClassifier(KNeighborsClassifier(), random_state = 42)),
-                                            ("boosting",AdaBoostClassifier(KNeighborsClassifier(), random_state = 42))],
-                                            voting = "soft",
-                                            n_jobs = -1)
-#    elif classifier == "NN":
-#        print("possibility of using neural network from articles/invention")
+            print("Training multiclass classifier based on Deep Neural Network hybrid between LSTM and Attention")
+        clf = build_LSTM_attention()
+    elif classifier == "cnn":
+        if verbose:
+            print("Training multiclass classifier based on CNN Neural Network")
+        clf = build_CNN()
+    elif classifier == "dbn":
+        if verbose:
+            print("Training multiclass classifier based on Deep DBN Neural Network")
+        clf = build_DBN()
+    elif classifier == "deepcnn":
+        if verbose:
+            print("Training multiclass classifier based on Deep CNN Network")
+        clf = build_WDcnn()
     else:
-        print("Classifier type unknown !!! \n Models implemented at this moment are \n :  MetaVW (metaVW), Linear SVM (multiSVM), Random forest (forest), \nKNN clustering (knn), bagging (bag), Adaboost (boost), Multinomial Bayes (NB), Multiple Linear Regression (mlr) and Multiclassifiers concensus (consensus)")
+        print("Bacteria classifier type unknown !!!\n\tModels implemented at this moment are :\n\tLinear models :  Ridge regressor (ridge), Linear SVM (svm), Multiple Logistic Regression (mlr)\n\tClustering classifier : K Means (kmeans)\n\tProbability classifier : Multinomial Bayes (mnb)\n\tNeural networks : Hybrid between LSTM and Attention (lstm_attention), CNN (cnn), DBN (dbn) and Deep CNN (deepcnn)")
         sys.exit()
 
     if cv:
-        X_train, X_test, y_train, y_test = model_selection.train_test_split(X_train, y_train, test_size = 0.2, random_state = 42)
-        clf.fit(X_train, y_train)
-        y_pred_test = clf.predict(X_test)
-        training_cross_validation(y_pred_test, list(y_test[0]), classifier)
-
+        clf = fit_predict_cv_multi()
     else:
-        clf.fit(X_train, y_train)
+        clf = fit_model_multi()
 
     return clf
 
-def classify(clf, k_mers, taxa, classified, unclassified, classified_file, unclassified_file, verbose = 1, saving = 1):
+# TO BE UPGRADED FOR DEALING WITH VIARIABLE NUMBER OF LABELS
+def classify(clf_file, X, kmers_list, ids, classifier, classified_kmers_file, unclassified_kmers_file, verbose = 1):
+# EXCLUDE CLASSIFICATIONS BASED ON CONFIDENCE SCORE AFTER PREDICTION
     if verbose:
         print("Extracting classification at {} level".format(taxa))
 
-# À voir comment ajouter outliers detection avant pour prédire les classes inconnues
-    predict = clf.predict(k_mers)
+    predict = model_predict_multi()
+    classified = []
+    unclassified = []
 
-    if saving:
-# À voir comment mettre ds pandas DF et si px valider avec les labels ou si list fonctionne / options output
-        classified[taxa] = predict
-        for i in range(len(predict)):
-            if predict[i] == -1:
-                unclassified.loc[:,taxa].iloc[i,:] = 1
+    for i in range(len(predict)):
+        if predict[i] >= 1:
+            bacteria.append(i)
+        elif predict[i] == -1:
+            unclassified.append(i)
 
-        save_Xy_data(classified, classified_file)
-        save_Xy_data(unclassified, unclassified_file)
+    save_predicted_kmers(classified, pd.Series(range(len(ids))), kmers_list, ids, X, classified_kmers_file)
+    save_predicted_kmers(unclassified, pd.Series(range(len(ids))), kmers_list, ids, X, unclassified_kmers_file)
 
-    else:
-# À voir comment mettre ds pandas DF et si px valider avec les labels ou si list fonctionne / options output
-        classified[taxa] = predict
-        save_Xy_data(classified, classified_file)
-
-    return classified, unclassified
+# SEE WHAT TO RETURN DEPENDING ON OUTPUT POSSIBILITIES

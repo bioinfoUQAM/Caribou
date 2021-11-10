@@ -19,7 +19,7 @@ done
 if [ $HELP -eq 1 ];
 then
   """
-  usage : fasta2class_bact.sh -d [directory] -i [inputFile] -c [classesFile] -o [outputDirectory]
+  usage : fasta2class_bacteria.sh -d [directory] -i [inputFile] -c [classesFile] -o [outputDirectory]
 
   This script merges multiple fasta files into one and creates the file containing classes of those sequences
   This method was tested on GTDB database and taxonomy and might need some modifications for other taxonomies
@@ -32,19 +32,24 @@ then
   """
 fi
 
-declare -a list_ids=()
-#ARRAY_NAME+=(NEW_ITEM1)
+
 
 fasta_file=$OUTDIR/data_bacteria.fa.gz
 cls_file=$OUTDIR/class_bacteria.csv
 echo "id","species","genus","family","order","class","phylum","domain" >> $cls_file
+length=$(wc -l $FASTA_LIST | awk '{print $1}')
 
-for i in $(seq $(wc -c $FASTA_LIST | awk '{print $1}')); do
+for i in $(seq $length); do
+  echo $i:$length
+  declare -a list_ids=()
   file=$(sed -n "${i}p" $FASTA_LIST)
   cat $file >> $fasta_file
-  ids=$(zcat $file | grep ">" | awk '{print $1}') | sed 's/>//'
-  for j in $(seq $(zcat $file | grep -c ">")); do
-    id=$(sed -n "${j}p" $ids)
-    echo $(cat $CLASSES_IN | grep $id) >> $cls_file
+  GCA=$(basename $file | cut -d'_' -f1-2)
+  list_ids+=$(zcat $file | grep ">" | awk '{print $1}' | sed 's/>//')
+  for id in ${list_ids[*]}; do
+    entry=$(cat $CLASSES_IN | grep $GCA)
+    entry=$(echo ${entry/$GCA/$id})
+    entry=$(echo ${entry// /,})
+    echo $entry >> $cls_file
   done
 done

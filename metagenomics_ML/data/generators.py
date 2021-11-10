@@ -121,9 +121,8 @@ class DataGeneratorKeras(Sequence):
         if self.classifier in ["lstm","deeplstm"]:
             X = X.reshape(1, self.batch_size, len(self.kmers))
             y = y.reshape(1, self.batch_size, 1)
-        elif self.classifier == "cnn":
-            X = X.reshape(1,1,1, self.batch_size, len(self.kmers))
-            y = y.reshape(1,1,1, self.batch_size, 1)
+        print(X)
+        print(y)
         return X, y
 
     def __len__(self):

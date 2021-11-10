@@ -36,7 +36,7 @@ fasta_file=$DIR/data_host.fa.gz
 cls_file=$DIR/class_host.csv
 echo "id","domain" >> $cls_file
 
-for i in $(seq $(wc -c $FASTA_LIST | awk '{print $1}')); do
+for i in $(seq $(wc -l $FASTA_LIST | awk '{print $1}')); do
   file=$(sed -n "${i}p" $FASTA_LIST)
   cat $file >> $fasta_file
   ids=$(zcat $file | grep ">" | awk '{print $1}') | sed 's/>//'
