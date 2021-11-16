@@ -21,7 +21,7 @@ def bacteria_extraction(metagenome_k_mers, database_k_mers, k, prefix, dataset, 
     host_kmers_file = prefix + "_K{}_{}_Xy_host_database_{}_data.h5f".format(k, classifier, dataset)
     unclassified_kmers_file = prefix + "_K{}_{}_Xy_unclassified_database_{}_data.h5f".format(k, classifier, dataset)
     if classifier in ["onesvm","linearsvm"]:
-        clf_file ="{}_K{}_{}_bacteria_binary_classifier_{}_model.joblib".format(prefix, k, classifier, dataset)
+        clf_file ="{}_K{}_{}_bacteria_binary_classifier_{}_model.jb".format(prefix, k, classifier, dataset)
     else:
         clf_file ="{}_K{}_{}_bacteria_binary_classifier_{}_model".format(prefix, k, classifier, dataset)
 
@@ -53,17 +53,17 @@ def bacteria_extraction(metagenome_k_mers, database_k_mers, k, prefix, dataset, 
         # If classifier exists load it or train if not
         if os.path.isfile(clf_file) and classifier in ["onesvm","linearsvm"]:
             clf = load(clf_file)
-        elif os.path.isfile(clf_file) and classifier in ["attention","lstm","deeplstm"]:
+        elif os.path.isdir(clf_file) and classifier in ["attention","lstm","deeplstm"]:
             clf = load_model(clf_file)
         else:
-            clf = training(X_train, y_train, database_k_mers["kmers_list"], k, database_k_mers["ids"], classifier = classifier, batch_size = batch_size, verbose = verbose, cv = cv, clf_file = clf_file)
+            clf = training(X_train, y_train, database_k_mers["kmers_list"], k, database_k_mers["ids"], labels_list = [-1, 1], classifier = classifier, batch_size = batch_size, verbose = verbose, cv = cv, clf_file = clf_file)
 
         # Classify sequences into bacteria / unclassified / host and build k-mers profiles for bacteria
-        bacteria = extract_bacteria_sequences(clf_file, metagenome_k_mers["X"], metagenome_k_mers["kmers_list"], metagenome_k_mers["ids"], classifier, bacteria_kmers_file, host_kmers_file, unclassified_kmers_file, verbose = verbose, saving_host = saving_host, saving_unclassified = saving_unclassified)
+        bacteria = extract_bacteria_sequences(clf_file, metagenome_k_mers["X"], metagenome_k_mers["kmers_list"], metagenome_k_mers["ids"], classifier, [-1, 1], bacteria_kmers_file, host_kmers_file, unclassified_kmers_file, verbose = verbose, saving_host = saving_host, saving_unclassified = saving_unclassified)
 
     return bacteria
 
-def training(X_train, y_train, kmers, k, ids, classifier = "deeplstm", batch_size = 32, verbose = 1, cv = 1, clf_file = None):
+def training(X_train, y_train, kmers, k, ids, labels_list, classifier = "deeplstm", batch_size = 32, verbose = 1, cv = 1, clf_file = None):
     if classifier == "onesvm":
         if verbose:
             print("Training bacterial extractor with One Class SVM")
@@ -89,19 +89,20 @@ def training(X_train, y_train, kmers, k, ids, classifier = "deeplstm", batch_siz
         sys.exit()
 
     if cv:
-        clf = fit_predict_cv(X_train, y_train, batch_size, kmers, ids, classifier, clf, cv = cv, verbose = verbose, clf_file = clf_file)
+        clf = fit_predict_cv(X_train, y_train, batch_size, kmers, ids, classifier, labels_list, clf, cv = cv, verbose = verbose, clf_file = clf_file)
     else:
-        clf = fit_model(X_train, y_train, batch_size, kmers, ids, classifier, clf, cv = cv, shuffle = True, verbose = verbose, clf_file = clf_file)
+        clf = fit_model(X_train, y_train, batch_size, kmers, ids, classifier labels_list, clf, cv = cv, shuffle = True, verbose = verbose, clf_file = clf_file)
 
     return clf
 
-def extract_bacteria_sequences(clf_file, X, kmers_list, ids, classifier, bacteria_kmers_file, host_kmers_file, unclassified_kmers_file, verbose = 1, saving_host = 1, saving_unclassified = 1):
+def extract_bacteria_sequences(clf_file, X, kmers_list, ids, classifier, labels_list, bacteria_kmers_file, host_kmers_file, unclassified_kmers_file, verbose = 1, saving_host = 1, saving_unclassified = 1):
 
-    predict = model_predict(clf_file, X, kmers_list, ids, classifier, verbose)
+    predict = model_predict(clf_file, X, kmers_list, ids, classifier, nb_classes = 2, labels_list = labels_list, verbose = verbose)
     bacteria = []
     host = []
     unclassified = []
 
+    # OneSVM sklearn
     if classifier == "onesvm" and saving_unclassified:
         if verbose:
             print("Extracting predicted bacteria and unclassified sequences")
@@ -112,6 +113,7 @@ def extract_bacteria_sequences(clf_file, X, kmers_list, ids, classifier, bacteri
                 unclassified.append(i)
         save_predicted_kmers(bacteria, pd.Series(range(len(ids))), kmers_list, ids, X, bacteria_kmers_file)
         save_predicted_kmers(unclassified, pd.Series(range(len(ids))), kmers_list, ids, X, unclassified_kmers_file)
+    # Keras classifiers
     elif classifier not in ["onesvm","linearsvm"] and saving_host and saving_unclassified:
         if verbose:
             print("Extracting predicted bacteria, host and unclassified sequences")
@@ -125,6 +127,7 @@ def extract_bacteria_sequences(clf_file, X, kmers_list, ids, classifier, bacteri
         save_predicted_kmers(bacteria, pd.Series(range(len(ids))), kmers_list, ids, X, bacteria_kmers_file)
         save_predicted_kmers(host, pd.Series(range(len(ids))), kmers_list, ids, X, host_kmers_file)
         save_predicted_kmers(unclassified, pd.Series(range(len(ids))), kmers_list, ids, X, unclassified_kmers_file)
+    # LinearSVM sklearn
     elif classifier != "onesvm" and saving_host:
         if verbose:
             print("Extracting predicted bacteria and host sequences")
@@ -135,6 +138,7 @@ def extract_bacteria_sequences(clf_file, X, kmers_list, ids, classifier, bacteri
                 host.append(i)
         save_predicted_kmers(bacteria, pd.Series(range(len(ids))), kmers_list, ids, X, bacteria_kmers_file)
         save_predicted_kmers(host, pd.Series(range(len(ids))), kmers_list, ids, X, host_kmers_file)
+    # Only saving bacterias
     else:
         if verbose:
             print("Extracting predicted bacteria sequences")
@@ -143,9 +147,9 @@ def extract_bacteria_sequences(clf_file, X, kmers_list, ids, classifier, bacteri
                 bacteria.append(i)
         save_predicted_kmers(bacteria, pd.Series(range(len(ids))), kmers_list, ids, X, bacteria_kmers_file)
 
-    bacteria = {}
-    bacteria["X"] = str(bacteria_kmers_file)
-    bacteria["kmers_list"] = kmers_list
-    bacteria["ids"] = ids
+    bacteria_data = {}
+    bacteria_data["X"] = str(bacteria_kmers_file)
+    bacteria_data["kmers_list"] = kmers_list
+    bacteria_data["ids"] = [ids[i] for i in bacteria]
 
-    return bacteria
+    return bacteria_data

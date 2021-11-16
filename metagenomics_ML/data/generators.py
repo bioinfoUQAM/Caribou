@@ -30,25 +30,13 @@ class DataGenerator():
         self.positions_list = np.arange(self.len_array)
         #
         self._shuffle()
-        self._iter_generator()
+        self.iterator = self.iter_minibatch(self.positions_list)
 
     # Shuffle list of positions of array
     def _shuffle(self):
-        # Update indexes and shuffle position after each epoch
-        self.positions_list = np.arange(len(self.positions_list))
+        # Shuffle position after each epoch
         if self.shuffle:
             np.random.shuffle(self.positions_list)
-            if self.cv:
-                self.training_length = int(self.len_array*0.8)
-                self.training_positions = self.positions_list[:self.training_length]
-                self.testing_positions = self.positions_list[self.training_length:]
-
-    def _iter_generator(self):
-        if self.cv:
-            self.iterator_train = self.iter_minibatch(self.training_positions)
-            self.iterator_test = self.iter_minibatch(self.testing_positions)
-        else:
-            self.iterator = self.iter_minibatch(self.positions_list)
 
     def iter_minibatch(self, positions):
         start = 0
@@ -98,14 +86,11 @@ class DataGeneratorKeras(Sequence):
 
     # Shuffle list of positions of array
     def on_epoch_end(self):
-        # Update indexes and shuffle position after each epoch
-        self.positions_list = np.arange(len(self.positions_list))
+        # Shuffle position after each epoch
         if self.shuffle:
             np.random.shuffle(self.positions_list)
 
     def __data_generation(self, list_pos_temp):
-        # Generate data
-        # X : (n_samples, *dim, n_channels)
         X = np.empty((self.batch_size, len(self.kmers)))
         y = np.empty((self.batch_size), dtype=int)
 
@@ -121,8 +106,7 @@ class DataGeneratorKeras(Sequence):
         if self.classifier in ["lstm","deeplstm"]:
             X = X.reshape(1, self.batch_size, len(self.kmers))
             y = y.reshape(1, self.batch_size, 1)
-        print(X)
-        print(y)
+
         return X, y
 
     def __len__(self):
@@ -141,13 +125,27 @@ class DataGeneratorKeras(Sequence):
 # ####################
 # Data build functions
 # ####################
+def iter_generator(array, labels, batch_size, kmers, ids, cv, shuffle = True, training = True):
+    if cv and training:
+        positions_list = np.array(range(len(labels)))
+        np.random.shuffle(positions_list)
 
-def iter_generator_keras(array, labels, batch_size, kmers, ids, cv, classifier, shuffle = True, training = True):
-    params = {'batch_size': batch_size,
-              'kmers': kmers,
-              'ids': ids,
-              'classifier': classifier,
-              'shuffle': shuffle}
+        training_length = int(len(labels)*0.8)
+
+        training_positions = positions_list[:training_length]
+        testing_positions = positions_list[training_length:]
+
+        iterator_train = DataGenerator(array, labels, batch_size, kmers, ids, cv, shuffle)
+        iterator_test = DataGenerator(array, labels, batch_size, kmers, ids, cv, shuffle)
+
+        return iterator_train, iterator_test
+
+    else:
+        positions_list = np.array(range(len(labels)))
+        iterator = DataGenerator(array, labels, batch_size, kmers, ids, cv, shuffle)
+        return iterator
+
+def iter_generator_keras(array, labels, batch_size, kmers, ids, cv, classifier, shuffle, training):
 
     if cv and training:
         positions_list = np.array(range(len(labels)))
@@ -161,9 +159,9 @@ def iter_generator_keras(array, labels, batch_size, kmers, ids, cv, classifier, 
         validating_positions = positions_list[training_length:(training_length + validating_length)]
         testing_positions = positions_list[(training_length + validating_length):]
 
-        iterator_train = DataGeneratorKeras(array, labels, training_positions, **params)
-        iterator_val = DataGeneratorKeras(array, labels, validating_positions, **params)
-        iterator_test = DataGeneratorKeras(array, labels, testing_positions, **params)
+        iterator_train = DataGeneratorKeras(array, labels, training_positions, batch_size, kmers, ids, classifier, shuffle = True)
+        iterator_val = DataGeneratorKeras(array, labels, validating_positions, batch_size, kmers, ids, classifier, shuffle = True)
+        iterator_test = DataGeneratorKeras(array, labels, testing_positions, 1, kmers, ids, classifier, shuffle = False)
 
         return iterator_train, iterator_val, iterator_test
 
@@ -174,11 +172,11 @@ def iter_generator_keras(array, labels, batch_size, kmers, ids, cv, classifier, 
         training_positions = positions_list[:training_length]
         validating_positions = positions_list[training_length:]
 
-        iterator_train = DataGeneratorKeras(array, labels, training_positions, **params)
-        iterator_val = DataGeneratorKeras(array, labels, validating_positions, **params)
+        iterator_train = DataGeneratorKeras(array, labels, training_positions, batch_size, kmers, ids, classifier, shuffle = True)
+        iterator_val = DataGeneratorKeras(array, labels, validating_positions, batch_size, kmers, ids, classifier, shuffle = True)
         return iterator_train, iterator_val
 
     else:
         positions_list = np.array(range(len(labels)))
-        iterator = DataGeneratorKeras(array, labels, positions_list, **params)
+        iterator = DataGeneratorKeras(array, labels, positions_list, batch_size, kmers, ids, classifier, shuffle = False)
         return iterator

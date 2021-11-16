@@ -3,15 +3,11 @@ from keras import initializers
 from tensorflow.keras.layers import InputSpec, Layer
 from keras import backend as K
 
-__author__ = "Aly O. Abdelkareem"
-
-"""
-Class extracted from module virnet/AttentionLayer.py of
-VirNet package [Abdelkareem et al. 2018]
-"""
-
 class AttentionWeightedAverage(Layer):
     """
+    Class extracted from module virnet/AttentionLayer.py of
+    VirNet package [Abdelkareem et al. 2018]
+
     Computes a weighted average of the different channels across timesteps.
     Uses 1 parameter pr. channel to compute the attention value for a single timestep.
     """
