@@ -5,6 +5,8 @@ import tables as tb
 
 import os
 
+from tensorflow.keras.utils import to_categorical
+
 from data.generators import DataGenerator
 
 __author__ = "nicolas"
@@ -25,13 +27,15 @@ def save_Xy_data(data, Xy_file):
 
 def save_predicted_kmers(positions_list, y, kmers_list, ids, infile, outfile):
     data = False
-    generator = DataGenerator(infile, y, 1, kmers_list, ids, cv = 0, shuffle = False)
-    with tb.open_file(outfile, "a") as handle:
-        for i, (X, y) in enumerate(generator.iterator):
-            if i in positions_list and not data:
-                data = handle.create_earray("/", "data", obj = np.array(X))
-            elif i in positions_list and data:
-                data.append(np.array(X))
+    generator = DataGenerator(infile, y, 1, kmers_list, ids, np.arange(len(ids)), cv = 0, shuffle = False)
+    for i, (X, y) in enumerate(generator.iterator):
+        if i in positions_list and data == False:
+            data = pd.HDFStore(outfile)
+            df = pd.DataFrame(X, columns = kmers_list, index = [ids[i]])
+            data.put("data", df, format = "table")
+        elif i in positions_list and data != False:
+            df = pd.DataFrame(X, columns = kmers_list, index = [ids[i]])
+            data.append("data", df)
     generator.handle.close()
 
 def merge_database_host(database_data, host_data):
@@ -46,8 +50,8 @@ def merge_database_host(database_data, host_data):
     merged_data["kmers_list"] = list(set(database_data["kmers_list"]).union(host_data["kmers_list"]))
     merged_data["taxas"] = max(database_data["taxas"], host_data["taxas"], key = len)
 
-    generator_database = DataGenerator(database_data["X"], database_data["y"], 32, database_data["kmers_list"], database_data["ids"], cv = 0, shuffle = False)
-    generator_host = DataGenerator(host_data["X"], host_data["y"], 32, host_data["kmers_list"], host_data["ids"], cv = 0, shuffle = False)
+    generator_database = DataGenerator(database_data["X"], database_data["y"], 32, database_data["kmers_list"], database_data["ids"], np.arange(len(database_data["ids"])), cv = 0, shuffle = False)
+    generator_host = DataGenerator(host_data["X"], host_data["y"], 32, host_data["kmers_list"], host_data["ids"], np.arange(len(host_data["ids"])), cv = 0, shuffle = False)
     if not os.path.isfile(merged_file):
         data = False
         with tb.open_file(merged_file, "a") as handle:
@@ -60,3 +64,10 @@ def merge_database_host(database_data, host_data):
         generator_host.handle.close()
 
     return merged_data
+
+def to_int_cls(data, nb_cls, list_cls):
+    # integer encoding of labels
+    for cls in list_cls:
+        pos_cls = np.where(list_cls == cls)[0]
+        data.replace(to_replace = {cls : pos_cls}, inplace = True)
+    return data

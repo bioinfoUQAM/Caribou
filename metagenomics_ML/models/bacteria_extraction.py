@@ -16,21 +16,29 @@ from joblib import load
 
 __author__ = "nicolas"
 
-def bacteria_extraction(metagenome_k_mers, database_k_mers, k, prefix, dataset, classifier = "deeplstm", batch_size = 32, verbose = 1, cv = 1, saving_host = 1, saving_unclassified = 1):
-    bacteria_kmers_file = "{}_K{}_{}_Xy_bacteria_database_{}_data.h5f".format(prefix, k, classifier, dataset)
-    host_kmers_file = prefix + "_K{}_{}_Xy_host_database_{}_data.h5f".format(k, classifier, dataset)
-    unclassified_kmers_file = prefix + "_K{}_{}_Xy_unclassified_database_{}_data.h5f".format(k, classifier, dataset)
+def bacteria_extraction(metagenome_k_mers, database_k_mers, k, outdirs, dataset, classifier = "deeplstm", batch_size = 32, verbose = 1, cv = 1, saving_host = 1, saving_unclassified = 1, n_jobs = 1):
+    train = False
+
+    bacteria_data_file = "{}_K{}_{}_Xy_bacteria_database_{}_data.npz".format(outdirs["data_dir"], k, classifier, dataset)
+    bacteria_kmers_file = "{}_K{}_{}_Xy_bacteria_database_{}_data.h5f".format(outdirs["data_dir"], k, classifier, dataset)
+    host_kmers_file ="{}_K{}_{}_Xy_host_database_{}_data.h5f".format(outdirs["data_dir"], k, classifier, dataset)
+    unclassified_kmers_file ="{}_K{}_{}_Xy_unclassified_database_{}_data.h5f".format(outdirs["data_dir"], k, classifier, dataset)
+
     if classifier in ["onesvm","linearsvm"]:
-        clf_file ="{}_K{}_{}_bacteria_binary_classifier_{}_model.jb".format(prefix, k, classifier, dataset)
-    else:
-        clf_file ="{}_K{}_{}_bacteria_binary_classifier_{}_model".format(prefix, k, classifier, dataset)
+        clf_file ="{}_K{}_{}_bacteria_binary_classifier_{}_model.jb".format(outdirs["models_dir"], k, classifier, dataset)
+        if not os.path.isfile(clf_file):
+            train = True
+    elif classifier in ["attention","lstm","deeplstm"]:
+        clf_file ="{}_K{}_{}_bacteria_binary_classifier_{}_model".format(outdirs["models_dir"], k, classifier, dataset)
+        if not os.path.isdir(clf_file):
+            train = True
 
     if verbose:
         print("Extracting bacteria sequences from data")
 
     # Load extracted data if already exists or train and extract bacteria depending on chosen method
-    if os.path.isfile(bacteria_kmers_file):
-        bacteria = load_Xy_data(bacteria_kmers_file)
+    if os.path.isfile(bacteria_data_file):
+        bacteria = load_Xy_data(bacteria_data_file)
     else:
         # Get training dataset and assign to variables
         if classifier == "onesvm" and isinstance(database_k_mers, tuple):
@@ -51,19 +59,15 @@ def bacteria_extraction(metagenome_k_mers, database_k_mers, k, prefix, dataset, 
             sys.exit()
 
         # If classifier exists load it or train if not
-        if os.path.isfile(clf_file) and classifier in ["onesvm","linearsvm"]:
-            clf = load(clf_file)
-        elif os.path.isdir(clf_file) and classifier in ["attention","lstm","deeplstm"]:
-            clf = load_model(clf_file)
-        else:
-            clf = training(X_train, y_train, database_k_mers["kmers_list"], k, database_k_mers["ids"], labels_list = [-1, 1], classifier = classifier, batch_size = batch_size, verbose = verbose, cv = cv, clf_file = clf_file)
-
+        if train == True:
+            clf_file = training(X_train, y_train, database_k_mers["kmers_list"], k, database_k_mers["ids"], [-1, 1], outdirs["plots_dir"] if cv else None, classifier = classifier, batch_size = batch_size, verbose = verbose, cv = cv, clf_file = clf_file, n_jobs = n_jobs)
         # Classify sequences into bacteria / unclassified / host and build k-mers profiles for bacteria
         bacteria = extract_bacteria_sequences(clf_file, metagenome_k_mers["X"], metagenome_k_mers["kmers_list"], metagenome_k_mers["ids"], classifier, [-1, 1], bacteria_kmers_file, host_kmers_file, unclassified_kmers_file, verbose = verbose, saving_host = saving_host, saving_unclassified = saving_unclassified)
+        save_Xy_data(bacteria, bacteria_data_file)
 
     return bacteria
 
-def training(X_train, y_train, kmers, k, ids, labels_list, classifier = "deeplstm", batch_size = 32, verbose = 1, cv = 1, clf_file = None):
+def training(X_train, y_train, kmers, k, ids, labels_list, outdir_plots, classifier = "deeplstm", batch_size = 32, verbose = 1, cv = 1, clf_file = None, n_jobs = 1):
     if classifier == "onesvm":
         if verbose:
             print("Training bacterial extractor with One Class SVM")
@@ -89,11 +93,11 @@ def training(X_train, y_train, kmers, k, ids, labels_list, classifier = "deeplst
         sys.exit()
 
     if cv:
-        clf = fit_predict_cv(X_train, y_train, batch_size, kmers, ids, classifier, labels_list, clf, cv = cv, verbose = verbose, clf_file = clf_file)
+        clf_file = cross_validation_training(X_train, y_train, batch_size, kmers, ids, classifier, labels_list, outdir_plots, clf, cv = cv, verbose = verbose, clf_file = clf_file, n_jobs = n_jobs)
     else:
-        clf = fit_model(X_train, y_train, batch_size, kmers, ids, classifier labels_list, clf, cv = cv, shuffle = True, verbose = verbose, clf_file = clf_file)
+        fit_model(X_train, y_train, batch_size, kmers, ids, classifier, labels_list, clf, cv = cv, shuffle = True, verbose = verbose, clf_file = clf_file)
 
-    return clf
+    return clf_file
 
 def extract_bacteria_sequences(clf_file, X, kmers_list, ids, classifier, labels_list, bacteria_kmers_file, host_kmers_file, unclassified_kmers_file, verbose = 1, saving_host = 1, saving_unclassified = 1):
 
@@ -121,9 +125,9 @@ def extract_bacteria_sequences(clf_file, X, kmers_list, ids, classifier, labels_
             if predict[i] == 1:
                 bacteria.append(i)
             elif predict[i] == 0:
-                host.append(i)
-            elif predict[i] == -1:
                 unclassified.append(i)
+            elif predict[i] == -1:
+                host.append(i)
         save_predicted_kmers(bacteria, pd.Series(range(len(ids))), kmers_list, ids, X, bacteria_kmers_file)
         save_predicted_kmers(host, pd.Series(range(len(ids))), kmers_list, ids, X, host_kmers_file)
         save_predicted_kmers(unclassified, pd.Series(range(len(ids))), kmers_list, ids, X, unclassified_kmers_file)

@@ -1,11 +1,13 @@
 
 from keras import initializers
-from tensorflow.keras.layers import InputSpec, Layer
 from keras import backend as K
+from keras.utils import tf_inspect
+from keras.mixed_precision import policy
+from tensorflow.keras.layers import InputSpec, Layer
 
 class AttentionWeightedAverage(Layer):
     """
-    Class extracted from module virnet/AttentionLayer.py of
+    Class extracted and adapted from module virnet/AttentionLayer.py of
     VirNet package [Abdelkareem et al. 2018]
 
     Computes a weighted average of the different channels across timesteps.
@@ -13,10 +15,57 @@ class AttentionWeightedAverage(Layer):
     """
 
     def __init__(self, return_attention=False, **kwargs):
-        self.init = initializers.get('uniform')
+        self.initializer = initializers.get('uniform')
         self.supports_masking = True
         self.return_attention = return_attention
-        super(AttentionWeightedAverage, self).__init__(** kwargs)
+        super(AttentionWeightedAverage, self).__init__()
+
+    def get_config(self):
+        """
+        Method adapted from module keras/keras/engine/base_layer.py of
+        Keras API to work with custom layer cloning
+        """
+        all_args = tf_inspect.getfullargspec(self.__init__).args
+        config = {
+            'name': self.name,
+            'trainable': self.trainable,
+            'initializer': self.initializer,
+            'supports_masking': self.supports_masking,
+            'return_attention': self.return_attention
+        }
+        if hasattr(self, '_batch_input_shape'):
+          config['batch_input_shape'] = self._batch_input_shape
+        config['dtype'] = policy.serialize(self._dtype_policy)
+        if hasattr(self, 'dynamic'):
+          # Only include `dynamic` in the `config` if it is `True`
+          if self.dynamic:
+            config['dynamic'] = self.dynamic
+          elif 'dynamic' in all_args:
+            all_args.remove('dynamic')
+        expected_args = config.keys()
+        # Finds all arguments in the `__init__` that are not in the config:
+        extra_args = [arg for arg in all_args if arg not in expected_args]
+        # Check that either the only argument in the `__init__` is  `self`,
+        # or that `get_config` has been overridden:
+        if len(extra_args) > 1 and hasattr(self.get_config, '_is_default'):
+          raise NotImplementedError(textwrap.dedent(f"""
+              Layer {self.__class__.__name__} has arguments {extra_args}
+              in `__init__` and therefore must override `get_config()`.
+              Example:
+              class CustomLayer(keras.layers.Layer):
+                  def __init__(self, arg1, arg2):
+                      super().__init__()
+                      self.arg1 = arg1
+                      self.arg2 = arg2
+                  def get_config(self):
+                      config = super().get_config()
+                      config.update({{
+                          "arg1": self.arg1,
+                          "arg2": self.arg2,
+                      }})
+                      return config"""))
+
+        return config
 
     def build(self, input_shape):
         self.input_spec = [InputSpec(ndim=3)]
@@ -24,7 +73,7 @@ class AttentionWeightedAverage(Layer):
 
         self.W = self.add_weight(shape=(input_shape[2], 1),
                                  name='{}_W'.format(self.name),
-                                 initializer=self.init)
+                                 initializer=self.initializer)
         self.train_weights = [self.W]
         super(AttentionWeightedAverage, self).build(input_shape)
 

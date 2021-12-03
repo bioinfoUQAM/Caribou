@@ -2,7 +2,10 @@
 Alignment-free bacterial identification and classification in metagenomics sequencing data using machine learning
 
 ## Installation of dependencies
-To install gpu on your machine if necessary, refer to tensorflow's help on installing gpus : https://www.tensorflow.org/install/gpu
+It is recommended to run on a GPU-enabled machine to accelerate training of models but not necessary.
+To install GPU dependencies on your machine if wanted, refer to following tutorials for installation of GPUs :
+https://docs.nvidia.com/deeplearning/cudnn/install-guide/index.html
+https://www.tensorflow.org/install/gpu
 
 To install package in a new python virtual environment through pip, make sure that python is installed first.
 Modify the first line to choose where to pu your virtual environment on your drive.
@@ -65,4 +68,4 @@ To test, run the following command using you own modified config file :
 python3 metagenomics_ML/metagenomics_ML/main.py metagenomics_ML/eval_configs/test.ini
 ```
 
-Description for each variable can be found in the wiki https://github.com/bioinfoUQAM/metagenomics_ML.wiki.git
+Description for each variable can be found in the wiki https://github.com/bioinfoUQAM/metagenomics_ML/wiki

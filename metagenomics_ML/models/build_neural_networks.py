@@ -1,11 +1,11 @@
 
 import math
 
+import tensorflow as tf
 from tensorflow import cast
-from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.initializers import GlorotNormal
 from keras.models import Model, Sequential
-from keras.layers import Dense, Input, LSTM, Embedding, Dropout, Conv2D, MaxPooling1D, ReLU, Concatenate, Flatten
+from keras.layers import Dense, Input, LSTM, Embedding, Dropout, Conv1D, Conv2D, MaxPooling1D, MaxPooling2D, ReLU, Concatenate, Flatten, Attention, Activation, Reshape
 
 from models.attentionLayer import AttentionWeightedAverage
 
@@ -19,7 +19,7 @@ def build_attention(kmers_length):
     """
 
     inputs = Input(shape = (kmers_length,))
-    x = Embedding(4, 128)(inputs)
+    x = Embedding(kmers_length, 128)(inputs)
     x = LSTM(128, return_sequences = True, dropout = 0.1, recurrent_dropout = 0.1 )(x)
     x = LSTM(128, return_sequences = True, dropout = 0.1, recurrent_dropout = 0.1 )(x)
     x = AttentionWeightedAverage()(x)
@@ -28,7 +28,7 @@ def build_attention(kmers_length):
     x = Dense(1, activation = "sigmoid")(x)
 
     model = Model(inputs = inputs, outputs = x)
-    model.compile(loss = 'binary_crossentropy', optimizer = Adam(lr = 0.001), metrics = ['accuracy'])
+    model.compile(loss = 'binary_crossentropy', optimizer = 'adam', metrics = ['accuracy'])
 
     return model
 
@@ -73,69 +73,71 @@ def build_deepLSTM(kmers_length, batch_size):
 
 def build_LSTM_attention(kmers_length, nb_classes, batch_size):
     """
-    Function adapted in keras from module DeepMicrobes/models/embed_lstm_attention.py of
+    Function adapted in keras from module DeepMicrobes/models/embed_lstm_attention.py and
+    default values for layers in script DeepMicrobes/models/define_flags.py of
     DeepMicrobes package [Liang et al. 2020]
     """
     inputs = Input(shape = (batch_size, kmers_length))
-    net = Embedding(8390658, 100, kernel_initializer = 'glorot_normal')(inputs)
-    net = LSTM((300, cast(kmers_length, tf.int32)), kernel_initializer = 'glorot_normal')(net)
-    net = Attention(kernel_initializer = 'glorot_normal')(net)
-    net = Dense(18000, activation = 'relu', kernel_initializer = 'glorot_normal')(net)
-    net = Dropout(0.2, kernel_initializer = 'glorot_normal')(net)
-    net = Dense(3000, activation = 'relu', kernel_initializer = 'glorot_normal')(net)
-    net = Dropout(0.2, kernel_initializer = 'glorot_normal')(net)
-    outputs = Activation('softmax', kernel_initializer = 'glorot_normal')(net)
+    #net = Embedding(kmers_length, 100, embeddings_initializer = 'glorot_normal')(inputs)
+    #net = Reshape((batch_size, kmers_length * 100))(net)
+    net = LSTM(300, kernel_initializer = 'glorot_normal', return_sequences=True, return_state=True)(inputs)
+    net = Attention()(net)
+    net = Dense((batch_size * 300 * 2), activation = 'relu', kernel_initializer = 'glorot_normal')(net)
+    net = Dropout(0.2)(net)
+    net = Dense(nb_classes, activation = 'relu', kernel_initializer = 'glorot_normal')(net)
+    net = Dropout(0.2)(net)
+    outputs = Activation('softmax')(net)
     model = Model(inputs = inputs, outputs = outputs)
-    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+    model.compile(loss='sparse_categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
 
     return model
 
-def build_CNN(nb_classes, nb_kmers):
+def build_CNN(kmers_length, batch_size, nb_classes):
     """
     Function extracted from module MetagenomicDC/models/CNN.py of
     MetagenomicDC package [Fiannaca et al. 2018]
     """
     model = Sequential()
-    model.add(Convolution1D(5,5, border_mode='valid', input_dim = 1, input_length = nb_kmers)) #input_dim
+    model.add(Conv1D(5,5, input_shape = (batch_size, kmers_length))) #input_dim
     model.add(Activation('relu'))
-    model.add(MaxPooling1D(pool_length=2,border_mode='valid'))
-    model.add(Convolution1D(10, 5,border_mode='valid'))
+    model.add(MaxPooling1D(pool_size = 2))
+    model.add(Conv1D(10, 5))
     model.add(Activation('relu'))
-    model.add(MaxPooling1D(pool_length=2,border_mode='valid'))
+    model.add(MaxPooling1D(pool_size = 2))
     model.add(Flatten())
     model.add(Dense(500))
     model.add(Activation('relu'))
     model.add(Dropout(0.5))
     model.add(Dense(nb_classes))
     model.add(Activation('softmax'))
-    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+    model.compile(loss='sparse_categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
 
     return model
 
-def build_deepCNN(kmers_length, batch_size):
+def build_deepCNN(kmers_length, batch_size, nb_classes):
     """
     Function adapted in keras from module CHEER/Classifier/model/Wcnn.py of
     CHEER package [Shang et al. 2021]
     """
     inputs = Input(shape = (batch_size, kmers_length))
     embed = Embedding(248, 100)(inputs)
-    conv1 = Conv2D(256, (3, kmers_length), input_shape = 1, activation = 'relu')(embed)
-    conv1 = MaxPooling1D(stride = kmers_length)(conv1)
-    conv2 = Conv2D(256, (7, kmers_length), input_shape = 1, activation = 'relu')(embed)
-    conv2 = MaxPooling1D(stride = kmers_length)(conv2)
-    conv3 = Conv2D(256, (11, kmers_length), input_shape = 1, activation = 'relu')(embed)
-    conv3 = MaxPooling1D(stride = kmers_length)(conv3)
-    conv4 = Conv2D(256, (15, kmers_length), input_shape = 1, activation = 'relu')(embed)
-    conv4 = MaxPooling1D(stride = kmers_length)(conv4)
-    net = Concatenate([conv1,conv2,conv3,conv4], axis = 1)
+    conv1 = Conv2D(256, (3, kmers_length), activation = 'relu')(embed)
+    conv1 = MaxPooling2D(pool_size = (1,1), strides = kmers_length)(conv1)
+    conv2 = Conv2D(256, (7, kmers_length), activation = 'relu')(embed)
+    conv2 = MaxPooling2D(pool_size = (1,1), strides = kmers_length)(conv2)
+    conv3 = Conv2D(256, (11, kmers_length), activation = 'relu')(embed)
+    conv3 = MaxPooling2D(pool_size = (1,1), strides = kmers_length)(conv3)
+    conv4 = Conv2D(256, (15, kmers_length), activation = 'relu')(embed)
+    conv4 = MaxPooling2D(pool_size = (1,1), strides = kmers_length)(conv4)
+    net = Concatenate(axis = 1)([conv1,conv2,conv3,conv4])
     net = Flatten()(net)
     net = Dense(1024)(net)
     net = Activation("relu")(net)
     net = Dropout(0.5)(net)
     net = Flatten()(net)
-    net = Dense(512)(net)
+    net = Dense(nb_classes)(net)
     outputs = Activation('softmax')(net)
     model = Model(inputs = inputs, outputs = outputs)
-    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+    model.compile(loss='sparse_categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
 
     return model

@@ -24,11 +24,8 @@ if gpus:
     config = ConfigProto(device_count={'GPU': len(gpus), 'CPU': os.cpu_count()})
     sess = Session(config=config)
     set_session(sess);
-
 # Part 0 - Initialisation / extraction of parameters from config file
 ################################################################################
-
-# CHANGE PARAMETERS TO BE MORE PRECISE / INSTINCTIVE IN CONFIG FILE
 
 if __name__ == "__main__":
 
@@ -47,29 +44,23 @@ if __name__ == "__main__":
         config.read_file(cf)
 
     # names
-    database = config.get("name", "database")
-    metagenome = config.get("name", "metagenome")
-    host = config.get("name", "host")
+    database = config.get("name", "database", fallback = "database")
+    metagenome = config.get("name", "metagenome", fallback = "metagenome")
+    host = config.get("name", "host", fallback = None)
 
     # io
     database_seq_file = config.get("io", "database_seq_file")
     database_cls_file = config.get("io", "database_cls_file")
-    host_seq_file = config.get("io", "host_seq_file")
-    host_cls_file = config.get("io", "host_cls_file")
+    host_seq_file = config.get("io", "host_seq_file", fallback = None)
+    host_cls_file = config.get("io", "host_cls_file", fallback = None)
     metagenome_seq_file = config.get("io", "metagenome_seq_file")
     outdir = config.get("io", "outdir")
 
     # seq_rep
     # main evaluation parameters
-    k_length = config.getint("seq_rep", "k")
-    fullKmers = config.getboolean("seq_rep", "full_kmers")
-    lowVarThreshold = config.get("seq_rep", "low_var_threshold", fallback=None)
-
-# MAYBE SOME NOT NEEDED
-    # evaluation
-    cv_folds = config.getint("evaluation", "cv_folds")
-    eval_metric = config.get("evaluation", "eval_metric")
-    avrg_metric = config.get("evaluation", "avrg_metric")
+    k_length = config.getint("seq_rep", "k", fallback = 20)
+    fullKmers = config.getboolean("seq_rep", "full_kmers", fallback = True)
+    lowVarThreshold = config.get("seq_rep", "low_var_threshold", fallback = None)
 
     # choose classifier based on host presence or not
     if host == "none":
@@ -77,29 +68,27 @@ if __name__ == "__main__":
     else:
          binary_classifier = "attention"
 
-# MAYBE SOME NOT NEEDED
+    multi_classifier = "lstm_attention"
+
     # settings
-    n_mainJobs = config.getint("settings", "n_main_jobs")
-    n_cvJobs = config.getint("settings", "n_cv_jobs")
-    verbose = config.getint("settings", "verbose")
-    training_batch_size = config.getint("settings", "training_batch_size")
-
-    binary_saving_host = config.get("settings", "binary_save_host")
-    binary_saving_unclassified = config.get("settings", "binary_save_unclassified")
-    binary_cv = config.getint("settings", "binary_cross_val")
-
-# Amine -> ideas to adapt saving
-    saveData = config.getboolean("settings", "save_data")
-    saveModels = config.getboolean("settings", "save_models")
-    saveResults = config.getboolean("settings", "save_results")
-    plotResults = config.getboolean("settings", "plot_results")
-    randomState = config.getint("settings", "random_state")
+    cv = config.getboolean("settings", "cross_validation", fallback = True)
+    n_cvJobs = config.getint("settings", "nb_cv_jobs", fallback = 1)
+    verbose = config.getboolean("settings", "verbose", fallback = True)
+    training_batch_size = config.getint("settings", "training_batch_size", fallback = 32)
+# AMINE -> IDEAS TO ADAPT SAVING
+    binary_saving_host = config.getboolean("settings", "binary_save_host", fallback = True)
+    binary_saving_unclassified = config.getboolean("settings", "binary_save_unclassified", fallback = True)
+    classifThreshold = config.get("settings", "classification_threshold", fallback = 0.8)
 
     # Check lowVarThreshold
     if lowVarThreshold == "None":
         lowVarThreshold = None
     else:
         lowVarThreshold = float(lowVarThreshold)
+
+    # Check batch_size
+    if multi_classifier in ["cnn","deepcnn"] and training_batch_size < 20:
+        training_batch_size = 20
 
     # Tags for prefix out
     if fullKmers:
@@ -109,10 +98,23 @@ if __name__ == "__main__":
     else:
         tag_kf = "S"
 
-    # OutDir folder
-    outdir = os.path.join(outdir,metagenome)
-    makedirs(outdir, mode=0o700, exist_ok=True)
-    outdir = os.path.join(outdir,tag_kf)
+    # Folders creation for output
+    outdirs = {}
+    outdirs["main_outdir"] = os.path.join(outdir, metagenome)
+    outdirs["data_dir"] = os.path.join(outdirs["main_outdir"], "data")
+    outdirs["models_dir"] = os.path.join(outdirs["main_outdir"], "models")
+    outdirs["prefix"] = tag_kf
+    makedirs(outdirs["main_outdir"], mode=0o700, exist_ok=True)
+    makedirs(outdirs["data_dir"], mode=0o700, exist_ok=True)
+    makedirs(outdirs["models_dir"], mode=0o700, exist_ok=True)
+    outdirs["data_dir"] = os.path.join(outdirs["data_dir"], outdirs["prefix"])
+    outdirs["models_dir"] = os.path.join(outdirs["models_dir"], outdirs["prefix"])
+
+    if cv:
+        outdirs["plots_dir"] = os.path.join(outdirs["main_outdir"], "plots")
+        makedirs(outdirs["plots_dir"], mode=0o700, exist_ok=True)
+        outdirs["plots_dir"] = os.path.join(outdirs["plots_dir"], outdirs["prefix"])
+
 
 # Part 1 - K-mers profile extraction
 ################################################################################
@@ -121,7 +123,7 @@ if __name__ == "__main__":
         # Reference Database and Host
         k_profile_database, k_profile_host = build_load_save_data((database_seq_file, database_cls_file),
             (host_seq_file, host_cls_file),
-            outdir,
+            outdirs["data_dir"],
             database,
             k = k_length,
             full_kmers = fullKmers,
@@ -131,7 +133,7 @@ if __name__ == "__main__":
         # Reference Database Only
         k_profile_database = build_load_save_data((database_seq_file, database_cls_file),
             host,
-            outdir,
+            outdirs["data_dir"],
             database,
             k = k_length,
             full_kmers = fullKmers,
@@ -141,62 +143,96 @@ if __name__ == "__main__":
     # Metagenome to analyse
     k_profile_metagenome = build_load_save_data(metagenome_seq_file,
         "none",
-        outdir,
+        outdirs["data_dir"],
         metagenome,
         k = k_length,
         full_kmers = fullKmers,
         low_var_threshold = lowVarThreshold
     )
 
-# Part 2 - Binary classification of bacteria / prokaryote sequences
+# Part 2 - Binary classification of bacteria / host sequences
 ################################################################################
 
     if host == "none":
         bacterial_metagenome = bacteria_extraction(k_profile_metagenome,
             k_profile_database,
             k_length,
-            outdir,
+            outdirs,
             database,
             classifier = binary_classifier,
             batch_size = training_batch_size,
             verbose = verbose,
-            cv = binary_cv,
+            cv = cv,
             saving_host = binary_saving_host,
-            saving_unclassified = binary_saving_unclassified
+            saving_unclassified = binary_saving_unclassified,
+            n_jobs = n_cvJobs
             )
     else:
         bacterial_metagenome = bacteria_extraction(k_profile_metagenome,
             (k_profile_database, k_profile_host),
             k_length,
-            outdir,
+            outdirs,
             database,
             classifier = binary_classifier,
             batch_size = training_batch_size,
             verbose = verbose,
-            cv = binary_cv,
+            cv = cv,
             saving_host = binary_saving_host,
-            saving_unclassified = binary_saving_unclassified
+            saving_unclassified = binary_saving_unclassified,
+            n_jobs = n_cvJobs
             )
 
 # Part 3 - Multiclass classification of bacterial sequences
 ################################################################################
 
-# MAYBE ADD PARAMETERS FOR CLASSIFIERS
-    """
-    classification = bacterial_classification(bacterial_metagenome,
+    classification_data = bacterial_classification(bacterial_metagenome,
         k_profile_database,
-        k,
-        prefix,
-        dataset,
-        classifier = ,
-        verbose = verbose)
+        k_length,
+        outdirs,
+        database,
+        classifier = multi_classifier,
+        batch_size = training_batch_size,
+        threshold = classifThreshold,
+        verbose = verbose,
+        cv = cv,
+        n_jobs = n_cvJobs)
+
+# Part 5 - Classification refinement
+################################################################################
     """
-# MAYBE ADD STEP FOR ABUNDANCE
-
-# Part 4 - Classification refinement / flexible classification
-################################################################################
-
 # convert identification en np.array/list/dict de nb reads pr chaque sp
+    classification = merge_classified_data(classification_data)
 
-# Part 5 - (OPTIONAL) New sequences identification / clustering
+    classif_abundances = classification_abundance(classification)
+    """
+# dimension reduction for reclassification?
+# order of kmers for better signature ~ markov chains
+
+# Part 6 - (OPTIONAL) New sequences identification / clustering
 ################################################################################
+
+    # Clustering for unidentified sequences into MAGs -> try to assign to species afterward
+    # Amine faire attention à comment fait la classif
+    """
+    from sklearn.cluster import MiniBatchKMeans
+        classifier == "kmeans":
+            if verbose:
+                print("Training multiclass classifier with K Means")
+            clf = MiniBatchKMeans(nclusters = nb_classes, batch_size = batch_size, random_state = 42)
+    """
+
+# Part 7 - Outputs for biological analysis of bacterial population
+################################################################################
+    # Kronagram
+    # Abundance tables / relative abundance
+        # Identification of each sequence \w domain + probability -> cutoff pr user if needed
+        # Taxonomic tree / table -> newick
+        # Joint identification of reads  vx autres domaines?
+    # Option for file containing kmers
+    # Summary file of opperations / proportions of reads at each steps
+    # Github wiki manual
+
+    # Environment
+        # R wrapper / execution in Rmarkdown?
+        # Venv / Conda
+        # Docker / singularity
