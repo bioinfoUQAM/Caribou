@@ -16,6 +16,7 @@ setup(
     author='Nicolas de Montigny',
     author_email='nicolas.de.montingy0323@gmail.com',
     packages=find_packages(),
-    scripts=[],
+    scripts=['metagenomics_ML/main.py',
+            'metagenomics_ML/main_testing_hpc.py'],
     install_requires=INSTALL_REQUIRES
 )
