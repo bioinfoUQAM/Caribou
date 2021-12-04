@@ -153,49 +153,51 @@ if __name__ == "__main__":
 # Part 2 - Binary classification of bacteria / host sequences
 ################################################################################
 
-    if host == "none":
-        bacterial_metagenome = bacteria_extraction(k_profile_metagenome,
-            k_profile_database,
-            k_length,
-            outdirs,
-            database,
-            classifier = binary_classifier,
-            batch_size = training_batch_size,
-            verbose = verbose,
-            cv = cv,
-            saving_host = binary_saving_host,
-            saving_unclassified = binary_saving_unclassified,
-            n_jobs = n_cvJobs
-            )
-    else:
-        bacterial_metagenome = bacteria_extraction(k_profile_metagenome,
-            (k_profile_database, k_profile_host),
-            k_length,
-            outdirs,
-            database,
-            classifier = binary_classifier,
-            batch_size = training_batch_size,
-            verbose = verbose,
-            cv = cv,
-            saving_host = binary_saving_host,
-            saving_unclassified = binary_saving_unclassified,
-            n_jobs = n_cvJobs
-            )
+    for binary_classifier in ["linearsvm","attention","lstm","deeplstm"]:
+        if host == "none":
+            bacterial_metagenome = bacteria_extraction(k_profile_metagenome,
+                k_profile_database,
+                k_length,
+                outdirs,
+                database,
+                classifier = binary_classifier,
+                batch_size = training_batch_size,
+                verbose = verbose,
+                cv = cv,
+                saving_host = binary_saving_host,
+                saving_unclassified = binary_saving_unclassified,
+                n_jobs = n_cvJobs
+                )
+        else:
+            bacterial_metagenome = bacteria_extraction(k_profile_metagenome,
+                (k_profile_database, k_profile_host),
+                k_length,
+                outdirs,
+                database,
+                classifier = binary_classifier,
+                batch_size = training_batch_size,
+                verbose = verbose,
+                cv = cv,
+                saving_host = binary_saving_host,
+                saving_unclassified = binary_saving_unclassified,
+                n_jobs = n_cvJobs
+                )
 
 # Part 3 - Multiclass classification of bacterial sequences
 ################################################################################
 
-    classification_data = bacterial_classification(bacterial_metagenome,
-        k_profile_database,
-        k_length,
-        outdirs,
-        database,
-        classifier = multi_classifier,
-        batch_size = training_batch_size,
-        threshold = classifThreshold,
-        verbose = verbose,
-        cv = cv,
-        n_jobs = n_cvJobs)
+    for multi_classifier in ["ridge","svm","mlr","mnb","lstm_attention","cnn","deepcnn"]:
+        classification_data = bacterial_classification(bacterial_metagenome,
+            k_profile_database,
+            k_length,
+            outdirs,
+            database,
+            classifier = multi_classifier,
+            batch_size = training_batch_size,
+            threshold = classifThreshold,
+            verbose = verbose,
+            cv = cv,
+            n_jobs = n_cvJobs)
 
 # Part 5 - Classification refinement
 ################################################################################
