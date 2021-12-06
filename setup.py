@@ -14,8 +14,9 @@ setup(
     version=_version,
     description='Alignment-free bacterial classification in metagenomic shotguns',
     author='Nicolas de Montigny',
-    author_email='nicolas.de.montingy0323@gmail.com',
+    author_email='de_montigny.nicolas@courrier.uqam.ca',
     packages=find_packages(),
+    include_packages_data=True,
     scripts=['metagenomics_ML/main.py',
             'metagenomics_ML/main_testing_hpc.py'],
     install_requires=INSTALL_REQUIRES
