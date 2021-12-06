@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 
-from data.build_data import *
-from models.bacteria_extraction import *
-from models.classification import *
+from .data.build_data import *
+from .models.bacteria_extraction import *
+from .models.classification import *
 
 import pandas as pd
 
