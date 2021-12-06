@@ -1,6 +1,7 @@
 Bio
 h5py
 keras
+matplotlib
 numpy
 pandas
 sklearn
