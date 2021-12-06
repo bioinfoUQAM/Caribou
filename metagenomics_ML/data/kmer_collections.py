@@ -1,4 +1,4 @@
-from .seq_collections import SeqCollection
+from metagenomics_ML.data.seq_collections import SeqCollection
 
 import re
 import os

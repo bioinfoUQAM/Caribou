@@ -15,7 +15,7 @@ from sklearn.base import clone
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.preprocessing import StandardScaler
 
-from data.generators import iter_generator, iter_generator_keras
+from metagenomics_ML.data.generators import iter_generator, iter_generator_keras
 
 from keras.callbacks import ModelCheckpoint, EarlyStopping
 from keras.models import load_model

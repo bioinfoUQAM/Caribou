@@ -1,6 +1,6 @@
-from data.seq_collections import SeqCollection
-from data.kmer_collections import build_kmers_Xy_data, build_kmers_X_data, build_kmers
-from utils import load_Xy_data, save_Xy_data
+from metagenomics_ML.data.seq_collections import SeqCollection
+from metagenomics_ML.data.kmer_collections import build_kmers_Xy_data, build_kmers_X_data, build_kmers
+from metagenomics_ML.utils import load_Xy_data, save_Xy_data
 
 import os.path
 

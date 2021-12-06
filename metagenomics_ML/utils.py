@@ -7,7 +7,7 @@ import os
 
 from tensorflow.keras.utils import to_categorical
 
-from data.generators import DataGenerator
+from metagenomics_ML.data.generators import DataGenerator
 
 __author__ = "nicolas"
 
