@@ -133,7 +133,7 @@ def cross_validation_training(X_train, y_train, batch_size, kmers, ids, classifi
     # each dict contains the results of the iteration
     cv_scores = []
     clf_scores = {}
-    parallel = Parallel(n_jobs = n_jobs if n_cvJobs <= os.cpu_count() else -1, backend = 'threading', prefer = "processes", verbose = 100 if verbose else 0)
+    parallel = Parallel(n_jobs = n_jobs if n_cvJobs <= os.cpu_count() else -1, backend = 'loky', prefer = "processes", verbose = 100 if verbose else 0)
 
     if classifier in ["onesvm","linearsvm","ridge","svm","mlr","mnb"]:
         clf_file, ext = os.path.splitext(clf_file)
