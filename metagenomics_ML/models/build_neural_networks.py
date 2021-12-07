@@ -9,7 +9,9 @@ from keras.layers import Dense, Input, LSTM, Embedding, Dropout, Conv1D, Conv2D,
 
 from metagenomics_ML.models.attentionLayer import AttentionWeightedAverage
 
-__author__ = "nicolas"
+__author__ = "Nicolas de Montigny"
+
+__all__ = ['build_attention','build_LSTM','build_deepLSTM','build_LSTM_attention','build_CNN','build_deepCNN']
 
 # Host extraction
 def build_attention(kmers_length):

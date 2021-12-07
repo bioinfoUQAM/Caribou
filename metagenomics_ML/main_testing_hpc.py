@@ -15,7 +15,9 @@ import configparser
 import os.path
 from os import makedirs
 
-__author__ = "nicolas"
+__author__ = "Nicolas de Montigny"
+
+__all__ = []
 
 # GPU & CPU setup
 ################################################################################
@@ -24,6 +26,7 @@ if gpus:
     config = ConfigProto(device_count={'GPU': len(gpus), 'CPU': os.cpu_count()})
     sess = Session(config=config)
     set_session(sess);
+    
 # Part 0 - Initialisation / extraction of parameters from config file
 ################################################################################
 
@@ -62,15 +65,9 @@ if __name__ == "__main__":
     fullKmers = config.getboolean("seq_rep", "full_kmers", fallback = True)
     lowVarThreshold = config.get("seq_rep", "low_var_threshold", fallback = None)
 
-    # choose classifier based on host presence or not
-    if host == "none":
-        binary_classifier = "onesvm"
-    else:
-         binary_classifier = "attention"
-
-    multi_classifier = "lstm_attention"
-
     # settings
+    binary_classifier = config.get("settings", "host_extractor", fallback = "attention")
+    multi_classifier = config.get("settings", "bacteria_classifier", fallback = "lstm_attention")
     cv = config.getboolean("settings", "cross_validation", fallback = True)
     n_cvJobs = config.getint("settings", "nb_cv_jobs", fallback = 1)
     verbose = config.getboolean("settings", "verbose", fallback = True)
@@ -79,6 +76,10 @@ if __name__ == "__main__":
     binary_saving_host = config.getboolean("settings", "binary_save_host", fallback = True)
     binary_saving_unclassified = config.getboolean("settings", "binary_save_unclassified", fallback = True)
     classifThreshold = config.get("settings", "classification_threshold", fallback = 0.8)
+
+    # Adjust classifier based on host presence or not
+    if host in ["none", "None", None]:
+        binary_classifier = "onesvm"
 
     # Check lowVarThreshold
     if lowVarThreshold == "None":
@@ -145,9 +146,7 @@ if __name__ == "__main__":
         "none",
         outdirs["data_dir"],
         metagenome,
-        k = k_length,
-        full_kmers = fullKmers,
-        low_var_threshold = lowVarThreshold
+        kmers_list = k_profile_database["kmers_list"]
     )
 
 # Part 2 - Binary classification of bacteria / host sequences

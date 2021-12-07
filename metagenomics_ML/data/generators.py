@@ -5,7 +5,9 @@ import tables as tb
 
 from tensorflow.keras.utils import Sequence, to_categorical
 
-__author__ = "nicolas"
+__author__ = "Nicolas de Montigny"
+
+__all__ = ['DataGenerator', 'DataGeneratorKeras', 'iter_generator', 'iter_generator_keras']
 
 # Data
 class DataGenerator():

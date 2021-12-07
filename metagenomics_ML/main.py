@@ -15,7 +15,9 @@ import configparser
 import os.path
 from os import makedirs
 
-__author__ = "nicolas"
+__author__ = "Nicolas de Montigny"
+
+__all__ = []
 
 # GPU & CPU setup
 ################################################################################
@@ -24,6 +26,7 @@ if gpus:
     config = ConfigProto(device_count={'GPU': len(gpus), 'CPU': os.cpu_count()})
     sess = Session(config=config)
     set_session(sess);
+
 # Part 0 - Initialisation / extraction of parameters from config file
 ################################################################################
 
@@ -57,20 +60,13 @@ if __name__ == "__main__":
     outdir = config.get("io", "outdir")
 
     # seq_rep
-    # main evaluation parameters
     k_length = config.getint("seq_rep", "k", fallback = 20)
     fullKmers = config.getboolean("seq_rep", "full_kmers", fallback = True)
     lowVarThreshold = config.get("seq_rep", "low_var_threshold", fallback = None)
 
-    # choose classifier based on host presence or not
-    if host == "none":
-        binary_classifier = "onesvm"
-    else:
-         binary_classifier = "attention"
-
-    multi_classifier = "lstm_attention"
-
     # settings
+    binary_classifier = config.get("settings", "host_extractor", fallback = "attention")
+    multi_classifier = config.get("settings", "bacteria_classifier", fallback = "lstm_attention")
     cv = config.getboolean("settings", "cross_validation", fallback = True)
     n_cvJobs = config.getint("settings", "nb_cv_jobs", fallback = 1)
     verbose = config.getboolean("settings", "verbose", fallback = True)
@@ -79,6 +75,59 @@ if __name__ == "__main__":
     binary_saving_host = config.getboolean("settings", "binary_save_host", fallback = True)
     binary_saving_unclassified = config.getboolean("settings", "binary_save_unclassified", fallback = True)
     classifThreshold = config.get("settings", "classification_threshold", fallback = 0.8)
+
+# Part 0.5 - Validation of parameters and environment
+################################################################################
+
+    # io
+    for file in [database_seq_file, database_cls_file, metagenome_seq_file]:
+        if not os.path.isfile(file):
+            print("Cannot find file {} ! Exiting".format(file))
+            sys.exit()
+
+    if host not in ['none', 'None', None]:
+        for file in [host_seq_file, host_cls_file]:
+            if not os.path.isfile(file):
+                print("Cannot find file {} ! Exiting".format(file))
+                sys.exit()
+
+    outdir_path, outdir_folder = os.path.split(outdir)
+    if not os.path.isdir(outdir) and os.path.exists(outdir_path):
+        print("Created output folder")
+        os.makedirs(outdir)
+    elif not os.path.exists(outdir_path):
+        print("Cannot find output folder ! Exiting")
+        sys.exit()
+
+    # seq_rep
+    if type(k) != int or k <= 0:
+        print("Invalid kmers length ! Please enter a positive integer ! Exiting")
+        print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/metagenomics_ML/wiki")
+        sys.exit()
+    if full_kmers not in [True, False, None]:
+        print("Invalid value for full_kmers ! Please use boolean values ! Exiting")
+        print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/metagenomics_ML/wiki")
+        sys.exit()
+    if low_var_threshold <= 0 or low_var_threshold > 1 or type(low_var_threshold) != float:
+        print("Invalid kmers length ! Please enter a value between 0 and 1 ! Exiting")
+        print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/metagenomics_ML/wiki")
+        sys.exit()
+
+# FINISH VALIDATION OF PARAMETERS
+    # settings
+    host_extractor = attention
+    bacteria_classifier = lstm_attention
+    cross_validation = True
+    nb_cv_jobs = 1
+    verbose = True
+    training_batch_size = 32
+    binary_save_host = True
+    binary_save_unclassified = True
+    classification_threshold = 0.8
+
+    # Adjust classifier based on host presence or not
+    if host in ["none", "None", None]:
+        binary_classifier = "onesvm"
 
     # Check lowVarThreshold
     if lowVarThreshold == "None":
@@ -115,7 +164,6 @@ if __name__ == "__main__":
         makedirs(outdirs["plots_dir"], mode=0o700, exist_ok=True)
         outdirs["plots_dir"] = os.path.join(outdirs["plots_dir"], outdirs["prefix"])
 
-
 # Part 1 - K-mers profile extraction
 ################################################################################
 
@@ -145,9 +193,7 @@ if __name__ == "__main__":
         "none",
         outdirs["data_dir"],
         metagenome,
-        k = k_length,
-        full_kmers = fullKmers,
-        low_var_threshold = lowVarThreshold
+        kmers_list = k_profile_database["kmers_list"]
     )
 
 # Part 2 - Binary classification of bacteria / host sequences

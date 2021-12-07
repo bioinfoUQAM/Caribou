@@ -9,7 +9,9 @@ from tensorflow.keras.utils import to_categorical
 
 from metagenomics_ML.data.generators import DataGenerator
 
-__author__ = "nicolas"
+__author__ = "Nicolas de Montigny"
+
+__all__ = ['load_Xy_data','save_Xy_data','save_predicted_kmers','merge_database_host','to_int_cls']
 
 # Load data from file
 def load_Xy_data(Xy_file):

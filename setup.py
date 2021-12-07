@@ -1,6 +1,10 @@
 from setuptools import setup, find_packages
 from metagenomics_ML import __version__
 
+__author__ = "Nicolas de Montigny"
+
+__all__ = []
+
 _version = __version__
 
 INSTALL_REQUIRES = []

@@ -4,7 +4,7 @@ Alignment-free bacterial identification and classification in metagenomics seque
 ## Installation of dependencies
 It is recommended to run on a GPU-enabled machine to accelerate training of models but not necessary.
 To install GPU dependencies on your machine if wanted, refer to following tutorials for installation of GPUs :
-https://docs.nvidia.com/deeplearning/cudnn/install-guide/index.html
+https://docs.nvidia.com/deeplearning/cudnn/install-guide/index.html \
 https://www.tensorflow.org/install/gpu
 
 To install package in a new python virtual environment through pip, make sure that python is installed first.
@@ -58,14 +58,18 @@ sh metagenomics_ML/data/build_data_scripts/fasta2class_host.sh -d [directory] -i
 ```
 
 ## Usage
-Not in a package yet.
+The package can be easily installed through pip. The git must be cloned first and then the package can be installed using the following commands lines in the desired folder :
+```
+git clone https://github.com/bioinfoUQAM/metagenomics_ML.git
+pip install ./metagenomics_ML/
+```
 
 There is a template config file which can be found here `metagenomics_ML/eval_configs/template_config.ini`.
 
-To test, run the following command using you own modified config file :
+To use, run the following command using you own modified config file :
 
 ```
-python3 metagenomics_ML/metagenomics_ML/main.py metagenomics_ML/eval_configs/test.ini
+main.py metagenomics_ML/eval_configs/test.ini
 ```
 
 Description for each variable can be found in the wiki https://github.com/bioinfoUQAM/metagenomics_ML/wiki

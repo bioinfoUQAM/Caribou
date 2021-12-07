@@ -10,10 +10,10 @@ from collections import UserList, defaultdict
 from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
 
-__all__ = ['SeqCollection']
-
 # From mlr_kgenomvir
-__author__ = "Nicolas de Montigny"
+__author__ = ['Amine Remita', 'Nicolas de Montigny']
+
+__all__ = ['SeqCollection']
 
 """
 Module adapted from module seq_collections.py of

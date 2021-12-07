@@ -9,9 +9,11 @@ import pandas as pd
 
 import pickle
 
-__author__ = "nicolas"
+__author__ = "Nicolas de Montigny"
 
-def build_load_save_data(file, hostfile, prefix, dataset, k=4, full_kmers=False, low_var_threshold=None):
+__all__ = ['build_load_save_data', 'build_Xy_data', 'build_X_data']
+
+def build_load_save_data(file, hostfile, prefix, dataset, kmers_list = None, k=4, full_kmers=False, low_var_threshold=None):
 
     # Generate the names of files
     Xy_file = "{}_K{}_Xy_genome_{}_data.h5f".format(prefix,k,dataset)
@@ -67,7 +69,7 @@ def build_load_save_data(file, hostfile, prefix, dataset, k=4, full_kmers=False,
             # Build X_data to drive
             print("X_data with k = {}".format(k))
             seq_data = SeqCollection(file)
-            data = build_X_data(seq_data, k, Xy_file, seq_data.length, full_kmers, low_var_threshold)
+            data = build_X_data(seq_data, Xy_file, kmers_list, seq_data.length)
             save_Xy_data(data, data_file)
             return data
 
@@ -91,14 +93,10 @@ def build_Xy_data(seq_data, k, Xy_file, length = 0, full_kmers = False, low_var_
     return data
 
 # Build kmers collection without known classes
-def build_X_data(seq_data, k, X_file, length = 0, full_kmers = False, low_var_threshold = None):
+def build_X_data(seq_data, X_file, kmers_list, length = 0):
     data = dict()
 
-    X, kmers, ids = build_kmers_X_data(seq_data, k, X_file,
-        length = length,
-        full_kmers = full_kmers,
-        low_var_threshold = low_var_threshold,
-        dtype = np.float32)
+    X, kmers, ids = build_kmers_X_data(seq_data, X_file, kmers_list, length = length, dtype = np.float32)
 
     # Data in a dictionnary
     data["X"] = str(X_file)

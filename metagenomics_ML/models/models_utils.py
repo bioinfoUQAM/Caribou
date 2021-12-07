@@ -26,6 +26,13 @@ from joblib import dump, load, Parallel, delayed, wrap_non_picklable_objects
 
 import warnings
 
+__author__ = "Nicolas de Montigny"
+
+__all__ = ['scaleX','test_labels','cv_score','make_score_df','choose_delete_models_sk','choose_delete_models_keras','plot_figure',
+           'cross_validation_training','fit_predict_cv','fit_model','model_predict',
+           'fit_model_oneSVM_sk','fit_model_linear_sk','fit_model_multi_sk','predict_binary_sk','predict_multi_sk',
+           'fit_model_keras','predict_binary_keras','predict_multi_keras']
+
 # Ignore warnings to have a more comprehensible output on stdout
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 warnings.filterwarnings("ignore")

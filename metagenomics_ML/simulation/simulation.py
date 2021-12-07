@@ -1,2 +1,4 @@
 
-__author__ = "nicolas"
+__author__ = "Nicolas de Montigny"
+
+__all__ = ['','','']

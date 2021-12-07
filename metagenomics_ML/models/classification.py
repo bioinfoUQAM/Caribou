@@ -14,7 +14,9 @@ from metagenomics_ML.models.build_neural_networks import *
 
 from joblib import load
 
-__author__ = "nicolas"
+__author__ = "Nicolas de Montigny"
+
+__all__ = ['bacterial_classification','training','classify']
 
 def bacterial_classification(metagenome_k_mers, database_k_mers, k, outdirs, dataset, classifier = "lstm_attention", batch_size = 32, threshold = 0.8, verbose = 1, cv = 1, n_jobs = 1):
     # classified_data is a dictionnary containing data dictionnaries at each classified level:

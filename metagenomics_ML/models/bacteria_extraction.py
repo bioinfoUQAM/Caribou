@@ -14,7 +14,9 @@ from metagenomics_ML.models.build_neural_networks import *
 
 from joblib import load
 
-__author__ = "nicolas"
+__author__ = "Nicolas de Montigny"
+
+__all__ = ['bacteria_extraction','training','extract_bacteria_sequences']
 
 def bacteria_extraction(metagenome_k_mers, database_k_mers, k, outdirs, dataset, classifier = "deeplstm", batch_size = 32, verbose = 1, cv = 1, saving_host = 1, saving_unclassified = 1, n_jobs = 1):
     train = False

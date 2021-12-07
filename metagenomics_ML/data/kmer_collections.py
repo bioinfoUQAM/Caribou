@@ -16,13 +16,13 @@ import tables as tb
 from scipy.sparse import csr_matrix, csc_matrix
 from sklearn.feature_selection import VarianceThreshold
 
+# From mlr_kgenomvir
+__author__ = ['Amine Remita', 'Nicolas de Montigny']
 
 __all__ = [ 'FullKmersCollection', 'SeenKmersCollection',
         'GivenKmersCollection' , 'VarKmersCollection',
         'build_kmers', 'build_kmers_Xy_data']
 
-# From mlr_kgenomvir
-__author__ = "Nicolas de Montigny"
 
 """
 Module adapted from module kmer_collections.py of
@@ -151,7 +151,7 @@ class FullKmersCollection(KmersCollection):
         self.k = k
         self.sparse = sparse
         self.dtype = dtype
-        self.alphabet = alphabet
+        self.alphabet = alphabet.lower() + alphabet.upper()
         self.Xy_file = tb.open_file(Xy_file, "w")
         self.length = length
         #
@@ -183,7 +183,7 @@ class SeenKmersCollection(KmersCollection):
         self.k = int(k)
         self.sparse = sparse
         self.dtype = dtype
-        self.alphabet = alphabet
+        self.alphabet = alphabet.lower() + alphabet.upper()
         self.Xy_file = tb.open_file(Xy_file, "w")
         self.length = length
         #
@@ -244,7 +244,7 @@ class GivenKmersCollection(KmersCollection):
             dtype=np.uint64, alphabet="ACGT"):
         self.sparse = sparse
         self.dtype = dtype
-        self.alphabet = alphabet
+        self.alphabet = alphabet.lower() + alphabet.upper()
         self.kmers_list = kmers_list
         self.Xy_file = tb.open_file(Xy_file, "w")
         self.length = length
@@ -305,10 +305,9 @@ def build_kmers_Xy_data(seq_data, k, Xy_file, length = 0, full_kmers=False, low_
 
     return X_data, y_data, kmers_list
 
-def build_kmers_X_data(seq_data, k, X_file, length = 0, full_kmers=False, low_var_threshold=None,
-        sparse=None, dtype=np.uint64):
+def build_kmers_X_data(seq_data, X_file, kmers_list, length = 0, sparse=None, dtype=np.uint64):
 
-    collection = build_kmers(seq_data, k, X_file, length, full_kmers, low_var_threshold, sparse, dtype)
+    collection = GivenKmersCollection(seq_data, X_file, length, kmers_list, sparse, dtype)
     kmers_list = collection.kmers_list
     X_data = collection.data
     ids = collection.ids
