@@ -100,53 +100,53 @@ if __name__ == "__main__":
         sys.exit()
 
     # seq_rep
-    if type(k) != int or k <= 0:
+    if type(k_length) != int or k_length <= 0:
         print("Invalid kmers length ! Please enter a positive integer ! Exiting")
         print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
         sys.exit()
-    if full_kmers not in [True, False, None]:
+    if fullKmers not in [True, False, None]:
         print("Invalid value for full_kmers ! Please use boolean values ! Exiting")
         print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
         sys.exit()
-    if not 0 < low_var_threshold <= 1 or type(low_var_threshold) != float:
+    if not 0 < lowVarThreshold <= 1 or type(lowVarThreshold) != float:
         print("Invalid variance threshold for extracting k-mers ! Please enter a value between 0 and 1 ! Exiting")
         print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
         sys.exit()
 
     # settings
-    if host_extractor not in ["onesvm","linearsvm","attention","lstm","deeplstm"]:
+    if binary_classifier not in ["onesvm","linearsvm","attention","lstm","deeplstm"]:
         print("Invalid host extraction classifier ! Exiting")
         print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
         sys.exit()
-    if bacteria_classifier not in ["ridge","svm","mlr","mnb","lstm_attention","cnn","deepcnn"]:
+    if multi_classifier not in ["ridge","svm","mlr","mnb","lstm_attention","cnn","deepcnn"]:
         print("Invalid multiclass bacterial classifier ! Exiting")
         print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
         sys.exit()
-    if cross_validation not in [True, False, None]:
+    if cv not in [True, False, None]:
         print("Invalid value for cross_validation ! Please use boolean values ! Exiting")
         print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
         sys.exit()
-    if type(nb_cv_jobs) != int or nb_cv_jobs <= 0:
+    if type(n_cvJobs) != int or n_cvJobs <= 0:
         print("Invalid number of cross validation jobs ! Please enter a positive integer ! Exiting")
         print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
         sys.exit()
-    if cross_validation not in [True, False, None]:
+    if verbose not in [True, False, None]:
         print("Invalid value for verbose parameter ! Please use boolean values ! Exiting")
         print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
         sys.exit()
     if type(training_batch_size) != int or training_batch_size <= 0:
-        print("Invalid number of cross validation jobs ! Please enter a positive integer ! Exiting")
+        print("Invalid number of training batch size ! Please enter a positive integer ! Exiting")
         print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
         sys.exit()
-    if binary_save_host not in [True, False, None]:
+    if binary_saving_host not in [True, False, None]:
         print("Invalid value for host data saving ! Please use boolean values ! Exiting")
         print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
         sys.exit()
-    if binary_save_unclassified not in [True, False, None]:
+    if binary_saving_unclassified not in [True, False, None]:
         print("Invalid value for unclassifiable sequences ! Please use boolean values ! Exiting")
         print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
         sys.exit()
-    if not 0 < classification_threshold <= 1 or type(classification_threshold) != float:
+    if not 0 < classifThreshold <= 1 or type(classifThreshold) != float:
         print("Invalid confidence threshold for classifying bacterial sequences ! Please enter a value between 0 and 1 ! Exiting")
         print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
         sys.exit()
