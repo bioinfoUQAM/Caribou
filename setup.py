@@ -1,5 +1,5 @@
 from setuptools import setup, find_packages
-from metagenomics_ML import __version__
+from Caribou import __version__
 
 _version = __version__
 
@@ -10,7 +10,7 @@ with open("requirements.txt", "r") as fh:
         INSTALL_REQUIRES.append(line.rstrip())
 
 setup(
-    name='metagenomics_ML',
+    name='Caribou',
     version=_version,
     description='Alignment-free bacterial classification in metagenomic shotguns',
     author='Nicolas de Montigny',
