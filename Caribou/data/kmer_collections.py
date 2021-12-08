@@ -298,10 +298,13 @@ def build_kmers(seq_data, k, Xy_file, length = 0, full_kmers=False, low_var_thre
                 seq_data, Xy_file, length, k=k, sparse=sparse, dtype=dtype)
 
 
-def build_kmers_Xy_data(seq_data, k, Xy_file, length = 0, full_kmers=False, low_var_threshold=None,
+def build_kmers_Xy_data(seq_data, k, Xy_file, length = 0, kmers_list = None, full_kmers=False, low_var_threshold=None,
         sparse=None, dtype=np.uint64):
 
-    collection = build_kmers(seq_data, k, Xy_file, length, full_kmers, low_var_threshold, sparse, dtype)
+    if kmers_list is not None:
+        collection = GivenKmersCollection(seq_data, Xy_file, length, kmers_list, sparse, dtype)
+    else:
+        collection = build_kmers(seq_data, k, Xy_file, length, full_kmers, low_var_threshold, sparse, dtype)
     kmers_list = collection.kmers_list
     X_data = collection.data
     y_data = np.array(seq_data.labels)
