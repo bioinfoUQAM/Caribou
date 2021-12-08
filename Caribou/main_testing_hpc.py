@@ -62,7 +62,7 @@ if __name__ == "__main__":
     # seq_rep
     k_length = config.getint("seq_rep", "k", fallback = 20)
     fullKmers = config.getboolean("seq_rep", "full_kmers", fallback = True)
-    lowVarThreshold = config.getfloat("seq_rep", "low_var_threshold", fallback = None)
+    lowVarThreshold = config.getfloat("seq_rep", "low_var_threshold", fallback = 0.0)
 
     # settings
     binary_classifier = config.get("settings", "host_extractor", fallback = "attention")
@@ -108,6 +108,8 @@ if __name__ == "__main__":
         print("Invalid value for full_kmers ! Please use boolean values ! Exiting")
         print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
         sys.exit()
+    if lowVarThreshold == 0.0:
+        lowVarThreshold = None
     if lowVarThreshold is not None:
         if type(lowVarThreshold) == float and not 0 < lowVarThreshold <= 1:
             print("Invalid variance threshold for extracting k-mers ! Please enter a value between 0 and 1 ! Exiting")
