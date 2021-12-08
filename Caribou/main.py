@@ -108,22 +108,48 @@ if __name__ == "__main__":
         print("Invalid value for full_kmers ! Please use boolean values ! Exiting")
         print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
         sys.exit()
-    if low_var_threshold <= 0 or low_var_threshold > 1 or type(low_var_threshold) != float:
-        print("Invalid kmers length ! Please enter a value between 0 and 1 ! Exiting")
+    if not 0 < low_var_threshold <= 1 or type(low_var_threshold) != float:
+        print("Invalid variance threshold for extracting k-mers ! Please enter a value between 0 and 1 ! Exiting")
         print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
         sys.exit()
 
-# FINISH VALIDATION OF PARAMETERS
     # settings
-    host_extractor = attention
-    bacteria_classifier = lstm_attention
-    cross_validation = True
-    nb_cv_jobs = 1
-    verbose = True
-    training_batch_size = 32
-    binary_save_host = True
-    binary_save_unclassified = True
-    classification_threshold = 0.8
+    if host_extractor not in ["onesvm","linearsvm","attention","lstm","deeplstm"]:
+        print("Invalid host extraction classifier ! Exiting")
+        print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
+        sys.exit()
+    if bacteria_classifier not in ["ridge","svm","mlr","mnb","lstm_attention","cnn","deepcnn"]:
+        print("Invalid multiclass bacterial classifier ! Exiting")
+        print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
+        sys.exit()
+    if cross_validation not in [True, False, None]:
+        print("Invalid value for cross_validation ! Please use boolean values ! Exiting")
+        print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
+        sys.exit()
+    if type(nb_cv_jobs) != int or nb_cv_jobs <= 0:
+        print("Invalid number of cross validation jobs ! Please enter a positive integer ! Exiting")
+        print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
+        sys.exit()
+    if cross_validation not in [True, False, None]:
+        print("Invalid value for verbose parameter ! Please use boolean values ! Exiting")
+        print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
+        sys.exit()
+    if type(training_batch_size) != int or training_batch_size <= 0:
+        print("Invalid number of cross validation jobs ! Please enter a positive integer ! Exiting")
+        print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
+        sys.exit()
+    if binary_save_host not in [True, False, None]:
+        print("Invalid value for host data saving ! Please use boolean values ! Exiting")
+        print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
+        sys.exit()
+    if binary_save_unclassified not in [True, False, None]:
+        print("Invalid value for unclassifiable sequences ! Please use boolean values ! Exiting")
+        print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
+        sys.exit()
+    if not 0 < classification_threshold <= 1 or type(classification_threshold) != float:
+        print("Invalid confidence threshold for classifying bacterial sequences ! Please enter a value between 0 and 1 ! Exiting")
+        print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
+        sys.exit()
 
     # Adjust classifier based on host presence or not
     if host in ["none", "None", None]:
@@ -167,7 +193,7 @@ if __name__ == "__main__":
 # Part 1 - K-mers profile extraction
 ################################################################################
 
-    if host != "none":
+    if host not in ["none", "None", None]:
         # Reference Database and Host
         k_profile_database, k_profile_host = build_load_save_data((database_seq_file, database_cls_file),
             (host_seq_file, host_cls_file),

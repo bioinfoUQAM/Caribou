@@ -60,7 +60,6 @@ if __name__ == "__main__":
     outdir = config.get("io", "outdir")
 
     # seq_rep
-    # main evaluation parameters
     k_length = config.getint("seq_rep", "k", fallback = 20)
     fullKmers = config.getboolean("seq_rep", "full_kmers", fallback = True)
     lowVarThreshold = config.get("seq_rep", "low_var_threshold", fallback = None)
@@ -76,6 +75,81 @@ if __name__ == "__main__":
     binary_saving_host = config.getboolean("settings", "binary_save_host", fallback = True)
     binary_saving_unclassified = config.getboolean("settings", "binary_save_unclassified", fallback = True)
     classifThreshold = config.get("settings", "classification_threshold", fallback = 0.8)
+
+# Part 0.5 - Validation of parameters and environment
+################################################################################
+
+    # io
+    for file in [database_seq_file, database_cls_file, metagenome_seq_file]:
+        if not os.path.isfile(file):
+            print("Cannot find file {} ! Exiting".format(file))
+            sys.exit()
+
+    if host not in ['none', 'None', None]:
+        for file in [host_seq_file, host_cls_file]:
+            if not os.path.isfile(file):
+                print("Cannot find file {} ! Exiting".format(file))
+                sys.exit()
+
+    outdir_path, outdir_folder = os.path.split(outdir)
+    if not os.path.isdir(outdir) and os.path.exists(outdir_path):
+        print("Created output folder")
+        os.makedirs(outdir)
+    elif not os.path.exists(outdir_path):
+        print("Cannot find output folder ! Exiting")
+        sys.exit()
+
+    # seq_rep
+    if type(k) != int or k <= 0:
+        print("Invalid kmers length ! Please enter a positive integer ! Exiting")
+        print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
+        sys.exit()
+    if full_kmers not in [True, False, None]:
+        print("Invalid value for full_kmers ! Please use boolean values ! Exiting")
+        print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
+        sys.exit()
+    if not 0 < low_var_threshold <= 1 or type(low_var_threshold) != float:
+        print("Invalid variance threshold for extracting k-mers ! Please enter a value between 0 and 1 ! Exiting")
+        print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
+        sys.exit()
+
+    # settings
+    if host_extractor not in ["onesvm","linearsvm","attention","lstm","deeplstm"]:
+        print("Invalid host extraction classifier ! Exiting")
+        print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
+        sys.exit()
+    if bacteria_classifier not in ["ridge","svm","mlr","mnb","lstm_attention","cnn","deepcnn"]:
+        print("Invalid multiclass bacterial classifier ! Exiting")
+        print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
+        sys.exit()
+    if cross_validation not in [True, False, None]:
+        print("Invalid value for cross_validation ! Please use boolean values ! Exiting")
+        print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
+        sys.exit()
+    if type(nb_cv_jobs) != int or nb_cv_jobs <= 0:
+        print("Invalid number of cross validation jobs ! Please enter a positive integer ! Exiting")
+        print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
+        sys.exit()
+    if cross_validation not in [True, False, None]:
+        print("Invalid value for verbose parameter ! Please use boolean values ! Exiting")
+        print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
+        sys.exit()
+    if type(training_batch_size) != int or training_batch_size <= 0:
+        print("Invalid number of cross validation jobs ! Please enter a positive integer ! Exiting")
+        print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
+        sys.exit()
+    if binary_save_host not in [True, False, None]:
+        print("Invalid value for host data saving ! Please use boolean values ! Exiting")
+        print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
+        sys.exit()
+    if binary_save_unclassified not in [True, False, None]:
+        print("Invalid value for unclassifiable sequences ! Please use boolean values ! Exiting")
+        print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
+        sys.exit()
+    if not 0 < classification_threshold <= 1 or type(classification_threshold) != float:
+        print("Invalid confidence threshold for classifying bacterial sequences ! Please enter a value between 0 and 1 ! Exiting")
+        print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
+        sys.exit()
 
     # Adjust classifier based on host presence or not
     if host in ["none", "None", None]:
@@ -115,7 +189,6 @@ if __name__ == "__main__":
         outdirs["plots_dir"] = os.path.join(outdirs["main_outdir"], "plots")
         makedirs(outdirs["plots_dir"], mode=0o700, exist_ok=True)
         outdirs["plots_dir"] = os.path.join(outdirs["plots_dir"], outdirs["prefix"])
-
 
 # Part 1 - K-mers profile extraction
 ################################################################################
