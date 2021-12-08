@@ -62,7 +62,7 @@ if __name__ == "__main__":
     # seq_rep
     k_length = config.getint("seq_rep", "k", fallback = 20)
     fullKmers = config.getboolean("seq_rep", "full_kmers", fallback = True)
-    lowVarThreshold = config.get("seq_rep", "low_var_threshold", fallback = None)
+    lowVarThreshold = config.getfloat("seq_rep", "low_var_threshold", fallback = None)
 
     # settings
     binary_classifier = config.get("settings", "host_extractor", fallback = "attention")
@@ -74,7 +74,7 @@ if __name__ == "__main__":
 # AMINE -> IDEAS TO ADAPT SAVING
     binary_saving_host = config.getboolean("settings", "binary_save_host", fallback = True)
     binary_saving_unclassified = config.getboolean("settings", "binary_save_unclassified", fallback = True)
-    classifThreshold = config.get("settings", "classification_threshold", fallback = 0.8)
+    classifThreshold = config.getfloat("settings", "classification_threshold", fallback = 0.8)
 
 # Part 0.5 - Validation of parameters and environment
 ################################################################################
