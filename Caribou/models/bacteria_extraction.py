@@ -8,9 +8,9 @@ from sklearn.linear_model import SGDOneClassSVM, SGDClassifier
 
 from keras.models import load_model
 
-from metagenomics_ML.utils import *
-from metagenomics_ML.models.models_utils import *
-from metagenomics_ML.models.build_neural_networks import *
+from Caribou.utils import *
+from Caribou.models.models_utils import *
+from Caribou.models.build_neural_networks import *
 
 from joblib import load
 

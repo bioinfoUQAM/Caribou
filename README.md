@@ -1,4 +1,4 @@
-# metagenomics_ML
+# Caribou
 Alignment-free bacterial identification and classification in metagenomics sequencing data using machine learning
 
 ## Installation of dependencies
@@ -14,13 +14,13 @@ In linux command shell, execute the following commands :
 ```
 ENV_DIR=/path/to/your/environment/folder
 
-python3 -m venv $ENV_DIR/metagenomics_ML
+python3 -m venv $ENV_DIR/Caribou
 
-source $ENV_DIR/metagenomics_ML/bin/activate
+source $ENV_DIR/Caribou/bin/activate
 
 pip install --no-index --upgrade pip
 
-pip install /home/nicolas/github/metagenomics_ML
+pip install /home/nicolas/github/Caribou
 ```
 
 To access your virtual environment later on you will only need to run the following two commands
@@ -28,7 +28,7 @@ To access your virtual environment later on you will only need to run the follow
 ```
 ENV_DIR=/path/to/your/environment/folder
 
-source $ENV_DIR/metagenomics_ML/bin/activate
+source $ENV_DIR/Caribou/bin/activate
 ```
 
 ## Testing data
@@ -40,36 +40,36 @@ This template must be modified by the user to insert filepaths and comment the h
 
 The modified template can be submited on a HPC cluster managed by Slurm (ex: Compute Canada) using the following command :
 ```
-sbatch metagenomics_ML/data/build_data_scripts/template_slurm_datagen.sh
+sbatch Caribou/data/build_data_scripts/template_slurm_datagen.sh
 ```
 
 The modified template can also be ran in a linux command shell by running the following command :
 ```
-sh metagenomics_ML/data/build_data_scripts/template_slurm_datagen.sh
+sh Caribou/data/build_data_scripts/template_slurm_datagen.sh
 ```
 
 Finally each script used by the template can be used in linux command shell by running the following commands :
 ```
-sh metagenomics_ML/data/build_data_scripts/generateFastaList.sh -d [directory] -o [outputFile]
+sh Caribou/data/build_data_scripts/generateFastaList.sh -d [directory] -o [outputFile]
 
-sh metagenomics_ML/data/build_data_scripts/fasta2class_bact.sh -d [directory] -i [inputFile] -c [classesFile] -o [outputDirectory]
+sh Caribou/data/build_data_scripts/fasta2class_bact.sh -d [directory] -i [inputFile] -c [classesFile] -o [outputDirectory]
 
-sh metagenomics_ML/data/build_data_scripts/fasta2class_host.sh -d [directory] -i [inputFile] -o [outputDirectory]
+sh Caribou/data/build_data_scripts/fasta2class_host.sh -d [directory] -i [inputFile] -o [outputDirectory]
 ```
 
 ## Usage
 The package can be easily installed through pip. The git must be cloned first and then the package can be installed using the following commands lines in the desired folder :
 ```
-git clone https://github.com/bioinfoUQAM/metagenomics_ML.git
-pip install ./metagenomics_ML/
+git clone https://github.com/bioinfoUQAM/Caribou.git
+pip install ./Caribou/
 ```
 
-There is a template config file which can be found here `metagenomics_ML/eval_configs/template_config.ini`.
+There is a template config file which can be found here `Caribou/eval_configs/template_config.ini`.
 
 To use, run the following command using you own modified config file :
 
 ```
-main.py metagenomics_ML/eval_configs/test.ini
+main.py Caribou/eval_configs/test.ini
 ```
 
-Description for each variable can be found in the wiki https://github.com/bioinfoUQAM/metagenomics_ML/wiki
+Description for each variable can be found in the wiki https://github.com/bioinfoUQAM/Caribou/wiki

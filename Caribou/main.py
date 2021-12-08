@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 
-from metagenomics_ML.data.build_data import *
-from metagenomics_ML.models.bacteria_extraction import *
-from metagenomics_ML.models.classification import *
+from Caribou.data.build_data import *
+from Caribou.models.bacteria_extraction import *
+from Caribou.models.classification import *
 
 import pandas as pd
 
@@ -102,15 +102,15 @@ if __name__ == "__main__":
     # seq_rep
     if type(k) != int or k <= 0:
         print("Invalid kmers length ! Please enter a positive integer ! Exiting")
-        print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/metagenomics_ML/wiki")
+        print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
         sys.exit()
     if full_kmers not in [True, False, None]:
         print("Invalid value for full_kmers ! Please use boolean values ! Exiting")
-        print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/metagenomics_ML/wiki")
+        print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
         sys.exit()
     if low_var_threshold <= 0 or low_var_threshold > 1 or type(low_var_threshold) != float:
         print("Invalid kmers length ! Please enter a value between 0 and 1 ! Exiting")
-        print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/metagenomics_ML/wiki")
+        print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
         sys.exit()
 
 # FINISH VALIDATION OF PARAMETERS

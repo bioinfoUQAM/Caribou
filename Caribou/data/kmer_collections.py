@@ -1,4 +1,4 @@
-from metagenomics_ML.data.seq_collections import SeqCollection
+from Caribou.data.seq_collections import SeqCollection
 
 import re
 import os
@@ -203,6 +203,10 @@ class SeenKmersCollection(KmersCollection):
         for i in range(len(sequence) - int(self.k) + 1):
             kmer = sequence[i:i + int(self.k)]
 
+            print("self.alphabet : ",type(self.alphabet))
+            print("kmer : ",type(kmer))
+            print("search(kmer) : ",type(search(kmer)))
+            print("bool(search(kmer)) : ",bool(search(kmer)))
             if self.alphabet and bool(search(kmer)) or not self.alphabet:
                 self.dict_data[kmer][ind] += 1
 

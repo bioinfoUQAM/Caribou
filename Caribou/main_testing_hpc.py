@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 
-from metagenomics_ML.data.build_data import *
-from metagenomics_ML.models.bacteria_extraction import *
-from metagenomics_ML.models.classification import *
+from Caribou.data.build_data import *
+from Caribou.models.bacteria_extraction import *
+from Caribou.models.classification import *
 
 import pandas as pd
 
@@ -26,7 +26,7 @@ if gpus:
     config = ConfigProto(device_count={'GPU': len(gpus), 'CPU': os.cpu_count()})
     sess = Session(config=config)
     set_session(sess);
-    
+
 # Part 0 - Initialisation / extraction of parameters from config file
 ################################################################################
 

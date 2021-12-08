@@ -7,7 +7,7 @@ import os
 
 from tensorflow.keras.utils import to_categorical
 
-from metagenomics_ML.data.generators import DataGenerator
+from Caribou.data.generators import DataGenerator
 
 __author__ = "Nicolas de Montigny"
 
