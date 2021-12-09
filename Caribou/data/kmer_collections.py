@@ -74,7 +74,6 @@ class KmersCollection(ABC):
 
         return self
 
-#TESTER SI FONCTIONNE BIEN ET NE RESTE PAS EN LOOP INFINIE
     def __compute_kmers_from_file(self, sequences):
         path, ext = splitext(sequences)
         ext = ext.lstrip(".")
@@ -205,7 +204,10 @@ class SeenKmersCollection(KmersCollection):
         for i in range(len(sequence) - int(self.k) + 1):
             kmer = sequence[i:i + int(self.k)]
 
-# kmer = byte type
+            if isinstance(kmer, bytes):
+                kmer =  kmer.decode("utf8")
+    
+            # kmer = byte type
             if self.alphabet and bool(search(kmer)) or not self.alphabet:
                 self.dict_data[kmer][ind] += 1
 
