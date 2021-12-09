@@ -199,14 +199,15 @@ class SeenKmersCollection(KmersCollection):
     def _compute_kmers_of_sequence(self, sequence, ind):
         search = re.compile("^["+self.alphabet+"]+$").search
 
-        print(type(sequence))
-        print(sequence)
+        if isinstance(sequence, bytes):
+            sequence =  sequence.decode("utf8")
+
         for i in range(len(sequence) - int(self.k) + 1):
             kmer = sequence[i:i + int(self.k)]
 
             if isinstance(kmer, bytes):
                 kmer =  kmer.decode("utf8")
-    
+
             # kmer = byte type
             if self.alphabet and bool(search(kmer)) or not self.alphabet:
                 self.dict_data[kmer][ind] += 1
