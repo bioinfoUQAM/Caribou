@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 
 import sys
@@ -127,14 +128,14 @@ def classify(clf_file, X, kmers_list, ids, classifier, nb_classes, labels_list_i
         elif predict[i] == -1:
             unclassified.append(i)
 
-    save_predicted_kmers(classified, pd.Series(range(len(ids))), kmers_list, ids, X, classified_kmers_file)
-    save_predicted_kmers(unclassified, pd.Series(range(len(ids))), kmers_list, ids, X, unclassified_kmers_file)
+    save_predicted_kmers(classified, pd.Series(range(len(ids))), kmers_list, ids, X, classified_kmers_file, "multi")
+    save_predicted_kmers(unclassified, pd.Series(range(len(ids))), kmers_list, ids, X, unclassified_kmers_file, "multi")
 
     classified_data = {}
     classified_data["X"] = str(classified_kmers_file)
     classified_data["kmers_list"] = kmers_list
     classified_data["ids"] = [ids[i] for i in classified]
-    classified_data["classification"] = from_int_cls(classified, ids, predict, labels_list_str)
+    classified_data["classification"] = [predict[i] for i in classified]
 
     unclassified_data = {}
     unclassified_data["X"] = str(unclassified_kmers_file)

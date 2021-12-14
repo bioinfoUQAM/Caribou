@@ -117,8 +117,8 @@ def extract_bacteria_sequences(clf_file, X, kmers_list, ids, classifier, labels_
                 bacteria.append(i)
             elif predict[i] == -1:
                 unclassified.append(i)
-        save_predicted_kmers(bacteria, pd.Series(range(len(ids))), kmers_list, ids, X, bacteria_kmers_file)
-        save_predicted_kmers(unclassified, pd.Series(range(len(ids))), kmers_list, ids, X, unclassified_kmers_file)
+        save_predicted_kmers(bacteria, pd.Series(range(len(ids))), kmers_list, ids, X, bacteria_kmers_file, "binary")
+        save_predicted_kmers(unclassified, pd.Series(range(len(ids))), kmers_list, ids, X, unclassified_kmers_file, "binary")
     # Keras classifiers
     elif classifier not in ["onesvm","linearsvm"] and saving_host and saving_unclassified:
         if verbose:
@@ -130,9 +130,9 @@ def extract_bacteria_sequences(clf_file, X, kmers_list, ids, classifier, labels_
                 unclassified.append(i)
             elif predict[i] == -1:
                 host.append(i)
-        save_predicted_kmers(bacteria, pd.Series(range(len(ids))), kmers_list, ids, X, bacteria_kmers_file)
-        save_predicted_kmers(host, pd.Series(range(len(ids))), kmers_list, ids, X, host_kmers_file)
-        save_predicted_kmers(unclassified, pd.Series(range(len(ids))), kmers_list, ids, X, unclassified_kmers_file)
+        save_predicted_kmers(bacteria, pd.Series(range(len(ids))), kmers_list, ids, X, bacteria_kmers_file, "binary")
+        save_predicted_kmers(host, pd.Series(range(len(ids))), kmers_list, ids, X, host_kmers_file, "binary")
+        save_predicted_kmers(unclassified, pd.Series(range(len(ids))), kmers_list, ids, X, unclassified_kmers_file, "binary")
     # LinearSVM sklearn
     elif classifier != "onesvm" and saving_host:
         if verbose:
@@ -142,8 +142,8 @@ def extract_bacteria_sequences(clf_file, X, kmers_list, ids, classifier, labels_
                 bacteria.append(i)
             elif predict[i] == -1:
                 host.append(i)
-        save_predicted_kmers(bacteria, pd.Series(range(len(ids))), kmers_list, ids, X, bacteria_kmers_file)
-        save_predicted_kmers(host, pd.Series(range(len(ids))), kmers_list, ids, X, host_kmers_file)
+        save_predicted_kmers(bacteria, pd.Series(range(len(ids))), kmers_list, ids, X, bacteria_kmers_file, "binary")
+        save_predicted_kmers(host, pd.Series(range(len(ids))), kmers_list, ids, X, host_kmers_file, "binary")
     # Only saving bacterias
     else:
         if verbose:
@@ -151,7 +151,7 @@ def extract_bacteria_sequences(clf_file, X, kmers_list, ids, classifier, labels_
         for i in range(len(predict)):
             if predict[i] == 1:
                 bacteria.append(i)
-        save_predicted_kmers(bacteria, pd.Series(range(len(ids))), kmers_list, ids, X, bacteria_kmers_file)
+        save_predicted_kmers(bacteria, pd.Series(range(len(ids))), kmers_list, ids, X, bacteria_kmers_file, "binary")
 
     bacteria_data = {}
     bacteria_data["X"] = str(bacteria_kmers_file)

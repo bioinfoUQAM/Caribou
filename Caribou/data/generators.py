@@ -129,7 +129,7 @@ class DataGeneratorKeras(Sequence):
 # ####################
 # Data build functions
 # ####################
-def iter_generator(array, labels, batch_size, kmers, ids, classifier, cv, shuffle = True, training = True):
+def iter_generator(array, labels, batch_size, kmers, ids, classifier, cv, shuffle = True, training = True, positions_list = None):
     if cv and training:
         positions_list = np.arange(len(labels))
         np.random.shuffle(positions_list)
@@ -143,6 +143,10 @@ def iter_generator(array, labels, batch_size, kmers, ids, classifier, cv, shuffl
         iterator_test = DataGenerator(array, labels, 1, kmers, ids, testing_positions, classifier, cv, shuffle)
 
         return iterator_train, iterator_test
+
+    elif positions_list is not None:
+        iterator = DataGenerator(array, labels, batch_size, kmers, ids, positions_list, cv, shuffle)
+        return iterator
 
     else:
         positions_list = np.arange(len(labels))

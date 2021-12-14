@@ -260,7 +260,7 @@ class GivenKmersCollection(KmersCollection):
         #
         self.ids = []
         self.v_size = len(self.kmers_list)
-        self.data = self.Xy_file.create_carray("/", "data", obj = np.zeros(self.length, self.v_size), dtype=self.dtype)
+        self.data = self.Xy_file.create_carray("/", "data", obj = np.zeros((self.length, self.v_size), dtype = self.dtype))
         #
         self._compute_kmers(sequences)
         self.Xy_file.close()
@@ -305,9 +305,9 @@ def build_kmers_Xy_data(seq_data, k, Xy_file, length = 0, kmers_list = None, ful
         sparse=None, dtype=np.uint64):
 
     if kmers_list is not None:
-        collection = GivenKmersCollection(seq_data, Xy_file, length, kmers_list, sparse, dtype)
+        collection = GivenKmersCollection(seq_data, Xy_file, length, kmers_list, sparse)
     else:
-        collection = build_kmers(seq_data, k, Xy_file, length, full_kmers, low_var_threshold, sparse, dtype)
+        collection = build_kmers(seq_data, k, Xy_file, length, full_kmers, low_var_threshold, sparse)
     kmers_list = collection.kmers_list
     X_data = collection.data
     y_data = np.array(seq_data.labels)
@@ -316,7 +316,7 @@ def build_kmers_Xy_data(seq_data, k, Xy_file, length = 0, kmers_list = None, ful
 
 def build_kmers_X_data(seq_data, X_file, kmers_list, length = 0, sparse=None, dtype=np.uint64):
 
-    collection = GivenKmersCollection(seq_data, X_file, length, kmers_list, sparse, dtype)
+    collection = GivenKmersCollection(seq_data, X_file, length, kmers_list, sparse)
     kmers_list = collection.kmers_list
     X_data = collection.data
     ids = collection.ids
