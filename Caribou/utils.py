@@ -34,8 +34,6 @@ def save_predicted_kmers(positions_list, y, kmers_list, ids, infile, outfile, cl
         with tb.open_file(outfile, "w") as handle:
             for X, y in generator.iterator:
                 df = np.array(X, dtype = "float32")
-                print("X : ", X)
-                print("df : ", df)
                 if data is None:
                     data = handle.create_earray("/", "data", obj = df)
                 else:
@@ -45,11 +43,12 @@ def save_predicted_kmers(positions_list, y, kmers_list, ids, infile, outfile, cl
         generator = iter_generator(infile, y, 1, kmers_list, ids, classif, cv = 0, shuffle = False, training = False, positions_list = positions_list)
         for i, (X, y) in enumerate(generator.iterator):
             with pd.HDFStore(outfile) as data:
-                df = pd.DataFrame(X, columns = kmers_list, index = [ids[i]], dtype = "float32")
+                X.fillna(0, axis = 0, inplace = True)
+                X = X.astype('int64')
                 if not os.path.isfile(outfile):
-                    df.to_hdf(data, "data", format = "table", mode = "w")
+                    X.to_hdf(data, "data", format = "table", mode = "w", min_itemsize = len(max(ids, key = len)))
                 else:
-                    df.to_hdf(data, "data", format = "table", mode = "a", append = True)
+                    X.to_hdf(data, "data", format = "table", mode = "a", append = True)
         generator.handle.close()
 
 def merge_database_host(database_data, host_data):

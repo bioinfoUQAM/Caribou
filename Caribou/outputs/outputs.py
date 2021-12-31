@@ -5,6 +5,8 @@ import tables as tb
 
 from subprocess import run
 
+from copy import copy
+
 import pickle
 
 import os
@@ -13,106 +15,178 @@ from Caribou.utils import load_Xy_data
 
 __author__ = "Nicolas de Montigny"
 
-__all__ = ['outputs','out_kronagram','out_abundance_table','out_summary']
+__all__ = ["outputs","get_abundances","out_abundances","abundance_table","out_summary","out_kronagram","create_krona_file","out_report"]
 
-#Functions
-def outputs(database_kmers, outdirs, k, classifier, dataset, classified_data, seq_data, abundance_table = True, kronagram = True, stats = True, taxo_tree = True, fasta = True):
-    if abundance_table is True:
-        out_abundance_table()
+def outputs(database_kmers, results_dir, k, classifier, dataset, host, classified_data, seq_file, abundance_stats = True, kronagram = True, full_report = True):
+    abund_file = "{}/K{}_{}_abundance_{}.tsv".format(results_dir, k, classifier, dataset)
+    summary_file = "{}/K{}_{}_summary_{}.tsv".format(results_dir, k, classifier, dataset)
+    krona_file = "{}/K{}_{}_kronagram_{}.tsv".format(results_dir, k, classifier, dataset)
+    krona_out = "{}/K{}_{}_kronagram_{}.html".format(results_dir, k, classifier, dataset)
+    report_file = "{}/K{}_{}_full_report_{}.tsv".format(results_dir, k, classifier, dataset)
+    tree_file = "{}/K{}_{}_taxonomic_tree_{}.nwk".format(results_dir, k, classifier, dataset)
+
+    with open(seq_file, "rb") as handle:
+        seq_data = pickle.load(handle)
+
+    abundances, order = get_abundances(classified_data)
+
+    if abundance_stats is True:
+        out_abundances(abundances, order, abund_file, summary_file, host, seq_data)
     if kronagram is True:
-        out_kronagram(outdirs, k, classifier, dataset, classified_data, seq_data, database_kmers)
-    if stats is True:
-        out_summary()
-    if taxo_tree is True:
-        out_tree()
-    if fasta is True:
-        out_fasta()
-"""
-classified_data = {}
-classified_data["X"] = str(classified_kmers_file)
-classified_data["kmers_list"] = kmers_list
-classified_data["ids"] = [ids[i] for i in classified]
-classified_data["classification"] = from_int_cls(classified, ids, predict, labels_list_str)
-"""
+        out_kronagram(abundances, order, krona_file, krona_out, seq_data, database_kmers, dataset)
+    if full_report is True:
+        out_report(classified_data, order, report_file, database_kmers, seq_data)
 
-def out_abundance_table():
+def get_abundances(data):
+    abundances = {}
+    order = data["order"].copy()
+
+    for taxon in data["order"]:
+        if taxon in ["bacteria","host","unclassified"]:
+            abundances[taxon] = len(data[taxon]["ids"])
+        else:
+            abundances[taxon] = {}
+            for classif in data[taxon]["classification"]:
+                if classif in abundances[taxon]:
+                    abundances[taxon][classif] += 1
+                else:
+                    abundances[taxon][classif] = 1
+
+    return abundances, order
+
+def out_abundances(abundances, order, abund_file, summary_file, host, seq_data):
+    summary = abundance_table(abundances, order, abund_file)
+    summary["initial"] = len(seq_data.labels)
+    out_summary(abundances, order, summary, host, summary_file)
+
+def abundance_table(abundances, order, abund_file):
     # Abundance tables / relative abundance
-        # Identification of each sequence \w domain + probability
-        # Joint identification of reads vx autres domaines?
-    print("To do")
+    summary = {"total":0}
+    cols = ["Taxonomic classification","Number of reads","Relative Abundance (%)"]
+    nrows = 0
+    for taxon in abundances:
+        if taxon not in ["bacteria","host","unclassified"]:
+            nrows += 1
 
-def out_kronagram(outdirs, k, classifier, dataset, classified_data, seq_data, database_kmers):
+    df = pd.DataFrame(np.zeros((nrows,len(cols)), dtype = int), index = np.arange(nrows), columns = cols)
+
+    index = 0
+    total_abund = 0
+    for taxon in order:
+        if taxon in ["bacteria","host","unclassified"]:
+            summary[taxon] = copy(abundances[taxon])
+        else:
+            df.loc[index, "Taxonomic classification"] = taxon
+            taxon_ind = copy(index)
+            taxon_abund = 0
+            index += 1
+            for k, v in abundances[taxon].items():
+                df.loc[index, "Taxonomic classification"] = k
+                df.loc[index, "Number of reads"] = v
+                taxon_abund += v
+                total_abund += v
+                index += 1
+            df.loc[taxon_ind, "Number of reads"] = taxon_abund
+            summary[taxon] = taxon_abund
+    df["Relative Abundance (%)"] = (df["Number of reads"]/total_abund)*100
+    summary["total"] = total_abund
+    df.to_csv(abund_file, sep = "\t", na_rep = "", header = True, index = False)
+
+    return summary
+
+def out_summary(abundances, order, summary, host, summary_file):
+    # Summary file of operations / counts & proportions of reads at each steps
+    cols = ["Value"]
+    rows = ["Abundance","","Number of reads before classification", "Number of reads classified","Number of unclassified reads","Number of reads identified as bacteria"]
+    values = np.array([np.NaN, np.NaN, summary["initial"], summary["total"], summary["unclassified"], summary["bacteria"]])
+    if host is not None:
+        rows.append("Number of reads identified as {}".format(host))
+        values = np.append(values, summary["host"])
+    for taxon in order:
+        if taxon not in ["bacteria","host","unclassified"]:
+            rows.append("Number of reads classified at {} level".format(taxon))
+            values = np.append(values, summary[taxon])
+    for i in ["","Relative abundances","","Percentage of reads classified", "Percentage of reads unclassified","Percentage of reads identified as bacteria"]:
+        rows.append(i)
+    values = np.append(values, [np.NaN,np.NaN,np.NaN,(summary["total"]/summary["initial"]*100),(summary["unclassified"]/summary["initial"]*100),(summary["bacteria"]/summary["initial"]*100)])
+    if host is not None:
+        rows.append("Percentage of reads identified as {}".format(host))
+        values = np.append(values, summary["host"]/summary["initial"]*100)
+    for taxon in order:
+        if taxon not in ["bacteria","host","unclassified"]:
+            rows.append("Percentage of reads classified at {} level".format(taxon))
+            values = np.append(values, summary[taxon]/summary["initial"]*100)
+
+    df = pd.DataFrame(values, index = rows, columns = cols)
+    df.to_csv(summary_file, sep = "\t", na_rep = "", header = False, index = True)
+
+def out_kronagram(abundances, order, krona_file, krona_out, seq_data, database_kmers, dataset):
+    # Kronagram / interactive tree
     krona_path = "{}/KronaTools/scripts/ImportText.pl".format(os.path.dirname(os.path.realpath(__file__)))
-    print(krona_path)
-    # Kronagram
-    krona_file = "{}/K{}_{}_kronagram_{}.txt".format(outdirs["data_dir"], k, classifier, dataset)
-    krona_out = "{}/K{}_{}_kronagram_{}.html".format(outdirs["plots_dir"], k, classifier, dataset)
-    create_krona_file(krona_file, classified_data, seq_data, database_kmers)
+    create_krona_file(abundances, order, krona_file, seq_data, database_kmers)
     perl_loc = run("which perl", shell = True, capture_output = True, text = True)
     cmd = "{} {} {} -o {} -n {}".format(perl_loc.stdout.strip("\n"), krona_path, krona_file, krona_out, dataset)
     run(cmd, shell = True)
 
-def create_krona_file(file, data, seq_data, database_kmers):
-    abundances = {}
-    col = ['Abundance']
-    [col.append(database_kmers['taxas'][i]) for i in range(len(database_kmers['taxas'])-1, -1, -1)]
+def create_krona_file(abundances, order, krona_file, seq_data, database_kmers):
+    cols = ['Abundance']
+    [cols.append(database_kmers['taxas'][i]) for i in range(len(database_kmers['taxas'])-1, -1, -1)]
 
-    for taxon, data_tax in data.items():
-        abundances[taxon] = {}
-        for classif in data_tax["classification"]:
-            if classif in abundances[taxon]:
-                abundances[taxon][classif] += 1
-            else:
-                abundances[taxon][classif] = 1
+    nrows = 0
+    for taxon in abundances:
+        if taxon not in ["bacteria","host","unclassified"]:
+            nrows += len(abundances[taxon])
 
-    abund_array = np.array([abundances[x] for x in abundances]).T
-    length = 0
-    for tax in abundances:
-        length += len(abundances[tax])
-
-    df = pd.DataFrame(np.zeros((length,len(col)), dtype = int), index = np.arange(length), columns = col)
+    df = pd.DataFrame(np.zeros((nrows,len(cols)), dtype = int), index = np.arange(nrows), columns = cols)
 
     unique_rows = np.vstack(list({tuple(row) for row in seq_data.labels}))
 
     index = 0
-    for tax in abundances:
-        col_tax = df.columns.get_loc(tax)
-        for k, v in abundances[tax].items():
-            if k in df[tax]:
-                ind = df[df[tax] == k].index.values
-                df.loc[ind, tax] = k
-                df.loc[ind, "Abundance"] += v
-                if col_tax != 1:
-                    for col in range(1, col_tax+1):
-                        df.iloc[ind,col] = np.flip(unique_rows[np.where(unique_rows == k)[0]])[0][col-1]
-            else:
-                df.loc[index, tax] = k
-                df.loc[index, "Abundance"] += v
-                if col_tax != 1:
-                    for col in range(1, col_tax+1):
-                        df.iloc[index,col] = np.flip(unique_rows[np.where(unique_rows == k)[0]])[0][col-1]
+    for taxon in order:
+        if taxon not in ["bacteria","host","unclassified"]:
+            col_taxon = df.columns.get_loc(taxon)
+            for k, v in abundances[taxon].items():
+                if k in df[taxon]:
+                    ind = df[df[taxon] == k].index.values
+                    df.loc[ind, taxon] = k
+                    df.loc[ind, "Abundance"] += v
+                    if col_taxon != 1:
+                        for col in range(1, col_taxon+1):
+                            df.iloc[ind,col] = np.flip(unique_rows[np.where(unique_rows == k)[0]])[0][col-1]
+                else:
+                    df.loc[index, taxon] = k
+                    df.loc[index, "Abundance"] += v
+                    if col_taxon != 1:
+                        for col in range(1, col_taxon+1):
+                            df.iloc[index,col] = np.flip(unique_rows[np.where(unique_rows == k)[0]])[0][col-1]
+                    index += 1
+    df = df.replace(0,np.NaN)
+    df.to_csv(krona_file, sep = "\t", na_rep = "", header = False, index = False)
+
+def out_report(classified_data, order, report_file, database_kmers, seq_data):
+    # Report file of classification of each id
+    cols = ['Sequence ID']
+    [cols.append(database_kmers['taxas'][i]) for i in range(len(database_kmers['taxas'])-1, -1, -1)]
+
+    nrows = 0
+    for taxon in order:
+        if taxon not in ["bacteria","host","unclassified"]:
+            nrows += len(classified_data[taxon]["ids"])
+
+    df = pd.DataFrame(np.zeros((nrows,len(cols)), dtype = int), index = np.arange(nrows), columns = cols)
+
+    unique_rows = np.vstack(list({tuple(row) for row in seq_data.labels}))
+
+    index = 0
+    for taxon in order:
+        if taxon not in ["bacteria","host","unclassified"]:
+            col_taxon = df.columns.get_loc(taxon)
+            for id, classification in zip(classified_data[taxon]["ids"], classified_data[taxon]["classification"]):
+                df.loc[index, "Sequence ID"] = id
+                df.loc[index, taxon] = classification
+                if col_taxon != 1:
+                    for col in range(1, col_taxon+1):
+                        df.iloc[index,col] = np.flip(unique_rows[np.where(unique_rows == classification)[0]])[0][col-1]
                 index += 1
     df = df.replace(0,np.NaN)
-    df.to_csv(file, sep = "\t", na_rep = "", header = False, index = False, )
-
-
-def out_summary():
-    # Summary file of operations / stats / proportions of reads at each steps
-    print("To do")
-
-def out_tree():
-    # Taxonomic tree / table -> newick format
-    print("To do")
-
-def out_fasta():
-    # Fasta file of classifications made
-    print("To do")
-
-#Testing
-seqfile = "/home/nicolas/github/Caribou_exp/local/results/output/mock/data/S_seqdata_db_bacteria_DB.txt"
-with open(seqfile, "rb") as handle:
-    seq_data = pickle.load(handle)
-database_kmers = load_Xy_data("/home/nicolas/github/Caribou_exp/local/results/output/mock/data/S_K4_Xy_genome_bacteria_DB_data.npz")
-outdirs = {"data_dir":"/home/nicolas/github/Caribou_exp/local/results/output/mock/data/", "plots_dir":"/home/nicolas/github/Caribou_exp/local/results/output/mock/plots/"}
-classified_data = {"species":{"X":"path","kmers_list":["ACTG","AGTC","GTCA"],"ids":["1","2","3"],"classification":["test_1","test_2","test_3"]}, "domain":{"X":"path","kmers_list":["ACTG","AGTC","GTCA"],"ids":["1","2","3"],"classification":["bacteria","bacteria","-1"]}}
-outputs(database_kmers, outdirs, 4, "TEST", "Patate", classified_data, seq_data)
+    df.to_csv(report_file, sep = "\t", na_rep = "", header = True, index = False)

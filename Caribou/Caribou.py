@@ -3,6 +3,7 @@
 from Caribou.data.build_data import *
 from Caribou.models.bacteria_extraction import *
 from Caribou.models.classification import *
+from Caribou.outputs.outputs import *
 
 import pandas as pd
 
@@ -73,10 +74,12 @@ if __name__ == "__main__":
     n_cvJobs = config.getint("settings", "nb_cv_jobs", fallback = 1)
     verbose = config.getboolean("settings", "verbose", fallback = True)
     training_batch_size = config.getint("settings", "training_batch_size", fallback = 32)
-# AMINE -> IDEAS TO ADAPT SAVING
-    binary_saving_host = config.getboolean("settings", "binary_save_host", fallback = True)
-    binary_saving_unclassified = config.getboolean("settings", "binary_save_unclassified", fallback = True)
     classifThreshold = config.getfloat("settings", "classification_threshold", fallback = 0.8)
+
+    # outputs
+    abundance_stats = config.getboolean("outputs", "abundance_report", fallback = True)
+    kronagram = config.getboolean("outputs", "kronagram", fallback = True)
+    full_report = config.getboolean("outputs", "full_report", fallback = True)
 
 # Part 0.5 - Validation of parameters and environment
 ################################################################################
@@ -142,16 +145,22 @@ if __name__ == "__main__":
         print("Invalid number of training batch size ! Please enter a positive integer ! Exiting")
         print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
         sys.exit()
-    if binary_saving_host not in [True, False, None]:
-        print("Invalid value for host data saving ! Please use boolean values ! Exiting")
-        print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
-        sys.exit()
-    if binary_saving_unclassified not in [True, False, None]:
-        print("Invalid value for unclassifiable sequences ! Please use boolean values ! Exiting")
-        print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
-        sys.exit()
     if not 0 < classifThreshold <= 1 or type(classifThreshold) != float:
         print("Invalid confidence threshold for classifying bacterial sequences ! Please enter a value between 0 and 1 ! Exiting")
+        print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
+        sys.exit()
+
+    # outputs
+    if abundance_stats not in [True, False, None]:
+        print("Invalid value for output in abundance table form ! Please use boolean values ! Exiting")
+        print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
+        sys.exit()
+    if kronagram not in [True, False, None]:
+        print("Invalid value for output in Kronagram form ! Please use boolean values ! Exiting")
+        print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
+        sys.exit()
+    if full_report not in [True, False, None]:
+        print("Invalid value for output in full report form ! Please use boolean values ! Exiting")
         print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
         sys.exit()
 
@@ -182,10 +191,12 @@ if __name__ == "__main__":
     outdirs["main_outdir"] = os.path.join(outdir, metagenome)
     outdirs["data_dir"] = os.path.join(outdirs["main_outdir"], "data")
     outdirs["models_dir"] = os.path.join(outdirs["main_outdir"], "models")
+    outdirs["results_dir"] = os.path.join(outdirs["main_outdir"], "results")
     outdirs["prefix"] = tag_kf
     makedirs(outdirs["main_outdir"], mode=0o700, exist_ok=True)
     makedirs(outdirs["data_dir"], mode=0o700, exist_ok=True)
     makedirs(outdirs["models_dir"], mode=0o700, exist_ok=True)
+    makedirs(outdirs["results_dir"], mode=0o700, exist_ok=True)
     outdirs["data_dir"] = os.path.join(outdirs["data_dir"], outdirs["prefix"])
     outdirs["models_dir"] = os.path.join(outdirs["models_dir"], outdirs["prefix"])
 
@@ -230,7 +241,7 @@ if __name__ == "__main__":
 ################################################################################
 
     if host == "none":
-        bacterial_metagenome = bacteria_extraction(k_profile_metagenome,
+        classified_data = bacteria_extraction(k_profile_metagenome,
             k_profile_database,
             k_length,
             outdirs,
@@ -244,7 +255,7 @@ if __name__ == "__main__":
             n_jobs = n_cvJobs
             )
     else:
-        bacterial_metagenome = bacteria_extraction(k_profile_metagenome,
+        classified_data = bacteria_extraction(k_profile_metagenome,
             (k_profile_database, k_profile_host),
             k_length,
             outdirs,
@@ -261,7 +272,7 @@ if __name__ == "__main__":
 # Part 3 - Multiclass classification of bacterial sequences
 ################################################################################
 
-    classification_data = bacterial_classification(bacterial_metagenome,
+    classified_data = bacterial_classification(classified_data,
         k_profile_database,
         k_length,
         outdirs,
@@ -300,5 +311,6 @@ if __name__ == "__main__":
 # Part 7 - Outputs for biological analysis of bacterial population
 ################################################################################
 
+    outputs(k_profile_database, outdirs["results_dir"], k_length, multi_classifier, database, host, classified_data, "{}_seqdata_db_{}.txt".format(outdirs["data_dir"], database), abundance_stats = abundance_stats, kronagram = kronagram, full_report = full_report)
 
     print("Caribou finished executing without faults and all results were outputed in the designated folders")
