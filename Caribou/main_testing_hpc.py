@@ -180,10 +180,12 @@ if __name__ == "__main__":
     outdirs["main_outdir"] = os.path.join(outdir, metagenome)
     outdirs["data_dir"] = os.path.join(outdirs["main_outdir"], "data")
     outdirs["models_dir"] = os.path.join(outdirs["main_outdir"], "models")
+    outdirs["results_dir"] = os.path.join(outdirs["main_outdir"], "results")
     outdirs["prefix"] = tag_kf
     makedirs(outdirs["main_outdir"], mode=0o700, exist_ok=True)
     makedirs(outdirs["data_dir"], mode=0o700, exist_ok=True)
     makedirs(outdirs["models_dir"], mode=0o700, exist_ok=True)
+    makedirs(outdirs["results_dir"], mode=0o700, exist_ok=True)
     outdirs["data_dir"] = os.path.join(outdirs["data_dir"], outdirs["prefix"])
     outdirs["models_dir"] = os.path.join(outdirs["models_dir"], outdirs["prefix"])
 
@@ -195,7 +197,7 @@ if __name__ == "__main__":
 # Part 1 - K-mers profile extraction
 ################################################################################
 
-    if host != "none":
+    if host not in ["none", "None", None]:
         # Reference Database and Host
         k_profile_database, k_profile_host = build_load_save_data((database_seq_file, database_cls_file),
             (host_seq_file, host_cls_file),
@@ -228,7 +230,7 @@ if __name__ == "__main__":
 ################################################################################
 
     for binary_classifier in ["linearsvm","attention","lstm","deeplstm"]:
-        if host == "none":
+        if host in ["none", "None", None]:
             bacterial_metagenome = bacteria_extraction(k_profile_metagenome,
                 k_profile_database,
                 k_length,
@@ -261,7 +263,7 @@ if __name__ == "__main__":
 ################################################################################
 
     for multi_classifier in ["ridge","svm","mlr","mnb","lstm_attention","cnn","deepcnn"]:
-        classification_data = bacterial_classification(bacterial_metagenome,
+        classified_data = bacterial_classification(bacterial_metagenome,
             k_profile_database,
             k_length,
             outdirs,

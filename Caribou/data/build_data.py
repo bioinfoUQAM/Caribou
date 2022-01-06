@@ -32,9 +32,8 @@ def build_load_save_data(file, hostfile, prefix, dataset, kmers_list=None, k=4, 
         data = load_Xy_data(data_file)
         return data
     else:
+        # Build Xy_data of database and host
         if isinstance(file, tuple):
-# To accelerate testing with bigger database
-# Possibility of adding option for user
             if not os.path.isfile(seqfile):
                 print("seq_data")
                 seq_data = SeqCollection((list(file)[0], list(file)[1]))
@@ -66,7 +65,7 @@ def build_load_save_data(file, hostfile, prefix, dataset, kmers_list=None, k=4, 
                 return data
 
         else:
-            # Build X_data to drive
+            # Build X_data of dataset
             print("X_data, k = {}".format(k))
             seq_data = SeqCollection(file)
             data = build_X_data(seq_data, Xy_file, kmers_list, seq_data.length)

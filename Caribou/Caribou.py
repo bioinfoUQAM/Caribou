@@ -20,7 +20,6 @@ __author__ = "Nicolas de Montigny"
 
 __all__ = ['caribou']
 
-
 # GPU & CPU setup
 ################################################################################
 gpus = list_physical_devices('GPU')
@@ -72,6 +71,8 @@ def caribou(argv):
     n_cvJobs = config.getint("settings", "nb_cv_jobs", fallback = 1)
     verbose = config.getboolean("settings", "verbose", fallback = True)
     training_batch_size = config.getint("settings", "training_batch_size", fallback = 32)
+    binary_saving_host = config.getboolean("settings", "binary_save_host", fallback = True)
+    binary_saving_unclassified = config.getboolean("settings", "binary_save_unclassified", fallback = True)
     classifThreshold = config.getfloat("settings", "classification_threshold", fallback = 0.8)
 
     # outputs
@@ -141,6 +142,14 @@ def caribou(argv):
         sys.exit()
     if type(training_batch_size) != int or training_batch_size <= 0:
         print("Invalid number of training batch size ! Please enter a positive integer ! Exiting")
+        print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
+        sys.exit()
+    if binary_saving_host not in [True, False, None]:
+        print("Invalid value for host data saving ! Please use boolean values ! Exiting")
+        print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
+        sys.exit()
+    if binary_saving_unclassified not in [True, False, None]:
+        print("Invalid value for unclassifiable sequences ! Please use boolean values ! Exiting")
         print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
         sys.exit()
     if not 0 < classifThreshold <= 1 or type(classifThreshold) != float:
@@ -238,7 +247,7 @@ def caribou(argv):
 # Part 2 - Binary classification of bacteria / host sequences
 ################################################################################
 
-    if host == "none":
+    if host in ["none", "None", None]:
         classified_data = bacteria_extraction(k_profile_metagenome,
             k_profile_database,
             k_length,

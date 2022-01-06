@@ -58,21 +58,23 @@ def merge_database_host(database_data, host_data):
     merged_file = "{}_host_merged{}".format(path, ext)
 
     merged_data["X"] = merged_file
-    merged_data["y"] = np.concatenate((database_data["y"], host_data["y"]))
+    merged_data["y"] = np.array(pd.merge(pd.DataFrame(database_data["y"], columns = database_data["taxas"]), pd.DataFrame(host_data["y"], columns = host_data["taxas"]), how = "outer"))
     merged_data["ids"] = database_data["ids"] + host_data["ids"]
-    merged_data["kmers_list"] = list(set(database_data["kmers_list"]).union(host_data["kmers_list"]))
-    merged_data["taxas"] = max(database_data["taxas"], host_data["taxas"], key = len)
+    merged_data["kmers_list"] = database_data["kmers_list"]
+    merged_data["taxas"] = list(set(database_data["taxas"]).union(host_data["taxas"]))
 
-    generator_database = iter_generator(database_data["X"], database_data["y"], 32, database_data["kmers_list"], database_data["ids"], np.arange(len(database_data["ids"])), cv = 0, shuffle = False)
-    generator_host = iter_generator(host_data["X"], host_data["y"], 32, host_data["kmers_list"], host_data["ids"], np.arange(len(host_data["ids"])), cv = 0, shuffle = False)
+    generator_database = iter_generator(database_data["X"], database_data["y"], 1, database_data["kmers_list"], database_data["ids"], np.arange(len(database_data["ids"])), cv = 0, shuffle = False)
+    generator_host = iter_generator(host_data["X"], host_data["y"], 1, host_data["kmers_list"], host_data["ids"], np.arange(len(host_data["ids"])), cv = 0, shuffle = False)
     if not os.path.isfile(merged_file):
         data = False
         with tb.open_file(merged_file, "a") as handle:
-            for (X_d, y_d), (X_h, y_h) in zip(generator_database.iterator, generator_host.iterator):
+            for X_d, y_d in generator_database.iterator:
                 if not data:
-                    data = handle.create_earray("/", "data", obj = np.array(pd.merge(X_d, X_h, how = "outer"), dtype = np.uint64))
+                    data = handle.create_earray("/", "data", obj = np.array(X_d, dtype = np.uint64))
                 else:
-                    data.append(np.array(pd.merge(X_d, X_h, how = "outer")))
+                    data.append(np.array(X_d, dtype = np.uint64))
+            for X_h, y_h in generator_host.iterator:
+                data.append(np.array(X_h, dtype = np.uint64))
         generator_database.handle.close()
         generator_host.handle.close()
 

@@ -311,7 +311,6 @@ def build_kmers_Xy_data(seq_data, k, Xy_file, length = 0, kmers_list = None, ful
     kmers_list = collection.kmers_list
     X_data = collection.data
     y_data = np.array(seq_data.labels)
-
     return X_data, y_data, kmers_list
 
 def build_kmers_X_data(seq_data, X_file, kmers_list, length = 0, sparse=None, dtype=np.uint64):

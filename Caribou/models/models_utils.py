@@ -44,7 +44,7 @@ warnings.filterwarnings("ignore")
 def scaleX(X_data, y_data, batch_size, kmers, ids, cv = 0, shuffle = False, verbose = True):
     try:
         scaler = StandardScaler()
-        generator = iter_generator(X_data, y_data, batch_size, kmers, ids, None, cv = 0, shuffle = False, training = False)
+        generator = iter_generator(X_data, y_data, batch_size, kmers, ids, None, cv = 0, shuffle = False, training = False, positions_list = None)
         for i, (X, y) in enumerate(generator.iterator):
             scaler.partial_fit(X)
         generator.handle.close()
