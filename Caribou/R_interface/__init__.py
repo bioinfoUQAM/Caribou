@@ -13,4 +13,4 @@
 
 __author__ = "Nicolas de Montigny"
 
-__all__ = ['R_interface', 'containers']
+__all__ = ['interface.R']
