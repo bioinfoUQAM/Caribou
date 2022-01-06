@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 
-from Caribou.data.build_data import *
-from Caribou.models.bacteria_extraction import *
-from Caribou.models.classification import *
-from Caribou.outputs.outputs import *
+from Caribou.data.build_data import build_load_save_data
+from Caribou.models.bacteria_extraction import bacteria_extraction
+from Caribou.models.classification import bacterial_classification
+from Caribou.outputs.outputs import outputs
 
 import pandas as pd
 
@@ -18,7 +18,8 @@ from os import makedirs
 
 __author__ = "Nicolas de Montigny"
 
-__all__ = []
+__all__ = ['caribou']
+
 
 # GPU & CPU setup
 ################################################################################
@@ -30,19 +31,16 @@ if gpus:
 
 # Part 0 - Initialisation / extraction of parameters from config file
 ################################################################################
-# Part 0 - Initialisation / extraction of parameters from config file
-################################################################################
+def caribou(argv):
 
-if __name__ == "__main__":
-
-    if len(sys.argv) != 2:
+    if len(argv) != 2:
         print("Config file is missing ! ! !")
         sys.exit()
 
-    print("Running {}".format(sys.argv[0]), flush=True)
+    print("Running {}".format(argv[0]), flush=True)
 
     # Get argument values from ini file
-    config_file = sys.argv[1]
+    config_file = argv[1]
     config = configparser.ConfigParser(
             interpolation=configparser.ExtendedInterpolation())
 
@@ -284,33 +282,23 @@ if __name__ == "__main__":
         cv = cv,
         n_jobs = n_cvJobs)
 
-# Part 5 - Classification refinement
-################################################################################
-    """
-# convert identification en np.array/list/dict de nb reads pr chaque sp
-    classification = merge_classified_data(classification_data)
-
-    classif_abundances = classification_abundance(classification)
-    """
-# dimension reduction for reclassification?
-# order of kmers for better signature ~ markov chains
-
-# Part 6 - (OPTIONAL) New sequences identification / clustering
+# Part 4 - Outputs for biological analysis of bacterial population
 ################################################################################
 
-    # Clustering for unidentified sequences into MAGs -> try to assign to species afterward
-    # Amine faire attention à comment fait la classif
-    """
-    from sklearn.cluster import MiniBatchKMeans
-        classifier == "kmeans":
-            if verbose:
-                print("Training multiclass classifier with K Means")
-            clf = MiniBatchKMeans(nclusters = nb_classes, batch_size = batch_size, random_state = 42)
-    """
-
-# Part 7 - Outputs for biological analysis of bacterial population
-################################################################################
-
-    outputs(k_profile_database, outdirs["results_dir"], k_length, multi_classifier, database, host, classified_data, "{}_seqdata_db_{}.txt".format(outdirs["data_dir"], database), abundance_stats = abundance_stats, kronagram = kronagram, full_report = full_report)
+    outputs(k_profile_database,
+            outdirs["results_dir"],
+            k_length,
+            multi_classifier,
+            database,
+            host,
+            classified_data,
+            "{}_seqdata_db_{}.txt".format(outdirs["data_dir"], database),
+            abundance_stats = abundance_stats,
+            kronagram = kronagram,
+            full_report = full_report)
 
     print("Caribou finished executing without faults and all results were outputed in the designated folders")
+
+
+if __name__ == "__main__":
+    caribou(sys.argv)

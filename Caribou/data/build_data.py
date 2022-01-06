@@ -13,7 +13,7 @@ __author__ = "Nicolas de Montigny"
 
 __all__ = ['build_load_save_data', 'build_Xy_data', 'build_X_data']
 
-def build_load_save_data(file, hostfile, prefix, dataset, kmers_list = None, k=4, full_kmers=False, low_var_threshold=None):
+def build_load_save_data(file, hostfile, prefix, dataset, kmers_list=None, k=4, full_kmers=False, low_var_threshold=None):
 
     # Generate the names of files
     Xy_file = "{}_K{}_Xy_genome_{}_data.h5f".format(prefix,k,dataset)

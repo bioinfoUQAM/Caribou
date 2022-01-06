@@ -273,42 +273,19 @@ if __name__ == "__main__":
             cv = cv,
             n_jobs = n_cvJobs)
 
-# Part 5 - Classification refinement
-################################################################################
-    """
-# convert identification en np.array/list/dict de nb reads pr chaque sp
-    classification = merge_classified_data(classification_data)
-
-    classif_abundances = classification_abundance(classification)
-    """
-# dimension reduction for reclassification?
-# order of kmers for better signature ~ markov chains
-
-# Part 6 - (OPTIONAL) New sequences identification / clustering
+# Part 4 - Outputs for biological analysis of bacterial population
 ################################################################################
 
-    # Clustering for unidentified sequences into MAGs -> try to assign to species afterward
-    # Amine faire attention à comment fait la classif
-    """
-    from sklearn.cluster import MiniBatchKMeans
-        classifier == "kmeans":
-            if verbose:
-                print("Training multiclass classifier with K Means")
-            clf = MiniBatchKMeans(nclusters = nb_classes, batch_size = batch_size, random_state = 42)
-    """
+    outputs(k_profile_database,
+            outdirs["results_dir"],
+            k_length,
+            multi_classifier,
+            database,
+            host,
+            classified_data,
+            "{}_seqdata_db_{}.txt".format(outdirs["data_dir"], database),
+            abundance_stats = abundance_stats,
+            kronagram = kronagram,
+            full_report = full_report)
 
-# Part 7 - Outputs for biological analysis of bacterial population
-################################################################################
-    # Kronagram
-    # Abundance tables / relative abundance
-        # Identification of each sequence \w domain + probability -> cutoff pr user if needed
-        # Taxonomic tree / table -> newick
-        # Joint identification of reads  vx autres domaines?
-    # Option for file containing kmers
-    # Summary file of opperations / proportions of reads at each steps
-    # Github wiki manual
-
-    # Environment
-        # R wrapper / execution in Rmarkdown?
-        # Venv / Conda
-        # Docker / singularity
+    print("Caribou finished executing without faults and all results were outputed in the designated folders")

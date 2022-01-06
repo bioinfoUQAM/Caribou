@@ -12,3 +12,5 @@
 ###########################################
 
 __author__ = "Nicolas de Montigny"
+
+__all__ = ['Caribou.R','functions.R']
