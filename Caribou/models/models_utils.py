@@ -112,7 +112,6 @@ def choose_delete_models_sk(df_scores):
 
     return clf
 
-
 # Outputs results and plots of multiple cross validation iterations
 def plot_figure(df_scores, n_jobs, outdir_plots, k, classifier):
     if classifier in ["onesvm","linearsvm","attention","lstm","deeplstm"]:

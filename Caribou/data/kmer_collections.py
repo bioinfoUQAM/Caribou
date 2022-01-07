@@ -23,7 +23,6 @@ __all__ = [ 'FullKmersCollection', 'SeenKmersCollection',
         'GivenKmersCollection' , 'VarKmersCollection',
         'build_kmers', 'build_kmers_Xy_data']
 
-
 """
 Module adapted from module kmer_collections.py of
 mlr_kgenomvir package [Remita et al. 2021]
