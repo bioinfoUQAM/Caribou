@@ -7,6 +7,8 @@
 #SBATCH --error=[path/to/log/outdirectory]/%x_%a.err
 #SBATCH --output=[path/to/log/outdir]/%x_%a.out
 
+__author__="Nicolas de Montigny"
+
 """
 Template script to submit database merging and class generation on HPC clusters which uses Slurm Workload Manager
 Otherwise each script can be used in linux command line in itself

@@ -13,4 +13,4 @@
 
 __author__ = "Nicolas de Montigny"
 
-__all__ = ['classification','bacteria_extraction','attentionLayer','build_neural_networks','models_utils']
+__all__ = ['outputs','KronaTools']

@@ -1,5 +1,7 @@
 #!/bin/bash
 
+__author__="Nicolas de Montigny"
+
 HELP=0
 while getopts d:i:c:o:h option; do
   case "${option}" in
@@ -35,6 +37,7 @@ fi
 
 
 fasta_file=$OUTDIR/data_bacteria.fa.gz
+tmp_file=$OUTDIR/tmp.csv
 cls_file=$OUTDIR/class_bacteria.csv
 echo "id","species","genus","family","order","class","phylum","domain" >> $cls_file
 length=$(wc -l $FASTA_LIST | awk '{print $1}')
@@ -49,7 +52,8 @@ for i in $(seq $length); do
   for id in ${list_ids[*]}; do
     entry=$(cat $CLASSES_IN | grep $GCA)
     entry=$(echo ${entry/$GCA/$id})
-    entry=$(echo ${entry// /,})
-    echo $entry >> $cls_file
+    echo $entry >> $tmp_file
   done
 done
+awk ' {print $1 "," $2 " " $3 "," $4 "," $5 "," $6 "," $7 "," $8 "," $9}' $tmp_file >> $cls_file
+rm $tmp_file

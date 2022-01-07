@@ -1,5 +1,7 @@
 #!/bin/bash
 
+__author__="Nicolas de Montigny"
+
 HELP=0
 while getopts d:i:c:o:hdirectoryinputclassesoutputhelp option; do
   case "${option}" in

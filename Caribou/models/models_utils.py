@@ -15,7 +15,7 @@ from sklearn.base import clone
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.preprocessing import StandardScaler
 
-from data.generators import iter_generator, iter_generator_keras
+from Caribou.data.generators import iter_generator, iter_generator_keras
 
 from keras.callbacks import ModelCheckpoint, EarlyStopping
 from keras.models import load_model
@@ -25,6 +25,13 @@ from tensorflow.keras.models import clone_model
 from joblib import dump, load, Parallel, delayed, wrap_non_picklable_objects
 
 import warnings
+
+__author__ = "Nicolas de Montigny"
+
+__all__ = ['scaleX','test_labels','cv_score','make_score_df','choose_delete_models_sk','choose_delete_models_keras','plot_figure',
+           'cross_validation_training','fit_predict_cv','fit_model','model_predict',
+           'fit_model_oneSVM_sk','fit_model_linear_sk','fit_model_multi_sk','predict_binary_sk','predict_multi_sk',
+           'fit_model_keras','predict_binary_keras','predict_multi_keras']
 
 # Ignore warnings to have a more comprehensible output on stdout
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
@@ -37,7 +44,7 @@ warnings.filterwarnings("ignore")
 def scaleX(X_data, y_data, batch_size, kmers, ids, cv = 0, shuffle = False, verbose = True):
     try:
         scaler = StandardScaler()
-        generator = iter_generator(X_data, y_data, batch_size, kmers, ids, None, cv = 0, shuffle = False, training = False)
+        generator = iter_generator(X_data, y_data, batch_size, kmers, ids, None, cv = 0, shuffle = False, training = False, positions_list = None)
         for i, (X, y) in enumerate(generator.iterator):
             scaler.partial_fit(X)
         generator.handle.close()
@@ -88,8 +95,10 @@ def choose_delete_models_keras(df_scores):
     models_list.remove(clf_max)
     for dir in models_list:
         shutil.rmtree(dir)
+    clf = re.sub('_iter_\d+', '',clf_max)
+    os.rename(clf_max, clf)
 
-    return clf_max
+    return clf
 
 def choose_delete_models_sk(df_scores):
     clf_max = df_scores.idxmax()[2]
@@ -98,9 +107,10 @@ def choose_delete_models_sk(df_scores):
     models_list.remove(clf_max)
     for file in models_list:
         os.remove(file)
+    clf = re.sub('_iter_\d+', '',clf_max)
+    os.rename(clf_max, clf)
 
-    return clf_max
-
+    return clf
 
 # Outputs results and plots of multiple cross validation iterations
 def plot_figure(df_scores, n_jobs, outdir_plots, k, classifier):
@@ -133,7 +143,7 @@ def cross_validation_training(X_train, y_train, batch_size, kmers, ids, classifi
     # each dict contains the results of the iteration
     cv_scores = []
     clf_scores = {}
-    parallel = Parallel(n_jobs = n_jobs if n_cvJobs <= os.cpu_count() else -1, backend = 'threading', prefer = "processes", verbose = 100 if verbose else 0)
+    parallel = Parallel(n_jobs = n_jobs if n_jobs <= os.cpu_count() else -1, backend = 'loky', prefer = "processes", verbose = 100 if verbose else 0)
 
     if classifier in ["onesvm","linearsvm","ridge","svm","mlr","mnb"]:
         clf_file, ext = os.path.splitext(clf_file)
@@ -179,6 +189,8 @@ def cross_validation_training(X_train, y_train, batch_size, kmers, ids, classifi
 
 @wrap_non_picklable_objects
 def fit_predict_cv(X_train, y_train, batch_size, kmers, ids, classifier, labels_list, outdir_plots, clf, cv = 1, shuffle = True, threshold = 0.8, verbose = True, clf_file = None):
+    batch_size = 4
+
     scaleX(X_train, y_train, batch_size, kmers, ids, verbose)
 
     if classifier in ["onesvm","linearsvm"]:
@@ -247,7 +259,6 @@ def fit_model(X_train, y_train, batch_size, kmers, ids, classifier, labels_list,
 
 def model_predict(clf_file, X, kmers_list, ids, classifier, nb_classes, labels_list, threshold = 0.8, verbose = True):
     y = pd.Series(range(len(ids)))
-    scaleX(X, y, 32, kmers_list, ids, verbose)
 
     if classifier in ["onesvm","linearsvm"]:
         generator = iter_generator(X, y, 1, kmers_list, ids, classifier, cv = 0, shuffle = False, training = False)

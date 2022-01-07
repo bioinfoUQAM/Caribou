@@ -5,6 +5,10 @@ from keras.utils import tf_inspect
 from keras.mixed_precision import policy
 from tensorflow.keras.layers import InputSpec, Layer
 
+__author__ = "Abdelkareem et al. 2018"
+
+__all__ = ['AttentionWeightedAverage']
+
 class AttentionWeightedAverage(Layer):
     """
     Class extracted and adapted from module virnet/AttentionLayer.py of
