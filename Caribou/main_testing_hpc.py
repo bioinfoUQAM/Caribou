@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/python3
 
 from Caribou.data.build_data import *
 from Caribou.models.bacteria_extraction import *

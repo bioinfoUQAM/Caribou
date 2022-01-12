@@ -1,3 +1,5 @@
+#!/usr/bin/python3
+
 import pandas as pd
 import numpy as np
 
@@ -32,18 +34,6 @@ def simulation(opt):
     if not os.path.isfile(cls_out_file):
         write_cls_file(cls_out_file, opt['classes'], abund_file)
 
-def get_args():
-    parser = argparse.ArgumentParser(description='Simulate metagenomics sequencing reads using InSilicoSeq package')
-    parser.add_argument('-f','--fasta', required=True, help='PATH to a fasta file containing bacterial genomes to build simulation from')
-    parser.add_argument('-c','--classes', required=True, help='PATH to a csv file containing the classes associated to the fasta from which the simulation is built')
-    parser.add_argument('-g','--genomes', type=int, default=100, help='Integer. The number of genomes to use for simulation')
-    parser.add_argument('-a','--reads', type=int, default=50000, help='Integer. The number of reads to simulate')
-    parser.add_argument('-t','--type', default='miseq', choices=['miseq','hiseq','novaseq'], help='Type of Illumina sequencing to be simulated among : MiSeq, HiSeq and NovaSeq')
-    parser.add_argument('-p','--prefix', required=True, help='PATH to and filename prefix of outputed files')
-    args = parser.parse_args()
-
-    return vars(args)
-
 def InSilicoSeq(fasta, genomes, reads, type, prefix, **kwargs):
     # InSilicoSeq https://insilicoseq.readthedocs.io/en/latest/
     cmd = "iss generate -g {} -u {} -n {} --abundance halfnormal --model {} --output {} --compress --cpus {}".format(fasta, genomes,reads,type,prefix,len(os.sched_getaffinity(0)))
@@ -66,5 +56,15 @@ def write_cls_file(cls_out_file, classes, abund_file):
     cls_out.to_csv(cls_out_file, index = False)
 
 if __name__ == "__main__":
-    opt = get_args()
+    parser = argparse.ArgumentParser(description='Simulate metagenomics sequencing reads using InSilicoSeq package')
+    parser.add_argument('-f','--fasta', required=True, help='PATH to a fasta file containing bacterial genomes to build simulation from')
+    parser.add_argument('-c','--classes', required=True, help='PATH to a csv file containing the classes associated to the fasta from which the simulation is built')
+    parser.add_argument('-g','--genomes', type=int, default=100, help='Integer. The number of genomes to use for simulation')
+    parser.add_argument('-a','--reads', type=int, default=50000, help='Integer. The number of reads to simulate')
+    parser.add_argument('-t','--type', default='miseq', choices=['miseq','hiseq','novaseq'], help='Type of Illumina sequencing to be simulated among : MiSeq, HiSeq and NovaSeq')
+    parser.add_argument('-p','--prefix', required=True, help='PATH to and filename prefix of outputed files')
+    args = parser.parse_args()
+
+    opt = vars(args)
+
     simulation(opt)
