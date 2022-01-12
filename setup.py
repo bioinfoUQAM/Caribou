@@ -30,6 +30,8 @@ setup(
                 'Caribou/data/build_data.py',
                 'Caribou/models/bacteria_extraction.py',
                 'Caribou/models/classification.py',
-                'Caribou/outputs/outputs.py'],
+                'Caribou/outputs/outputs.py',
+                'Caribou/Caribou/supplement/R_interface.R',
+                'Caribou/Caribou/supplement/simulation.py'],
     install_requires = INSTALL_REQUIRES
 )

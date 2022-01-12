@@ -61,7 +61,7 @@ def caribou(argv):
 
     # seq_rep
     k_length = config.getint("seq_rep", "k", fallback = 20)
-    fullKmers = config.getboolean("seq_rep", "full_kmers", fallback = True)
+    fullKmers = config.getboolean("seq_rep", "full_kmers", fallback = False)
     lowVarThreshold = config.get("seq_rep", "low_var_threshold", fallback = None)
 
     # settings
@@ -222,7 +222,6 @@ def caribou(argv):
             outdirs["data_dir"],
             database,
             k = k_length,
-            full_kmers = fullKmers,
             low_var_threshold = lowVarThreshold
         )
     else:
@@ -232,7 +231,6 @@ def caribou(argv):
             outdirs["data_dir"],
             database,
             k = k_length,
-            full_kmers = fullKmers,
             low_var_threshold = lowVarThreshold
         )
 
