@@ -222,7 +222,6 @@ def caribou(argv):
             outdirs["data_dir"],
             database,
             k = k_length,
-            full_kmers = fullKmers,
             low_var_threshold = lowVarThreshold
         )
     else:
@@ -232,7 +231,6 @@ def caribou(argv):
             outdirs["data_dir"],
             database,
             k = k_length,
-            full_kmers = fullKmers,
             low_var_threshold = lowVarThreshold
         )
 

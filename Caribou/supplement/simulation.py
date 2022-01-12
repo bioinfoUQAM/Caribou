@@ -11,10 +11,10 @@ from Bio import SeqIO, Entrez
 
 __author__ = "Nicolas de Montigny"
 
-__all__ = ['main','get_args','simulation','fastq2fasta','write_cls_file']
+__all__ = ['simulation','InSilicoSeq','get_args','fastq2fasta','write_cls_file']
 
 
-def main(opt):
+def simulation(opt):
     abund_file = opt['prefix'] + '_abundance.txt'
     fastq_R1 = opt['prefix'] + '_R1.fastq.gz'
     fastq_R2 = opt['prefix'] + '_R2.fastq.gz'
@@ -26,7 +26,7 @@ def main(opt):
         sys.exit()
 
     if not os.path.isfile(fasta_file):
-        simulation(**opt)
+        InSilicoSeq(**opt)
         fastq2fasta(fastq_R1, fastq_R2, fasta_file)
 
     if not os.path.isfile(cls_out_file):
@@ -38,24 +38,22 @@ def get_args():
     parser.add_argument('-c','--classes', required=True, help='PATH to a csv file containing the classes associated to the fasta from which the simulation is built')
     parser.add_argument('-g','--genomes', type=int, default=100, help='Integer. The number of genomes to use for simulation')
     parser.add_argument('-a','--reads', type=int, default=50000, help='Integer. The number of reads to simulate')
-    parser.add_argument('-r','--ribosome', action='store_true', help='Optional. Should the simulated dataset be outputed with 16S DNA sequences')
     parser.add_argument('-t','--type', default='miseq', choices=['miseq','hiseq','novaseq'], help='Type of Illumina sequencing to be simulated among : MiSeq, HiSeq and NovaSeq')
     parser.add_argument('-p','--prefix', required=True, help='PATH to and filename prefix of outputed files')
     args = parser.parse_args()
 
     return vars(args)
 
-def simulation(fasta, genomes, reads, type, prefix, **kwargs):
+def InSilicoSeq(fasta, genomes, reads, type, prefix, **kwargs):
     # InSilicoSeq https://insilicoseq.readthedocs.io/en/latest/
     cmd = "iss generate -g {} -u {} -n {} --abundance halfnormal --model {} --output {} --compress --cpus {}".format(fasta, genomes,reads,type,prefix,len(os.sched_getaffinity(0)))
     os.system(cmd)
 
 def fastq2fasta(fastq_R1, fastq_R2, fasta_file):
     with gzip.open(fastq_R1, "rt") as handle_R1, gzip.open(fastq_R2, "rt") as handle_R2, gzip.open(fasta_file, "at") as handle_out:
-        for record in SeqIO.parse(handle_R1, 'fastq'):
-            SeqIO.write(record, handle_out, 'fasta')
-        for record in SeqIO.parse(handle_R2, 'fastq'):
-            SeqIO.write(record, handle_out, 'fasta')
+        for record_R1, Record_R2 in zip(SeqIO.parse(handle_R1, 'fastq'), SeqIO.parse(handle_R2, 'fastq')):
+            SeqIO.write(record_R1, handle_out, 'fasta')
+            SeqIO.write(record_R2, handle_out, 'fasta')
 
 def write_cls_file(cls_out_file, classes, abund_file):
 
@@ -69,4 +67,4 @@ def write_cls_file(cls_out_file, classes, abund_file):
 
 if __name__ == "__main__":
     opt = get_args()
-    main(opt)
+    simulation(opt)

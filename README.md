@@ -31,9 +31,6 @@ ENV_DIR=/path/to/your/environment/folder
 source $ENV_DIR/Caribou/bin/activate
 ```
 
-## Testing data
-Mock community used for testing found in database Mockrobiota from Kozich et al.
-
 ## Building database
 There is a template script to build data in one large fasta file and extract classes into a csv file.
 This template must be modified by the user to insert filepaths and comment the host section if there is no host to be used.
@@ -57,6 +54,12 @@ sh Caribou/data/build_data_scripts/fasta2class_bact.sh -d [directory] -i [inputF
 sh Caribou/data/build_data_scripts/fasta2class_host.sh -d [directory] -i [inputFile] -o [outputDirectory]
 ```
 
+## Pretrained models
+Pretrained models are available in the folder
+
+The pretrained models available were trained using the GTDB taxonomy representatives version 202 and can be used directly for both extraction of bacteria with (squash sequences) and without host as well as for bacteria classification of the associated taxonomic levels.
+Should the user want to use another database or version of the GTDB taxonomy, there will be a training step which can vary in time and computing ressources needed according to its size and the length of the k-mers used. Moreover, the accuracy of the classification depends greatly on the database used and it is recommended to use the GTDB representatives in the latest release available [here](https://data.gtdb.ecogenomic.org/releases/).
+
 ## Usage
 The package can be easily installed through pip. The git must be cloned first and then the package can be installed using the following commands lines in the desired folder :
 ```
@@ -72,4 +75,4 @@ To use, run the following command using you own modified config file :
 main.py Caribou/eval_configs/test.ini
 ```
 
-Description for each variable can be found in the wiki https://github.com/bioinfoUQAM/Caribou/wiki
+Description for each variable can be found in the [wiki](https://github.com/bioinfoUQAM/Caribou/wiki/Configuration-file).
