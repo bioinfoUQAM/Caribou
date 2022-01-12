@@ -1,6 +1,6 @@
 setuptools >= 59.5.0
 wheel >= 0.37.0
-Bio
+Bio <= 1.78
 h5py
 keras
 matplotlib

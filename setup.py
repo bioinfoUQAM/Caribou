@@ -23,7 +23,7 @@ setup(
     packages = find_namespace_packages(),
     #package_data={'': ['*.pl', 'Caribou/Caribou/outputs/KronaTools/scripts/ImportText.pl']},
     namespace_packages=['Caribou'],
-    license = 'LICENSE',
+    license = 'MIT license',
     include_package_data = True,
     scripts = ['Caribou/Caribou.py',
                 'Caribou/main_testing_hpc.py',
