@@ -36,7 +36,7 @@ def simulation(opt):
 
 def InSilicoSeq(fasta, genomes, reads, type, prefix, **kwargs):
     # InSilicoSeq https://insilicoseq.readthedocs.io/en/latest/
-    cmd = "iss generate -g {} -u {} -n {} --abundance halfnormal --model {} --output {} --compress --cpus {}".format(fasta, genomes,reads,type,prefix,len(os.sched_getaffinity(0)))
+    cmd = "iss generate -g {} -u {} -n {} --abundance halfnormal --model {} --output {} --compress --cpus {}".format(fasta,genomes,reads,type,prefix,len(os.sched_getaffinity(0)))
     os.system(cmd)
 
 def fastq2fasta(fastq_R1, fastq_R2, fasta_file):
