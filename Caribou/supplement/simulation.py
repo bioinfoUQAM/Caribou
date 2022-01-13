@@ -41,7 +41,7 @@ def InSilicoSeq(fasta, genomes, reads, type, prefix, **kwargs):
 
 def fastq2fasta(fastq_R1, fastq_R2, fasta_file):
     with gzip.open(fastq_R1, "rt") as handle_R1, gzip.open(fastq_R2, "rt") as handle_R2, gzip.open(fasta_file, "at") as handle_out:
-        for record_R1, Record_R2 in zip(SeqIO.parse(handle_R1, 'fastq'), SeqIO.parse(handle_R2, 'fastq')):
+        for record_R1, record_R2 in zip(SeqIO.parse(handle_R1, 'fastq'), SeqIO.parse(handle_R2, 'fastq')):
             SeqIO.write(record_R1, handle_out, 'fasta')
             SeqIO.write(record_R2, handle_out, 'fasta')
 
