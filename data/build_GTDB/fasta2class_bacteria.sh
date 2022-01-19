@@ -55,5 +55,5 @@ for i in $(seq $length); do
     echo $entry >> $tmp_file
   done
 done
-awk ' {print $1 "," $2 " " $3 "," $4 "," $5 "," $6 "," $7 "," $8 "," $9}' $tmp_file >> $cls_file
+awk '{print $1 "," $2 " " $3 "," $4 "," $5 "," $6 "," $7 "," $8 "," $9}' $tmp_file >> $cls_file
 rm $tmp_file
