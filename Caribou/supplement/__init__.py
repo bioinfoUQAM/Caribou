@@ -13,4 +13,4 @@
 
 __author__ = "Nicolas de Montigny"
 
-__all__ = ['R_interface.R','simulation']
+__all__ = ['R_interface.R','simulation','sim_requirements.txt']

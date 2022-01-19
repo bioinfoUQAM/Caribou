@@ -9,6 +9,8 @@ from collections import defaultdict
 from itertools import product
 from Bio import SeqIO
 from os.path import splitext
+from subprocess import run
+from shutil import rmtree
 
 import numpy as np
 import pandas as pd
@@ -77,6 +79,9 @@ class KmersCollection(ABC):
         path, ext = splitext(sequences)
         ext = ext.lstrip(".")
 
+        if not os.path.isdir(self.path):
+            os.mkdir(self.path)
+
         if ext in ["fa","fna"]:
             ext = "fasta"
             with open(sequences, "rt") as handle:
@@ -87,7 +92,10 @@ class KmersCollection(ABC):
                     try:
                         record = next(records)
                         self.ids.append(record.id)
-                        self._compute_kmers_of_sequence(record.seq._data, i)
+                        file = "{}/{}.fa".format(self.path, record.id)
+                        with open(file, "w") as handle:
+                            SeqIO.write(record, handle, "fasta")
+                        self._compute_kmers_of_sequence(file, i)
                         i += 1
                     except StopIteration as e:
                         error = True
@@ -106,11 +114,15 @@ class KmersCollection(ABC):
                     try:
                         record = next(records)
                         self.ids.append(record.id)
-                        self._compute_kmers_of_sequence(record.seq._data, i)
+                        file = "{}/{}.fa".format(self.path, record.id)
+                        with open(file, "w") as handle:
+                            SeqIO.write(record, handle, "fasta")
+                        self._compute_kmers_of_sequence(file, i)
                         i += 1
                     except StopIteration as e:
                         error = True
 
+        rmtree(self.path)
         return self
 
     def __compute_kmers_from_strings(self, sequences):
@@ -150,6 +162,7 @@ class FullKmersCollection(KmersCollection):
         self.sparse = sparse
         self.dtype = dtype
         self.alphabet = alphabet.lower() + alphabet.upper()
+        self.path = os.path.split(Xy_file)[0] + "/tmp/"
         self.Xy_file = tb.open_file(Xy_file, "w")
         self.length = length
         #
@@ -157,19 +170,24 @@ class FullKmersCollection(KmersCollection):
         self.v_size = np.power(len(self.alphabet), int(self.k))
         self.data = self.Xy_file.create_carray("/", "data", obj = np.zeros((self.length, self.v_size)))
         self.kmers_list = ["".join(t) for t in product(alphabet, repeat=k)]
+        self.kmc_path = "{}/KMC/bin".format(os.path.dirname(os.path.realpath(__file__)))
         #
         self._compute_kmers(sequences)
         self.Xy_file.close()
 
-    def _compute_kmers_of_sequence(self, sequence, ind):
-        search = re.compile("^["+self.alphabet+"]+$").search
-
-        for i in range(len(sequence) - int(self.k) + 1):
-            kmer = sequence[i:i + int(self.k)]
-
-            if self.alphabet and bool(search(kmer)) or not self.alphabet:
-                ind_kmer = get_index_from_kmer(kmer, int(self.k))
-                self.data[ind,ind_kmer] += 1
+    def _compute_kmers_of_sequence(self, file, ind):
+        # Count k-mers with KMC
+        cmd_count = "{}/kmc -k{} -fm -cs1000000000 -t48 -hp -sm -m1024 {} {}/{} {}".format(self.kmc_path, self.k, file, self.path, ind, self.path)
+        run(cmd_count, shell = True, capture_output=True)
+        # Transform k-mers db with KMC
+        cmd_transform = "{}/kmc_tools transform {}/{} dump {}/{}.txt".format(self.kmc_path, self.path, ind, self.path, ind)
+        run(cmd_transform, shell = True, capture_output=True)
+        # Parse k-mers file to pandas
+        profile = np.loadtxt('{}/{}.txt'.format(self.path, ind), dtype = object)
+        # Save to Xyfile
+        for row in profile:
+            ind_kmer = self.kmers_list.index(row[0])
+            self.data[ind, ind_kmer] = int(row[1])
 
         return self
 
@@ -182,6 +200,7 @@ class SeenKmersCollection(KmersCollection):
         self.sparse = sparse
         self.dtype = dtype
         self.alphabet = alphabet.lower() + alphabet.upper()
+        self.path = os.path.split(Xy_file)[0] + "/tmp/"
         self.Xy_file = tb.open_file(Xy_file, "w")
         self.length = length
         #
@@ -190,26 +209,24 @@ class SeenKmersCollection(KmersCollection):
         self.dict_data = defaultdict(lambda: [0]*self.length)
         self.kmers_list = []
         self.data = "array"
+        self.kmc_path = "{}/KMC/bin".format(os.path.dirname(os.path.realpath(__file__)))
         #
         self._compute_kmers(sequences)
         self.__construct_data()
         self.Xy_file.close()
 
-    def _compute_kmers_of_sequence(self, sequence, ind):
-        search = re.compile("^["+self.alphabet+"]+$").search
-
-        if isinstance(sequence, bytes):
-            sequence =  sequence.decode("utf8")
-
-        for i in range(len(sequence) - int(self.k) + 1):
-            kmer = sequence[i:i + int(self.k)]
-
-            if isinstance(kmer, bytes):
-                kmer =  kmer.decode("utf8")
-
-            # kmer = byte type
-            if self.alphabet and bool(search(kmer)) or not self.alphabet:
-                self.dict_data[kmer][ind] += 1
+    def _compute_kmers_of_sequence(self, file, ind):
+        # Count k-mers with KMC
+        cmd_count = "{}/kmc -k{} -fm -cs1000000000 -t48 -hp -sm -m1024 {} {}/{} {}".format(self.kmc_path, self.k, file, self.path, ind, self.path)
+        run(cmd_count, shell = True, capture_output=True)
+        # Transform k-mers db with KMC
+        cmd_transform = "{}/kmc_tools transform {}/{} dump {}/{}.txt".format(self.kmc_path, self.path, ind, self.path, ind)
+        run(cmd_transform, shell = True, capture_output=True)
+        # Parse k-mers file to pandas
+        profile = np.loadtxt('{}/{}.txt'.format(self.path, ind), dtype = object)
+        # Save to Xyfile
+        for row in profile:
+            self.dict_data[row[0]][ind] = int(row[1])
 
         return self
 
@@ -242,7 +259,6 @@ class VarKmersCollection(SeenKmersCollection):
         with tb.open_file(Xy_file, "a") as handle:
             self.data = handle.create_carray("/", "data", obj = np.array(self.data,dtype=self.dtype))
 
-
 class GivenKmersCollection(KmersCollection):
 
     def __init__(self, sequences, Xy_file, length, kmers_list, sparse=None,
@@ -250,6 +266,7 @@ class GivenKmersCollection(KmersCollection):
         self.sparse = sparse
         self.dtype = dtype
         self.alphabet = alphabet.lower() + alphabet.upper()
+        self.path = os.path.split(Xy_file)[0] + "/tmp/"
         self.kmers_list = kmers_list
         self.Xy_file = tb.open_file(Xy_file, "w")
         self.length = length
@@ -260,17 +277,29 @@ class GivenKmersCollection(KmersCollection):
         self.ids = []
         self.v_size = len(self.kmers_list)
         self.data = self.Xy_file.create_carray("/", "data", obj = np.zeros((self.length, self.v_size), dtype = self.dtype))
+        self.kmc_path = "{}/KMC/bin".format(os.path.dirname(os.path.realpath(__file__)))
         #
         self._compute_kmers(sequences)
         self.Xy_file.close()
 
-    def _compute_kmers_of_sequence(self, sequence, ind):
-        for i in range(len(sequence) - self.k + 1):
-            kmer = sequence[i:i + self.k]
+    def _compute_kmers_of_sequence(self, file, ind):
+        # Count k-mers with KMC
+        cmd_count = "{}/kmc -k{} -fm -cs1000000000 -t48 -hp -sm -m1024 {} {}/{} {}".format(self.kmc_path, self.k, file, self.path, ind, self.path)
+        run(cmd_count, shell = True, capture_output=True)
+        # Transform k-mers db with KMC
+        cmd_transform = "{}/kmc_tools transform {}/{} dump {}/{}.txt".format(self.kmc_path, self.path, ind, self.path, ind)
+        run(cmd_transform, shell = True, capture_output=True)
+        # Parse k-mers file to pandas
+        profile = np.loadtxt('{}/{}.txt'.format(self.path, ind), dtype = object)
+        # Save to Xyfile
 
-            if kmer in self.kmers_indices:
-                ind_kmer = self.kmers_indices[kmer]
-                self.data[ind,ind_kmer] += 1
+        for kmer in self.kmers_list:
+            ind_kmer = self.kmers_list.index(kmer)
+            for row in profile:
+                if row[0] == kmer:
+                    self.data[ind, ind_kmer] = int(row[1])
+                else:
+                    self.data[ind, ind_kmer] = 0
 
         return self
 
