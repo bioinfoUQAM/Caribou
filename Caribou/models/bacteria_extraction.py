@@ -64,7 +64,6 @@ def bacteria_extraction(metagenome_k_mers, database_k_mers, k, outdirs, dataset,
             y_train = pd.DataFrame(database_k_mers["y"], index = database_k_mers["ids"], columns = database_k_mers["taxas"]).loc[:,"domain"].str.lower()
             y_train = y_train.replace("bacteria", 1)
             y_train = y_train.replace("host", -1)
-            print(y_train)
         else:
             print("Only classifier One Class SVM can be used without host data!\nEither add host data in config file or choose classifier One Class SVM.")
             sys.exit()

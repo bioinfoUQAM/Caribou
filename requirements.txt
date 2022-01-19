@@ -1,6 +1,6 @@
 setuptools >= 59.5.0
 wheel >= 0.37.0
-biopython == 1.78
+biopython
 Bio
 h5py
 keras
