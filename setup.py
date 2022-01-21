@@ -24,7 +24,7 @@ setup(
                   'bin/kmc_dump',
                   'bin/kmc_tools',
                   'bin/libkmc_core.a',
-                  'include/kmc_runner.h']},
+                  'include/kmc_runner.h'], 'Caribou.data':['faSplit']},
     include_package_data = True,
     scripts = ['Caribou/Caribou.py',
                 'Caribou/main_testing_hpc.py',

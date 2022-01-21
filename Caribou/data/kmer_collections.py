@@ -76,51 +76,19 @@ class KmersCollection(ABC):
         return self
 
     def __compute_kmers_from_file(self, sequences):
-        path, ext = splitext(sequences)
+        path, ext = splitext(sequences.data)
         ext = ext.lstrip(".")
 
         if not os.path.isdir(self.path):
             os.mkdir(self.path)
 
-        if ext in ["fa","fna"]:
-            ext = "fasta"
-            with open(sequences, "rt") as handle:
-                records = SeqIO.parse(handle, "fasta")
-                i = 0
-                error = False
-                while not error:
-                    try:
-                        record = next(records)
-                        self.ids.append(record.id)
-                        file = "{}/{}.fa".format(self.path, record.id)
-                        with open(file, "w") as handle:
-                            SeqIO.write(record, handle, "fasta")
-                        self._compute_kmers_of_sequence(file, i)
-                        i += 1
-                    except StopIteration as e:
-                        error = True
+        cmd_split = '{} byname {} {}'.format(self.faSplit, sequences.data, self.path)
 
-        elif ext == "gz":
-            path, ext = splitext(path)
-            ext = ext.lstrip(".")
-            if ext in ["fa","fna"]:
-                ext = "fasta"
+        os.system(cmd_split)
 
-            with gzip.open(sequences, "rt") as handle:
-                records = SeqIO.parse(handle, "fasta")
-                i = 0
-                error = False
-                while not error:
-                    try:
-                        record = next(records)
-                        self.ids.append(record.id)
-                        file = "{}/{}.fa".format(self.path, record.id)
-                        with open(file, "w") as handle:
-                            SeqIO.write(record, handle, "fasta")
-                        self._compute_kmers_of_sequence(file, i)
-                        i += 1
-                    except StopIteration as e:
-                        error = True
+        for i, id in enumerate(sequences.ids):
+            file = self.path + id + '.fa'
+            self._compute_kmers_of_sequence(file, i)
 
         rmtree(self.path)
         return self
@@ -135,7 +103,7 @@ class KmersCollection(ABC):
     def _compute_kmers(self, sequences):
         if isinstance(sequences, SeqCollection):
             if os.path.isfile(sequences.data):
-                self.__compute_kmers_from_file(sequences.data)
+                self.__compute_kmers_from_file(sequences)
             else:
                 self.__compute_kmers_from_collection(sequences)
         else:
@@ -171,6 +139,7 @@ class FullKmersCollection(KmersCollection):
         self.data = self.Xy_file.create_carray("/", "data", obj = np.zeros((self.length, self.v_size)))
         self.kmers_list = ["".join(t) for t in product(alphabet, repeat=k)]
         self.kmc_path = "{}/KMC/bin".format(os.path.dirname(os.path.realpath(__file__)))
+        self.faSplit = "{}/faSplit".format(os.path.dirname(os.path.realpath(__file__)))
         #
         self._compute_kmers(sequences)
         self.Xy_file.close()
@@ -210,6 +179,7 @@ class SeenKmersCollection(KmersCollection):
         self.kmers_list = []
         self.data = "array"
         self.kmc_path = "{}/KMC/bin".format(os.path.dirname(os.path.realpath(__file__)))
+        self.faSplit = "{}/faSplit".format(os.path.dirname(os.path.realpath(__file__)))
         #
         self._compute_kmers(sequences)
         self.__construct_data()
@@ -278,6 +248,7 @@ class GivenKmersCollection(KmersCollection):
         self.v_size = len(self.kmers_list)
         self.data = self.Xy_file.create_carray("/", "data", obj = np.zeros((self.length, self.v_size), dtype = self.dtype))
         self.kmc_path = "{}/KMC/bin".format(os.path.dirname(os.path.realpath(__file__)))
+        self.faSplit = "{}/faSplit".format(os.path.dirname(os.path.realpath(__file__)))
         #
         self._compute_kmers(sequences)
         self.Xy_file.close()
@@ -339,6 +310,7 @@ def build_kmers_Xy_data(seq_data, k, Xy_file, length = 0, kmers_list = None, ful
     kmers_list = collection.kmers_list
     X_data = collection.data
     y_data = np.array(seq_data.labels)
+    ids = collection.ids
     return X_data, y_data, kmers_list
 
 def build_kmers_X_data(seq_data, X_file, kmers_list, length = 0, sparse=None, dtype=np.uint64):
