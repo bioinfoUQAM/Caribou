@@ -166,16 +166,16 @@ def caribou(argv):
     # Folders creation for output
     outdirs = {}
     outdirs["main_outdir"] = os.path.join(outdir, metagenome)
-    outdirs["data_dir"] = os.path.join(outdirs["main_outdir"], "data")
-    outdirs["models_dir"] = os.path.join(outdirs["main_outdir"], "models")
-    outdirs["results_dir"] = os.path.join(outdirs["main_outdir"], "results")
+    outdirs["data_dir"] = os.path.join(outdirs["main_outdir"], "data/")
+    outdirs["models_dir"] = os.path.join(outdirs["main_outdir"], "models/")
+    outdirs["results_dir"] = os.path.join(outdirs["main_outdir"], "results/")
     makedirs(outdirs["main_outdir"], mode=0o700, exist_ok=True)
     makedirs(outdirs["data_dir"], mode=0o700, exist_ok=True)
     makedirs(outdirs["models_dir"], mode=0o700, exist_ok=True)
     makedirs(outdirs["results_dir"], mode=0o700, exist_ok=True)
 
     if cv:
-        outdirs["plots_dir"] = os.path.join(outdirs["main_outdir"], "plots")
+        outdirs["plots_dir"] = os.path.join(outdirs["main_outdir"], "plots/")
         makedirs(outdirs["plots_dir"], mode=0o700, exist_ok=True)
 
 # Part 1 - K-mers profile extraction

@@ -16,12 +16,12 @@ __all__ = ['build_load_save_data', 'build_Xy_data', 'build_X_data']
 def build_load_save_data(file, hostfile, prefix, dataset, kmers_list=None, k=4):
 
     # Generate the names of files
-    Xy_file = "{}_K{}_Xy_genome_{}_data.h5f".format(prefix,k,dataset)
-    data_file = "{}_K{}_Xy_genome_{}_data.npz".format(prefix,k,dataset)
-    Xy_file_host = "{}_K{}_Xy_genome_{}_host_data.h5f".format(prefix,k,dataset)
-    data_file_host = "{}_K{}_Xy_genome_{}_host_data.npz".format(prefix,k,dataset)
-    seqfile = "{}_seqdata_db_{}.txt".format(prefix, dataset)
-    seqfile_host = "{}_seqdata_host_{}.txt".format(prefix, dataset)
+    Xy_file = "{}Xy_genome_{}_data_K{}.h5f".format(prefix,dataset,k)
+    data_file = "{}Xy_genome_{}_data_K{}.npz".format(prefix,dataset,k)
+    Xy_file_host = "{}Xy_genome_{}_data_K{}.h5f".format(prefix,dataset,k)
+    data_file_host = "{}Xy_genome_{}_data_K{}.npz".format(prefix,dataset,k)
+    seqfile = "{}seqdata_{}.txt".format(prefix, dataset)
+    seqfile_host = "{}seqdata_{}.txt".format(prefix, dataset)
 
     # Load file if already exists
     if os.path.isfile(data_file) and os.path.isfile(data_file_host) and isinstance(hostfile, tuple):

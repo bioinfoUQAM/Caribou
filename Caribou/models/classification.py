@@ -28,20 +28,20 @@ def bacterial_classification(classified_data, database_k_mers, k, outdirs, datas
     taxas = database_k_mers["taxas"].copy()
 
     for taxa in taxas:
-        classified_kmers_file = "{}_K{}_{}_Xy_classified_{}_database_{}_data.hdf5".format(outdirs["data_dir"], k, classifier, taxa, dataset) # Pandas df en output?
-        unclassified_kmers_file = "{}_K{}_{}_Xy_unclassified_{}_database_{}_data.hdf5".format(outdirs["data_dir"], k, classifier, taxa, dataset)
+        classified_kmers_file = "{}Xy_classified_{}_K{}_{}_database_{}_data.hdf5".format(outdirs["data_dir"], taxa, k, classifier, dataset) # Pandas df en output?
+        unclassified_kmers_file = "{}Xy_unclassified_{}_K{}_{}_database_{}_data.hdf5".format(outdirs["data_dir"], taxa, k, classifier, dataset)
 
         if taxa == taxas[-1]:
             classified_data[taxa] = previous_taxa_unclassified
             classified_data["order"].append(taxa)
         else:
             if classifier in ["ridge","svm","mlr","kmeans","mnb"]:
-                clf_file = "{}_K{}_{}_bacteria_identification_classifier_{}_model.jb".format(outdirs["models_dir"], k, classifier, dataset)
+                clf_file = "{}bacteria_identification_classifier_{}_K{}_{}_{}_model.jb".format(outdirs["models_dir"], taxa, k, classifier, dataset)
                 if not os.path.isfile(clf_file):
                     train = True
 
             elif classifier in ["lstm_attention","cnn","deepcnn"]:
-                clf_file = "{}_K{}_{}_bacteria_identification_classifier_{}_model".format(outdirs["models_dir"], k, classifier, dataset)
+                clf_file = "{}bacteria_identification_classifier_{}_K{}_{}_{}_model".format(outdirs["models_dir"], taxa, k, classifier, dataset)
                 if not os.path.isdir(clf_file):
                     train = True
 
