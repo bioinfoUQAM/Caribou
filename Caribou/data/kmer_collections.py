@@ -22,7 +22,7 @@ from sklearn.feature_selection import VarianceThreshold
 # From mlr_kgenomvir
 __author__ = ['Amine Remita', 'Nicolas de Montigny']
 
-__all__ = [ 'SeenKmersCollection','GivenKmersCollection','build_kmers','build_kmers_Xy_data']
+__all__ = [ 'SeenKmersCollection','GivenKmersCollection','build_kmers','build_kmers_Xy_data','build_kmers_X_data']
 
 """
 Module adapted from module kmer_collections.py of
