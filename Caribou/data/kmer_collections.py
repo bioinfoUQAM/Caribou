@@ -86,7 +86,7 @@ class KmersCollection(ABC):
 
         os.system(cmd_split)
 
-        parallel = Parallel(n_jobs = -1, prefer = "processes", verbose = 100)
+        parallel = Parallel(n_jobs = -1, backend = "threading", prefer = "processes", verbose = 100)
 
         for i, id in enumerate(sequences.ids):
             file = self.path + id + '.fa'
