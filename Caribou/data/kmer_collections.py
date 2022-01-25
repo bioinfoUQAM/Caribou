@@ -11,6 +11,7 @@ from Bio import SeqIO
 from os.path import splitext
 from subprocess import run
 from shutil import rmtree
+from joblib import Parallel, delayed
 
 import numpy as np
 import pandas as pd
@@ -21,9 +22,7 @@ from sklearn.feature_selection import VarianceThreshold
 # From mlr_kgenomvir
 __author__ = ['Amine Remita', 'Nicolas de Montigny']
 
-__all__ = [ 'FullKmersCollection', 'SeenKmersCollection',
-        'GivenKmersCollection' , 'VarKmersCollection',
-        'build_kmers', 'build_kmers_Xy_data']
+__all__ = [ 'SeenKmersCollection','GivenKmersCollection','build_kmers','build_kmers_Xy_data']
 
 """
 Module adapted from module kmer_collections.py of
@@ -78,6 +77,7 @@ class KmersCollection(ABC):
     def __compute_kmers_from_file(self, sequences):
         path, ext = splitext(sequences.data)
         ext = ext.lstrip(".")
+        fileList = []
 
         if not os.path.isdir(self.path):
             os.mkdir(self.path)
@@ -86,9 +86,13 @@ class KmersCollection(ABC):
 
         os.system(cmd_split)
 
+        parallel = Parallel(n_jobs = -1, prefer = "processes", verbose = 100)
+
         for i, id in enumerate(sequences.ids):
             file = self.path + id + '.fa'
-            self._compute_kmers_of_sequence(file, i)
+            fileList.append(file)
+
+        parallel(delayed(self._compute_kmers_of_sequence)(file, i) for i, file in enumerate(fileList))
 
         rmtree(self.path)
         return self
@@ -120,45 +124,6 @@ class KmersCollection(ABC):
 
         elif self.sparse == "csc":
             self.data = csc_matrix(self.data, dtype=self.dtype)
-
-
-class FullKmersCollection(KmersCollection):
-
-    def __init__(self, sequences, Xy_file, length, k=5, sparse=None,
-            dtype=np.uint64, alphabet="ACGT"):
-        self.k = k
-        self.sparse = sparse
-        self.dtype = dtype
-        self.alphabet = alphabet.lower() + alphabet.upper()
-        self.path = os.path.split(Xy_file)[0] + "/tmp/"
-        self.Xy_file = tb.open_file(Xy_file, "w")
-        self.length = length
-        #
-        self.ids = []
-        self.v_size = np.power(len(self.alphabet), int(self.k))
-        self.data = self.Xy_file.create_carray("/", "data", obj = np.zeros((self.length, self.v_size)))
-        self.kmers_list = ["".join(t) for t in product(alphabet, repeat=k)]
-        self.kmc_path = "{}/KMC/bin".format(os.path.dirname(os.path.realpath(__file__)))
-        self.faSplit = "{}/faSplit".format(os.path.dirname(os.path.realpath(__file__)))
-        #
-        self._compute_kmers(sequences)
-        self.Xy_file.close()
-
-    def _compute_kmers_of_sequence(self, file, ind):
-        # Count k-mers with KMC
-        cmd_count = "{}/kmc -k{} -fm -cs1000000000 -t48 -hp -sm -m1024 {} {}/{} {}".format(self.kmc_path, self.k, file, self.path, ind, self.path)
-        run(cmd_count, shell = True, capture_output=True)
-        # Transform k-mers db with KMC
-        cmd_transform = "{}/kmc_tools transform {}/{} dump {}/{}.txt".format(self.kmc_path, self.path, ind, self.path, ind)
-        run(cmd_transform, shell = True, capture_output=True)
-        # Parse k-mers file to pandas
-        profile = np.loadtxt('{}/{}.txt'.format(self.path, ind), dtype = object)
-        # Save to Xyfile
-        for row in profile:
-            ind_kmer = self.kmers_list.index(row[0])
-            self.data[ind, ind_kmer] = int(row[1])
-
-        return self
 
 
 class SeenKmersCollection(KmersCollection):
@@ -209,26 +174,6 @@ class SeenKmersCollection(KmersCollection):
         self.data = self.Xy_file.create_carray("/", "data", obj = np.array([ self.dict_data[x] for x in self.dict_data ],dtype=self.dtype).T)
         return self
 
-# ADAPT WITH GENERATOR/EARRAY
-class VarKmersCollection(SeenKmersCollection):
-
-    def __init__(self, sequences, Xy_file, length = 0, low_var_threshold=0.01, k=5, sparse=None,
-            dtype=np.uint64, alphabet="ACGT"):
-        super().__init__(sequences, Xy_file = Xy_file, length = length, k=k, sparse=sparse,
-                dtype=dtype, alphabet=alphabet)
-
-        # Kmer selection based on variance
-        selection = VarianceThreshold(threshold=low_var_threshold)
-        with tb.open_file(Xy_file, "r") as handle:
-            self.data = selection.fit_transform(handle.get_node("/", "data").read())
-
-        # update kmer list
-        self.v_size = self.data.shape[1]
-        _support = selection.get_support()
-        self.kmers_list = [ kmer for i, kmer in enumerate(self.kmers_list) if _support[i] ]
-        with tb.open_file(Xy_file, "a") as handle:
-            self.data = handle.create_carray("/", "data", obj = np.array(self.data,dtype=self.dtype))
-
 class GivenKmersCollection(KmersCollection):
 
     def __init__(self, sequences, Xy_file, length, kmers_list, sparse=None,
@@ -246,11 +191,13 @@ class GivenKmersCollection(KmersCollection):
         #
         self.ids = []
         self.v_size = len(self.kmers_list)
-        self.data = self.Xy_file.create_carray("/", "data", obj = np.zeros((self.length, self.v_size), dtype = self.dtype))
+        self.dict_data = defaultdict(lambda: [0]*self.length)
+        self.data = "array"
         self.kmc_path = "{}/KMC/bin".format(os.path.dirname(os.path.realpath(__file__)))
         self.faSplit = "{}/faSplit".format(os.path.dirname(os.path.realpath(__file__)))
         #
         self._compute_kmers(sequences)
+        self.__construct_data()
         self.Xy_file.close()
 
     def _compute_kmers_of_sequence(self, file, ind):
@@ -262,15 +209,14 @@ class GivenKmersCollection(KmersCollection):
         run(cmd_transform, shell = True, capture_output=True)
         # Parse k-mers file to pandas
         profile = np.loadtxt('{}/{}.txt'.format(self.path, ind), dtype = object)
-        # Save to Xyfile
 
         for kmer in self.kmers_list:
             ind_kmer = self.kmers_list.index(kmer)
             for row in profile:
                 if row[0] == kmer:
-                    self.data[ind, ind_kmer] = int(row[1])
+                    self.dict_data[row[0]][ind] = int(row[1])
                 else:
-                    self.data[ind, ind_kmer] = 0
+                    self.dict_data[row[0]][ind] = 0
 
         return self
 
@@ -279,34 +225,26 @@ class GivenKmersCollection(KmersCollection):
 
         return self
 
+    def __construct_data(self):
+        # Convert to numpy array and write directly to disk
+        self.data = self.Xy_file.create_carray("/", "data", obj = np.array([ self.dict_data[x] for x in self.dict_data ],dtype=self.dtype).T)
+        return self
+
 
 # #####
 # Data build functions
 # ####################
 
-def build_kmers(seq_data, k, Xy_file, length = 0, full_kmers=False, low_var_threshold=None,
-        sparse=None, dtype=np.uint64):
-
-    if full_kmers:
-        return FullKmersCollection(
-                seq_data, Xy_file, length, k=k, sparse=sparse, dtype=dtype)
-
-    elif low_var_threshold:
-        return VarKmersCollection(
-                seq_data, Xy_file, length, low_var_threshold=low_var_threshold,
-                k=k, sparse=sparse, dtype=dtype)
-    else:
-        return SeenKmersCollection(
-                seq_data, Xy_file, length, k=k, sparse=sparse, dtype=dtype)
+def build_kmers(seq_data, k, Xy_file, length = 0, sparse=None, dtype=np.uint64):
+    return SeenKmersCollection(seq_data, Xy_file, length, k=k, sparse=sparse, dtype=dtype)
 
 
-def build_kmers_Xy_data(seq_data, k, Xy_file, length = 0, kmers_list = None, full_kmers=False, low_var_threshold=None,
-        sparse=None, dtype=np.uint64):
+def build_kmers_Xy_data(seq_data, k, Xy_file, length = 0, kmers_list = None, sparse=None, dtype=np.uint64):
 
     if kmers_list is not None:
         collection = GivenKmersCollection(seq_data, Xy_file, length, kmers_list, sparse)
     else:
-        collection = build_kmers(seq_data, k, Xy_file, length, full_kmers, low_var_threshold, sparse)
+        collection = build_kmers(seq_data, k, Xy_file, length, sparse)
     kmers_list = collection.kmers_list
     X_data = collection.data
     y_data = np.array(seq_data.labels)

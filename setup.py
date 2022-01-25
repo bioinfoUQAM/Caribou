@@ -27,7 +27,6 @@ setup(
                   'include/kmc_runner.h'], 'Caribou.data':['faSplit']},
     include_package_data = True,
     scripts = ['Caribou/Caribou.py',
-                'Caribou/main_testing_hpc.py',
                 'Caribou/K-mers_extract.py',
                 'Caribou/data/build_data.py',
                 'Caribou/models/bacteria_extraction.py',

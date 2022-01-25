@@ -59,12 +59,8 @@ def caribou(argv):
     metagenome_seq_file = config.get("io", "metagenome_seq_file")
     outdir = config.get("io", "outdir")
 
-    # seq_rep
-    k_length = config.getint("seq_rep", "k", fallback = 20)
-    fullKmers = config.getboolean("seq_rep", "full_kmers", fallback = False)
-    lowVarThreshold = config.get("seq_rep", "low_var_threshold", fallback = None)
-
     # settings
+    k_length = config.getint("settings", "k", fallback = 35)
     binary_classifier = config.get("settings", "host_extractor", fallback = "attention")
     multi_classifier = config.get("settings", "bacteria_classifier", fallback = "lstm_attention")
     cv = config.getboolean("settings", "cross_validation", fallback = True)
@@ -103,23 +99,11 @@ def caribou(argv):
         print("Cannot find output folder ! Exiting")
         sys.exit()
 
-    # seq_rep
+    # settings
     if type(k_length) != int or k_length <= 0:
         print("Invalid kmers length ! Please enter a positive integer ! Exiting")
         print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
         sys.exit()
-    if fullKmers not in [True, False, None]:
-        print("Invalid value for full_kmers ! Please use boolean values ! Exiting")
-        print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
-        sys.exit()
-    if lowVarThreshold not in ["none", "None", None]:
-        lowVarThreshold = float(lowVarThreshold)
-        if not 0 < lowVarThreshold <= 1:
-            print("Invalid variance threshold for extracting k-mers ! Please enter a value between 0 and 1 ! Exiting")
-            print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
-            sys.exit()
-
-    # settings
     if binary_classifier not in ["onesvm","linearsvm","attention","lstm","deeplstm"]:
         print("Invalid host extraction classifier ! Exiting")
         print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
@@ -175,23 +159,9 @@ def caribou(argv):
     if host in ["none", "None", None]:
         binary_classifier = "onesvm"
 
-    # Check lowVarThreshold
-    if lowVarThreshold == "None":
-        lowVarThreshold = None
-    else:
-        lowVarThreshold = float(lowVarThreshold)
-
     # Check batch_size
     if multi_classifier in ["cnn","deepcnn"] and training_batch_size < 20:
         training_batch_size = 20
-
-    # Tags for prefix out
-    if fullKmers:
-        tag_kf = "F"
-    elif lowVarThreshold:
-        tag_kf = "V"
-    else:
-        tag_kf = "S"
 
     # Folders creation for output
     outdirs = {}
@@ -199,18 +169,14 @@ def caribou(argv):
     outdirs["data_dir"] = os.path.join(outdirs["main_outdir"], "data")
     outdirs["models_dir"] = os.path.join(outdirs["main_outdir"], "models")
     outdirs["results_dir"] = os.path.join(outdirs["main_outdir"], "results")
-    outdirs["prefix"] = tag_kf
     makedirs(outdirs["main_outdir"], mode=0o700, exist_ok=True)
     makedirs(outdirs["data_dir"], mode=0o700, exist_ok=True)
     makedirs(outdirs["models_dir"], mode=0o700, exist_ok=True)
     makedirs(outdirs["results_dir"], mode=0o700, exist_ok=True)
-    outdirs["data_dir"] = os.path.join(outdirs["data_dir"], outdirs["prefix"])
-    outdirs["models_dir"] = os.path.join(outdirs["models_dir"], outdirs["prefix"])
 
     if cv:
         outdirs["plots_dir"] = os.path.join(outdirs["main_outdir"], "plots")
         makedirs(outdirs["plots_dir"], mode=0o700, exist_ok=True)
-        outdirs["plots_dir"] = os.path.join(outdirs["plots_dir"], outdirs["prefix"])
 
 # Part 1 - K-mers profile extraction
 ################################################################################
@@ -222,7 +188,6 @@ def caribou(argv):
             outdirs["data_dir"],
             database,
             k = k_length,
-            low_var_threshold = lowVarThreshold
         )
     else:
         # Reference Database Only
@@ -231,7 +196,6 @@ def caribou(argv):
             outdirs["data_dir"],
             database,
             k = k_length,
-            low_var_threshold = lowVarThreshold
         )
 
     # Metagenome to analyse
@@ -241,6 +205,9 @@ def caribou(argv):
         metagenome,
         kmers_list = k_profile_database["kmers_list"]
     )
+
+    print("Caribou finished extracting k-mers")
+
 
 if __name__ == "__main__":
     caribou(sys.argv)
