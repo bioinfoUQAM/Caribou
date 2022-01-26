@@ -11,7 +11,7 @@ from Bio import SeqIO
 from os.path import splitext
 from subprocess import run
 from shutil import rmtree
-from joblib import Parallel, delayed
+from joblib import Parallel, delayed, wrap_non_picklable_objects
 
 import numpy as np
 import pandas as pd
@@ -114,6 +114,8 @@ class KmersCollection(ABC):
             self.__compute_kmers_from_strings(sequences)
 
     @abstractmethod
+    @delayed
+    @wrap_non_picklable_objects
     def _compute_kmers_of_sequence(self, seq, i):
         """
         """
@@ -150,6 +152,8 @@ class SeenKmersCollection(KmersCollection):
         self.__construct_data()
         self.Xy_file.close()
 
+    @delayed
+    @wrap_non_picklable_objects
     def _compute_kmers_of_sequence(self, file, ind):
         # Count k-mers with KMC
         cmd_count = "{}/kmc -k{} -fm -cs1000000000 -t48 -hp -sm -m1024 {} {}/{} {}".format(self.kmc_path, self.k, file, self.path, ind, self.path)
@@ -200,6 +204,8 @@ class GivenKmersCollection(KmersCollection):
         self.__construct_data()
         self.Xy_file.close()
 
+    @delayed
+    @wrap_non_picklable_objects
     def _compute_kmers_of_sequence(self, file, ind):
         # Count k-mers with KMC
         cmd_count = "{}/kmc -k{} -fm -cs1000000000 -t48 -hp -sm -m1024 {} {}/{} {}".format(self.kmc_path, self.k, file, self.path, ind, self.path)
