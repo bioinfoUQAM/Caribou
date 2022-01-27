@@ -147,7 +147,7 @@ class SeenKmersCollection(KmersCollection):
         self.data = "array"
         self.kmc_path = "{}/KMC/bin".format(os.path.dirname(os.path.realpath(__file__)))
         self.faSplit = "{}/faSplit".format(os.path.dirname(os.path.realpath(__file__)))
-        self.client = Client()
+        self.client = Client(processes=False)
         #
         self._compute_kmers(sequences)
         self.__construct_data()
@@ -199,7 +199,7 @@ class GivenKmersCollection(KmersCollection):
         self.data = "array"
         self.kmc_path = "{}/KMC/bin".format(os.path.dirname(os.path.realpath(__file__)))
         self.faSplit = "{}/faSplit".format(os.path.dirname(os.path.realpath(__file__)))
-        self.client = Client()
+        self.client = Client(processes=False)
         #
         self._compute_kmers(sequences)
         self.__construct_data()
