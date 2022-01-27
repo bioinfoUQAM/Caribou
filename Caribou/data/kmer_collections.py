@@ -91,6 +91,8 @@ class KmersCollection(ABC):
             file = self.path + id + '.fa'
             fileList.append(file)
 
+        print(fileList)
+
         with parallel_backend('dask'):
             Parallel(verbose = 100)(
             delayed(self._compute_kmers_of_sequence)(file, i)
