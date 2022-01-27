@@ -92,7 +92,7 @@ class KmersCollection(ABC):
             fileList.append(file)
 
         with parallel_backend('dask'):
-            Parallel(n_jobs = -1, prefer = "processes", verbose = 100)(
+            Parallel(verbose = 100)(
             delayed(self._compute_kmers_of_sequence)(file, i)
             for i, file in enumerate(fileList))
 
