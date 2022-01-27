@@ -92,10 +92,7 @@ class KmersCollection(ABC):
             file = self.path + id + '.fa'
             fileList.append(file)
 
-        for i, file in enumerate(fileList):
-            print("i : ", i)
-            print("file : ", file)
-            parallel(delayed(self._compute_kmers_of_sequence)(file, i))
+        parallel(delayed(self._compute_kmers_of_sequence)(file, i) for i, file in enumerate(fileList))
 
         rmtree(self.path)
         return self
@@ -207,6 +204,7 @@ class GivenKmersCollection(KmersCollection):
 
     @wrap_non_picklable_objects
     def _compute_kmers_of_sequence(self, file, ind):
+        print("Given ind : ", ind)
         # Count k-mers with KMC
         cmd_count = "{}/kmc -k{} -fm -cs1000000000 -t48 -hp -sm -m1024 {} {}/{} {}".format(self.kmc_path, self.k, file, self.path, ind, self.path)
         run(cmd_count, shell = True, capture_output=True)
