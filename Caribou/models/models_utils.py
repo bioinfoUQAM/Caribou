@@ -22,8 +22,8 @@ from keras.models import load_model
 
 from tensorflow.keras.models import clone_model
 
-from joblib import dump, load, Parallel, delayed, wrap_non_picklable_objects
-
+from joblib import dump, load, Parallel, delayed, parallel_backend
+from dask.distributed import Client
 import warnings
 
 __author__ = "Nicolas de Montigny"
@@ -143,7 +143,6 @@ def cross_validation_training(X_train, y_train, batch_size, kmers, ids, classifi
     # each dict contains the results of the iteration
     cv_scores = []
     clf_scores = {}
-    parallel = Parallel(n_jobs = n_jobs if n_jobs <= os.cpu_count() else -1, prefer = "processes", verbose = 100 if verbose else 0)
 
     if classifier in ["onesvm","linearsvm","ridge","svm","mlr","mnb"]:
         clf_file, ext = os.path.splitext(clf_file)
@@ -151,7 +150,9 @@ def cross_validation_training(X_train, y_train, batch_size, kmers, ids, classifi
         X_data = ["{}_iter_{}".format(X_train, iter) for iter in range(n_jobs)]
         for file in X_data:
             shutil.copy(X_train,file)
-        cv_scores = parallel(delayed(fit_predict_cv)
+        with parallel_backend('dask'):
+            cv_scores = Parallel(n_jobs = n_jobs if n_jobs <= os.cpu_count() else -1, prefer = "processes", verbose = 100 if verbose else 0)(
+            delayed(fit_predict_cv)
             (X_file, y_train, batch_size, kmers,
             ids, classifier, labels_list, outdir_plots,
             clone(clf), cv = 1, shuffle = True,
@@ -164,7 +165,9 @@ def cross_validation_training(X_train, y_train, batch_size, kmers, ids, classifi
         X_data = ["{}_iter_{}".format(X_train, iter) for iter in range(n_jobs)]
         for file in X_data:
             shutil.copy(X_train,file)
-        cv_scores = parallel(delayed(fit_predict_cv)
+        with parallel_backend('dask'):
+            cv_scores = Parallel(n_jobs = n_jobs if n_jobs <= os.cpu_count() else -1, prefer = "processes", verbose = 100 if verbose else 0)(
+            delayed(fit_predict_cv)
             (X_file, y_train, batch_size, kmers,
             ids, classifier, labels_list, outdir_plots,
             clone_model(clf), cv = 1, shuffle = True,
@@ -187,7 +190,6 @@ def cross_validation_training(X_train, y_train, batch_size, kmers, ids, classifi
 
     return clf_file
 
-@wrap_non_picklable_objects
 def fit_predict_cv(X_train, y_train, batch_size, kmers, ids, classifier, labels_list, outdir_plots, clf, cv = 1, shuffle = True, threshold = 0.8, verbose = True, clf_file = None):
     batch_size = 4
 

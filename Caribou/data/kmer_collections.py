@@ -11,7 +11,8 @@ from Bio import SeqIO
 from os.path import splitext
 from subprocess import run
 from shutil import rmtree
-from joblib import Parallel, delayed, wrap_non_picklable_objects
+from joblib import Parallel, delayed, parallel_backend
+from dask.distributed import Client
 
 import numpy as np
 import pandas as pd
@@ -86,13 +87,14 @@ class KmersCollection(ABC):
 
         os.system(cmd_split)
 
-        parallel = Parallel(n_jobs = -1, prefer = "processes", verbose = 100)
-
         for i, id in enumerate(sequences.ids):
             file = self.path + id + '.fa'
             fileList.append(file)
 
-        parallel(delayed(self._compute_kmers_of_sequence)(file, i) for i, file in enumerate(fileList))
+        with parallel_backend('dask'):
+            Parallel(n_jobs = -1, prefer = "processes", verbose = 100)(
+            delayed(self._compute_kmers_of_sequence)(file, i)
+            for i, file in enumerate(fileList))
 
         rmtree(self.path)
         return self
@@ -145,12 +147,12 @@ class SeenKmersCollection(KmersCollection):
         self.data = "array"
         self.kmc_path = "{}/KMC/bin".format(os.path.dirname(os.path.realpath(__file__)))
         self.faSplit = "{}/faSplit".format(os.path.dirname(os.path.realpath(__file__)))
+        self.client = Client()
         #
         self._compute_kmers(sequences)
         self.__construct_data()
         self.Xy_file.close()
 
-    @wrap_non_picklable_objects
     def _compute_kmers_of_sequence(self, file, ind):
         print("Seen ind : ", ind)
         # Count k-mers with KMC
@@ -197,12 +199,12 @@ class GivenKmersCollection(KmersCollection):
         self.data = "array"
         self.kmc_path = "{}/KMC/bin".format(os.path.dirname(os.path.realpath(__file__)))
         self.faSplit = "{}/faSplit".format(os.path.dirname(os.path.realpath(__file__)))
+        self.client = Client()
         #
         self._compute_kmers(sequences)
         self.__construct_data()
         self.Xy_file.close()
 
-    @wrap_non_picklable_objects
     def _compute_kmers_of_sequence(self, file, ind):
         print("Given ind : ", ind)
         # Count k-mers with KMC
