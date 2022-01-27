@@ -92,8 +92,6 @@ class KmersCollection(ABC):
             file = self.path + id + '.fa'
             fileList.append(file)
 
-        print(fileList)
-
         parallel(delayed(self._compute_kmers_of_sequence)(file, i) for i, file in enumerate(fileList))
 
         rmtree(self.path)
