@@ -114,7 +114,6 @@ class KmersCollection(ABC):
             self.__compute_kmers_from_strings(sequences)
 
     @abstractmethod
-    @delayed
     @wrap_non_picklable_objects
     def _compute_kmers_of_sequence(self, seq, i):
         """
@@ -152,7 +151,6 @@ class SeenKmersCollection(KmersCollection):
         self.__construct_data()
         self.Xy_file.close()
 
-    @delayed
     @wrap_non_picklable_objects
     def _compute_kmers_of_sequence(self, file, ind):
         # Count k-mers with KMC
@@ -204,7 +202,6 @@ class GivenKmersCollection(KmersCollection):
         self.__construct_data()
         self.Xy_file.close()
 
-    @delayed
     @wrap_non_picklable_objects
     def _compute_kmers_of_sequence(self, file, ind):
         # Count k-mers with KMC
