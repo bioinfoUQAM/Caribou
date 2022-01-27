@@ -153,6 +153,7 @@ class SeenKmersCollection(KmersCollection):
 
     @wrap_non_picklable_objects
     def _compute_kmers_of_sequence(self, file, ind):
+        print("Seen ind : ", ind)
         # Count k-mers with KMC
         cmd_count = "{}/kmc -k{} -fm -cs1000000000 -t48 -hp -sm -m1024 {} {}/{} {}".format(self.kmc_path, self.k, file, self.path, ind, self.path)
         run(cmd_count, shell = True, capture_output=True)
