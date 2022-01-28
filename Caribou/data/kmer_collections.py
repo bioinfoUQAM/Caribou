@@ -84,7 +84,7 @@ class KmersCollection(ABC):
             file = self.path + id + '.fa'
             fileList.append(file)
 
-        with parallel_backend('dask'):
+        with parallel_backend('loky'):
             Parallel(n_jobs = -1, prefer = 'processes', verbose = 100)(
             delayed(self._compute_kmers_of_sequence)
             (file, i) for i, file in enumerate(fileList))
@@ -124,12 +124,13 @@ class SeenKmersCollection(KmersCollection):
         self.data = "array"
         self.kmc_path = "{}/KMC/bin".format(os.path.dirname(os.path.realpath(__file__)))
         self.faSplit = "{}/faSplit".format(os.path.dirname(os.path.realpath(__file__)))
-        self.client = Client(processes=False)
+        #self.client = Client(processes=False)
         #
         self._compute_kmers(sequences)
         self.__construct_data()
         self.Xy_file.close()
 
+    @wrap_non_picklable_objects
     def _compute_kmers_of_sequence(self, file, ind):
         print("Seen ind : ", ind)
         # Count k-mers with KMC
@@ -176,12 +177,13 @@ class GivenKmersCollection(KmersCollection):
         self.data = "array"
         self.kmc_path = "{}/KMC/bin".format(os.path.dirname(os.path.realpath(__file__)))
         self.faSplit = "{}/faSplit".format(os.path.dirname(os.path.realpath(__file__)))
-        self.client = Client(processes=False)
+        #self.client = Client(processes=False)
         #
         self._compute_kmers(sequences)
         self.__construct_data()
         self.Xy_file.close()
 
+    @wrap_non_picklable_objects
     def _compute_kmers_of_sequence(self, file, ind):
         print("Given ind : ", ind)
         # Count k-mers with KMC
