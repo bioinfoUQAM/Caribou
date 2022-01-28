@@ -11,14 +11,14 @@ from Bio import SeqIO
 from os.path import splitext
 from subprocess import run
 from shutil import rmtree
-from joblib import Parallel, delayed, parallel_backend
-from dask.distributed import Client
+from joblib import Parallel, delayed, parallel_backend, wrap_non_picklable_objects
+from dask.distributed import Client, LocalCluster
+from scipy.sparse import csr_matrix, csc_matrix
+from sklearn.feature_selection import VarianceThreshold
 
 import numpy as np
 import pandas as pd
 import tables as tb
-from scipy.sparse import csr_matrix, csc_matrix
-from sklearn.feature_selection import VarianceThreshold
 
 # From mlr_kgenomvir
 __author__ = ['Amine Remita', 'Nicolas de Montigny']
@@ -68,14 +68,7 @@ def get_index_from_kmer(kmer, k):
 
 class KmersCollection(ABC):
 
-    def __compute_kmers_from_collection(self, sequences):
-        for i, seq in enumerate(sequences):
-            self._compute_kmers_of_sequence(seq.seq._data, i)
-            self.ids.append(seq.id)
-
-        return self
-
-    def __compute_kmers_from_file(self, sequences):
+    def _compute_kmers(self, sequences):
         path, ext = splitext(sequences.data)
         ext = ext.lstrip(".")
         fileList = []
@@ -87,35 +80,17 @@ class KmersCollection(ABC):
 
         os.system(cmd_split)
 
-        for i, id in enumerate(sequences.ids):
+        for id in sequences.ids:
             file = self.path + id + '.fa'
             fileList.append(file)
 
-        print(fileList)
-
         with parallel_backend('dask'):
-            Parallel(verbose = 100)(
-            delayed(self._compute_kmers_of_sequence)(file, i)
-            for i, file in enumerate(fileList))
+            Parallel(n_jobs = -1, prefer = 'processes', verbose = 100)(
+            delayed(self._compute_kmers_of_sequence)
+            (file, i) for i, file in enumerate(fileList))
 
         rmtree(self.path)
         return self
-
-    def __compute_kmers_from_strings(self, sequences):
-        for i, seq in enumerate(sequences):
-            self._compute_kmers_of_sequence(seq, i)
-            self.ids.append(i)
-
-        return self
-
-    def _compute_kmers(self, sequences):
-        if isinstance(sequences, SeqCollection):
-            if os.path.isfile(sequences.data):
-                self.__compute_kmers_from_file(sequences)
-            else:
-                self.__compute_kmers_from_collection(sequences)
-        else:
-            self.__compute_kmers_from_strings(sequences)
 
     @abstractmethod
     def _compute_kmers_of_sequence(self, seq, i):

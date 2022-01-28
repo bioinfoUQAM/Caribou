@@ -4,11 +4,11 @@ Bio
 h5py
 keras
 matplotlib
-numpy
+numpy < 1.22, >= 1.18
 pandas
 sklearn
 scipy
 tables
 tensorflow
-joblib
 dask[complete]
+numba
