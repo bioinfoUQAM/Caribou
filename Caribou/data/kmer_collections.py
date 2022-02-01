@@ -199,7 +199,7 @@ def compute_kmers(seq_data, method, dict_data, kmers_list, k, dir_path, faSplit,
     """
     try:
         t_start = time.time()
-        dict_data = dask_client(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path)
+        dict_data = dask_client(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path, time)
         print("Dask client : {:.3f}s".format(time.time() - t_start))
         rmtree(dir_path)
         os.mkdir(dir_path)
@@ -263,7 +263,7 @@ def joblib_dask(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path)
 
     return dict_data
 
-def dask_client(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path):
+def dask_client(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path, time):
     #See on Narval if detects well and need to specify nb of threads
     cluster = LocalCluster(processes = True, n_workers = 6, threads_per_worker = 68)
     #cluster = LocalCluster(processes = True)
@@ -281,6 +281,8 @@ def dask_client(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path)
             jobs.append(job)
 
     results = client.gather(jobs)
+
+    print("Dask client : {:.3f}s".format(time.time() - t_start))
 
     for result in results:
         dict_data = {**result, **dict_data}
