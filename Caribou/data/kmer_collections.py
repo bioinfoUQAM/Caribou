@@ -87,7 +87,6 @@ def kmers_collection(seq_data, Xy_file, length, k, method = 'seen', kmers_list =
     Xy_file = tb.open_file(Xy_file, "w")
     dict_data = defaultdict(lambda: [0]*length)
     kmc_path = "{}/KMC/bin".format(os.path.dirname(os.path.realpath(__file__)))
-    print("KMC_path : ", kmc_path)
     faSplit = "{}/faSplit".format(os.path.dirname(os.path.realpath(__file__)))
     #
     dict_data = compute_kmers(seq_data, method, dict_data, kmers_list, k, dir_path, faSplit, kmc_path)
@@ -107,22 +106,23 @@ def construct_data(dict_data, Xy_file):
 
 def compute_seen_kmers_of_sequence(dict_data, kmc_path, k, dir_path, ind, file):
     # Count k-mers with KMC
-    cmd_count = "{}/kmc -k{} -fm -cs1000000000 -t68 -hp -sm {} {}/{} {}".format(kmc_path, k, file, dir_path, ind, dir_path)
-    run(cmd_count, shell = True)#, capture_output=True)
+    cmd_count = "{}/kmc -k{} -fm -cs1000000000 -t68 -hp {} {}/{} {}".format(kmc_path, k, file, dir_path, ind, dir_path)
+    #/localscratch/nicdemon.2258390.0/env/lib/python3.8/site-packages/Caribou/data/KMC/bin/kmc -k35 -fm -cs1000000000 -t68 -hp -sm $SLURM_TMPDIR/output/mock/data/tmp/NC_014830.1.fa $SLURM_TMPDIR/output/mock/data/tmp/0 $SLURM_TMPDIR/output/mock/data/tmp/
+    run(cmd_count, shell = True, capture_output=True)
     # Transform k-mers db with KMC
     cmd_transform = "{}/kmc_tools transform {}/{} dump {}/{}.txt".format(kmc_path, dir_path, ind, dir_path, ind)
-    run(cmd_transform, shell = True)#, capture_output=True)
+    #/localscratch/nicdemon.2258390.0/env/lib/python3.8/site-packages/Caribou/data/KMC/bin/kmc_tools transform $SLURM_TMPDIR/output/mock/data/tmp/0 dump $SLURM_TMPDIR/output/mock/data/tmp/0.txt
+    run(cmd_transform, shell = True, capture_output=True)
     # Parse k-mers file to pandas
     profile = np.loadtxt('{}/{}.txt'.format(dir_path, ind), dtype = object)
     # Save to Xyfile
     for row in profile:
         dict_data[row[0]][ind] = int(row[1])
-
     return dict_data
 
 def compute_given_kmers_of_sequence(dict_data, kmers_list, kmc_path, k, dir_path, ind, file):
     # Count k-mers with KMC
-    cmd_count = "{}/kmc -k{} -fm -cs1000000000 -t68 -hp -sm {} {}/{} {}".format(kmc_path, k, file, dir_path, ind, dir_path)
+    cmd_count = "{}/kmc -k{} -fm -cs1000000000 -t68 -hp {} {}/{} {}".format(kmc_path, k, file, dir_path, ind, dir_path)
     run(cmd_count, shell = True, capture_output=True)
     # Transform k-mers db with KMC
     cmd_transform = "{}/kmc_tools transform {}/{} dump {}/{}.txt".format(kmc_path, dir_path, ind, dir_path, ind)
