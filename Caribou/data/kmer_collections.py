@@ -83,7 +83,7 @@ def kmers_collection(seq_data, Xy_file, length, k, method = 'seen', kmers_list =
     k = k
     method = method
     kmers_list = kmers_list
-    dir_path = os.path.split(Xy_file)[0] + "/tmp/"
+    dir_path = os.path.split(Xy_file)[0] + "/tmp"
     Xy_file = tb.open_file(Xy_file, "w")
     dict_data = defaultdict(lambda: [0]*length)
     kmc_path = "{}/KMC/bin".format(os.path.dirname(os.path.realpath(__file__)))
@@ -105,8 +105,11 @@ def construct_data(dict_data, Xy_file):
     return data
 
 def compute_seen_kmers_of_sequence(dict_data, kmc_path, k, dir_path, ind, file):
+    # Make tmp folder per sequence
+    #tmp_folder = "{}_{}".format(dir_path, ind)
+    #os.mkdir(tmp_folder)
     # Count k-mers with KMC
-    cmd_count = "{}/kmc -k{} -fm -cs1000000000 -t68 -hp {} {}/{} {}".format(kmc_path, k, file, dir_path, ind, dir_path)
+    cmd_count = "{}/kmc -k{} -fm -cs1000000000 -t68 -hp -sm {} {}/{} {}".format(kmc_path, k, file, dir_path, ind, dir_path)
     #/localscratch/nicdemon.2258390.0/env/lib/python3.8/site-packages/Caribou/data/KMC/bin/kmc -k35 -fm -cs1000000000 -t68 -hp -sm $SLURM_TMPDIR/output/mock/data/tmp/NC_014830.1.fa $SLURM_TMPDIR/output/mock/data/tmp/0 $SLURM_TMPDIR/output/mock/data/tmp/
     run(cmd_count, shell = True, capture_output=True)
     # Transform k-mers db with KMC
@@ -122,7 +125,7 @@ def compute_seen_kmers_of_sequence(dict_data, kmc_path, k, dir_path, ind, file):
 
 def compute_given_kmers_of_sequence(dict_data, kmers_list, kmc_path, k, dir_path, ind, file):
     # Count k-mers with KMC
-    cmd_count = "{}/kmc -k{} -fm -cs1000000000 -t68 -hp {} {}/{} {}".format(kmc_path, k, file, dir_path, ind, dir_path)
+    cmd_count = "{}/kmc -k{} -fm -cs1000000000 -t68 -hp -sm {} {}/{} {}".format(kmc_path, k, file, dir_path, ind, dir_path)
     run(cmd_count, shell = True, capture_output=True)
     # Transform k-mers db with KMC
     cmd_transform = "{}/kmc_tools transform {}/{} dump {}/{}.txt".format(kmc_path, dir_path, ind, dir_path, ind)
