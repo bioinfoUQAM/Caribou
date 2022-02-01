@@ -124,8 +124,7 @@ def compute_seen_kmers_of_sequence(dict_data, kmc_path, k, dir_path, ind, file):
             dict_data[row[0]][ind] = int(row[1])
     except ValueError as e:
         print(e)
-        print("row[0] : ", row[0])
-        print("row[1] : ", row[1])
+        print("profile : ",profile)
         print("ind : ", ind)
         print("dict_data :", dict_data)
 
