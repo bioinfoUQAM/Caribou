@@ -83,7 +83,7 @@ def kmers_collection(seq_data, Xy_file, length, k, method = 'seen', kmers_list =
     k = k
     method = method
     kmers_list = kmers_list
-    dir_path = os.path.split(Xy_file)[0] + "/tmp"
+    dir_path = os.path.split(Xy_file)[0] + "/tmp/"
     Xy_file = tb.open_file(Xy_file, "w")
     dict_data = defaultdict(lambda: [0]*length)
     kmc_path = "{}/KMC/bin".format(os.path.dirname(os.path.realpath(__file__)))
@@ -106,10 +106,10 @@ def construct_data(dict_data, Xy_file):
 
 def compute_seen_kmers_of_sequence(dict_data, kmc_path, k, dir_path, ind, file):
     # Make tmp folder per sequence
-    #tmp_folder = "{}_{}".format(dir_path, ind)
-    #os.mkdir(tmp_folder)
+    tmp_folder = "{}tmp_{}".format(dir_path, ind)
+    os.mkdir(tmp_folder)
     # Count k-mers with KMC
-    cmd_count = "{}/kmc -k{} -fm -cs1000000000 -t68 -hp -sm {} {}/{} {}".format(kmc_path, k, file, dir_path, ind, dir_path)
+    cmd_count = "{}/kmc -k{} -fm -cs1000000000 -t68 -hp -sm {} {}/{} {}".format(kmc_path, k, file, dir_path, ind, tmp_folder)
     #/localscratch/nicdemon.2258390.0/env/lib/python3.8/site-packages/Caribou/data/KMC/bin/kmc -k35 -fm -cs1000000000 -t68 -hp -sm $SLURM_TMPDIR/output/mock/data/tmp/NC_014830.1.fa $SLURM_TMPDIR/output/mock/data/tmp/0 $SLURM_TMPDIR/output/mock/data/tmp/
     run(cmd_count, shell = True, capture_output=True)
     # Transform k-mers db with KMC
@@ -121,11 +121,15 @@ def compute_seen_kmers_of_sequence(dict_data, kmc_path, k, dir_path, ind, file):
     # Save to Xyfile
     for row in profile:
         dict_data[row[0]][ind] = int(row[1])
+
     return dict_data
 
 def compute_given_kmers_of_sequence(dict_data, kmers_list, kmc_path, k, dir_path, ind, file):
+    # Make tmp folder per sequence
+    tmp_folder = "{}tmp_{}".format(dir_path, ind)
+    os.mkdir(tmp_folder)
     # Count k-mers with KMC
-    cmd_count = "{}/kmc -k{} -fm -cs1000000000 -t68 -hp -sm {} {}/{} {}".format(kmc_path, k, file, dir_path, ind, dir_path)
+    cmd_count = "{}/kmc -k{} -fm -cs1000000000 -t68 -hp -sm {} {}/{} {}".format(kmc_path, k, file, dir_path, ind, tmp_folder)
     run(cmd_count, shell = True, capture_output=True)
     # Transform k-mers db with KMC
     cmd_transform = "{}/kmc_tools transform {}/{} dump {}/{}.txt".format(kmc_path, dir_path, ind, dir_path, ind)
@@ -158,20 +162,21 @@ def compute_kmers(seq_data, method, dict_data, kmers_list, k, dir_path, faSplit,
     for id in seq_data.ids:
         file = dir_path + id + '.fa'
         file_list.append(file)
-
+        
     try:
         t_start = time.time()
-        loky(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path)
+        dict_data = loky(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path)
         print("Joblib loky : {:.3f}s".format(time.time() - t_start))
-        rmtree(dir_path)
-        os.mkdir(dir_path)
+        #rmtree(dir_path)
+        #os.mkdir(dir_path)
         dict_data = {}
     except Error as e:
         print("Joblib loky did not work")
         print(e)
+    os.system(cmd_split)
     try:
         t_start = time.time()
-        threading(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path)
+        dict_data = threading(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path)
         print("Joblib threading : {:.3f}s".format(time.time() - t_start))
         rmtree(dir_path)
         os.mkdir(dir_path)
@@ -179,9 +184,10 @@ def compute_kmers(seq_data, method, dict_data, kmers_list, k, dir_path, faSplit,
     except Error as e:
         print("Joblib threading did not work")
         print(e)
+    os.system(cmd_split)
     try:
         t_start = time.time()
-        joblib_dask(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path)
+        dict_data = joblib_dask(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path)
         print("Joblib dask : {:.3f}s".format(time.time() - t_start))
         rmtree(dir_path)
         os.mkdir(dir_path)
@@ -189,9 +195,10 @@ def compute_kmers(seq_data, method, dict_data, kmers_list, k, dir_path, faSplit,
     except Error as e:
         print("Joblib dask did not work")
         print(e)
+    os.system(cmd_split)
     try:
         t_start = time.time()
-        dask_client(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path)
+        dict_data = dask_client(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path)
         print("Dask client : {:.3f}s".format(time.time() - t_start))
         rmtree(dir_path)
         os.mkdir(dir_path)
