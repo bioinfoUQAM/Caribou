@@ -1,5 +1,5 @@
 from Caribou.data.seq_collections import SeqCollection
-from Caribou.data.kmer_collections import build_kmers_Xy_data, build_kmers_X_data, build_kmers
+from Caribou.data.kmer_collections import build_kmers_Xy_data, build_kmers_X_data
 from Caribou.utils import load_Xy_data, save_Xy_data
 
 import os.path
@@ -68,7 +68,7 @@ def build_load_save_data(file, hostfile, prefix, dataset, kmers_list=None, k=4):
             # Build X_data of dataset
             print("X_data, k = {}".format(k))
             seq_data = SeqCollection(file)
-            data = build_X_data(seq_data, Xy_file, kmers_list, seq_data.length)
+            data = build_X_data(seq_data, k, Xy_file, kmers_list, seq_data.length)
             save_Xy_data(data, data_file)
             return data
 
@@ -78,8 +78,7 @@ def build_Xy_data(seq_data, k, Xy_file, length = 0, kmers_list = None):
 
     X, y, kmers = build_kmers_Xy_data(seq_data, k, Xy_file,
                                       length = length,
-                                      kmers_list = kmers_list,
-                                      dtype = np.float32)
+                                      kmers_list = kmers_list)
 
     # Data in a dictionnary
     data["X"] = str(Xy_file)
@@ -91,13 +90,13 @@ def build_Xy_data(seq_data, k, Xy_file, length = 0, kmers_list = None):
     return data
 
 # Build kmers collection without known classes
-def build_X_data(seq_data, X_file, kmers_list, length = 0):
+def build_X_data(seq_data, k, X_file, kmers_list, length = 0):
     data = dict()
 
     X, kmers, ids = build_kmers_X_data(seq_data, X_file,
                                        kmers_list = kmers_list,
-                                       length = length,
-                                       dtype = np.float32)
+                                       k = k,
+                                       length = length)
 
     # Data in a dictionnary
     data["X"] = str(X_file)
