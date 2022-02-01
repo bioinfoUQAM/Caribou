@@ -117,7 +117,7 @@ def compute_seen_kmers_of_sequence(dict_data, kmc_path, k, dir_path, ind, file):
     #/localscratch/nicdemon.2258390.0/env/lib/python3.8/site-packages/Caribou/data/KMC/bin/kmc_tools transform $SLURM_TMPDIR/output/mock/data/tmp/0 dump $SLURM_TMPDIR/output/mock/data/tmp/0.txt
     run(cmd_transform, shell = True, capture_output=True)
     # Parse k-mers file to pandas
-    profile = np.loadtxt('{}/{}.txt'.format(dir_path, ind), dtype = object)
+    profile = np.loadtxt('{}/{}.txt'.format(dir_path, ind), delimiter = '\t', dtype = object)
     # Save to Xyfile
     try:
         for row in profile:
@@ -142,7 +142,7 @@ def compute_given_kmers_of_sequence(dict_data, kmers_list, kmc_path, k, dir_path
     cmd_transform = "{}/kmc_tools transform {}/{} dump {}/{}.txt".format(kmc_path, dir_path, ind, dir_path, ind)
     run(cmd_transform, shell = True, capture_output=True)
     # Parse k-mers file to pandas
-    profile = np.loadtxt('{}/{}.txt'.format(dir_path, ind), dtype = object)
+    profile = np.loadtxt('{}/{}.txt'.format(dir_path, ind), delimiter = '\t', dtype = object)
 
     for kmer in kmers_list:
         ind_kmer = kmers_list.index(kmer)
