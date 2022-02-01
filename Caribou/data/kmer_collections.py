@@ -159,8 +159,8 @@ def compute_kmers(seq_data, method, dict_data, kmers_list, k, dir_path, faSplit,
         t_start = time.time()
         loky(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path)
         print("Joblib loky : {:.3f}s".format(time.time() - t_start))
-        rmtree(dir_path)
-        os.mkdir(dir_path)
+        #rmtree(dir_path)
+        #os.mkdir(dir_path)
         dict_data = {}
     except Error as e:
         print("Joblib loky did not work")
