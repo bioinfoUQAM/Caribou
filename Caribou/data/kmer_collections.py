@@ -265,8 +265,8 @@ def joblib_dask(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path)
 
 def dask_client(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path):
     #See on Narval if detects well and need to specify nb of threads
-    #cluster = LocalCluster(processes = True, n_workers = 6, threads_per_worker = 68)
-    cluster = LocalCluster(processes = True)
+    cluster = LocalCluster(processes = True, n_workers = 6, threads_per_worker = 68)
+    #cluster = LocalCluster(processes = True)
     client = Client(cluster)
     print("Client : ", client)
     jobs = []
