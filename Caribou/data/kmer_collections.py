@@ -116,7 +116,7 @@ def compute_seen_kmers_of_sequence(dict_data, kmc_path, k, dir_path, ind, file):
     # Save to Xyfile
     for row in profile:
         dict_data[row[0]][ind] = int(row[1])
-
+    print(os.listdir(dir_path))
     return dict_data
 
 def compute_given_kmers_of_sequence(dict_data, kmers_list, kmc_path, k, dir_path, ind, file):
