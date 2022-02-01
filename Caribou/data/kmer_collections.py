@@ -162,7 +162,7 @@ def compute_kmers(seq_data, method, dict_data, kmers_list, k, dir_path, faSplit,
     for id in seq_data.ids:
         file = dir_path + id + '.fa'
         file_list.append(file)
-        
+    """
     try:
         t_start = time.time()
         dict_data = loky(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path)
@@ -174,6 +174,7 @@ def compute_kmers(seq_data, method, dict_data, kmers_list, k, dir_path, faSplit,
         print("Joblib loky did not work")
         print(e)
     os.system(cmd_split)
+    """
     try:
         t_start = time.time()
         dict_data = threading(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path)
