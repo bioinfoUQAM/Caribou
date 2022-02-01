@@ -87,6 +87,7 @@ def kmers_collection(seq_data, Xy_file, length, k, method = 'seen', kmers_list =
     Xy_file = tb.open_file(Xy_file, "w")
     dict_data = defaultdict(lambda: [0]*length)
     kmc_path = "{}/KMC/bin".format(os.path.dirname(os.path.realpath(__file__)))
+    print("KMC_path : ", kmc_path)
     faSplit = "{}/faSplit".format(os.path.dirname(os.path.realpath(__file__)))
     #
     dict_data = compute_kmers(seq_data, method, dict_data, kmers_list, k, dir_path, faSplit, kmc_path)
