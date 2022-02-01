@@ -149,7 +149,7 @@ def compute_kmers(seq_data, method, dict_data, kmers_list, k, dir_path, faSplit,
 
     cmd_split = '{} byname {} {}'.format(faSplit, seq_data.data, dir_path)
 
-    run(cmd_split)
+    os.system(cmd_split)
 
     for id in seq_data.ids:
         file = dir_path + id + '.fa'
