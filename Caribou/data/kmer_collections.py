@@ -119,8 +119,15 @@ def compute_seen_kmers_of_sequence(dict_data, kmc_path, k, dir_path, ind, file):
     # Parse k-mers file to pandas
     profile = np.loadtxt('{}/{}.txt'.format(dir_path, ind), dtype = object)
     # Save to Xyfile
-    for row in profile:
-        dict_data[row[0]][ind] = int(row[1])
+    try:
+        for row in profile:
+            dict_data[row[0]][ind] = int(row[1])
+    except ValueError as e:
+        print(e)
+        print("row[0] : ", row[0])
+        print("row[1] : ", row[1])
+        print("ind : ", ind)
+        print("dict_data :", dict_data)
 
     return dict_data
 
@@ -185,7 +192,6 @@ def compute_kmers(seq_data, method, dict_data, kmers_list, k, dir_path, faSplit,
         print("Joblib threading did not work")
         print(e)
     os.system(cmd_split)
-    """
     try:
         t_start = time.time()
         dict_data = joblib_dask(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path)
@@ -197,6 +203,7 @@ def compute_kmers(seq_data, method, dict_data, kmers_list, k, dir_path, faSplit,
         print("Joblib dask did not work")
         print(e)
     os.system(cmd_split)
+    """
     try:
         t_start = time.time()
         dict_data = dask_client(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path, t_start)
