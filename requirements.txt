@@ -2,7 +2,6 @@ setuptools >= 59.5.0
 wheel >= 0.37.0
 Bio
 h5py
-keras
 matplotlib
 numpy < 1.22, >= 1.18
 pandas
@@ -10,5 +9,5 @@ sklearn
 scipy
 tables
 tensorflow
+keras < 2.8 , >= 2.7.0rc0
 dask[complete]
-numba

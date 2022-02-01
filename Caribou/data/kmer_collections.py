@@ -1,12 +1,9 @@
 from Caribou.data.seq_collections import SeqCollection
 
-import time
-
 import re
 import os
+import time
 import gzip
-import dask
-import joblib
 
 from abc import ABC, abstractmethod
 from collections import defaultdict
@@ -26,6 +23,9 @@ from tensorflow.config import list_physical_devices
 import numpy as np
 import pandas as pd
 import tables as tb
+
+import dask
+import joblib
 
 # From mlr_kgenomvir
 __author__ = ['Amine Remita', 'Nicolas de Montigny']
@@ -161,6 +161,7 @@ def compute_kmers(seq_data, method, dict_data, kmers_list, k, dir_path, faSplit,
         print("Joblib loky : {:.3f}s".format(time.time() - t_start))
         rmtree(dir_path)
         os.mkdir(dir_path)
+        dict_data = {}
     except Error as e:
         print("Joblib loky did not work")
         print(e)
@@ -170,6 +171,7 @@ def compute_kmers(seq_data, method, dict_data, kmers_list, k, dir_path, faSplit,
         print("Joblib threading : {:.3f}s".format(time.time() - t_start))
         rmtree(dir_path)
         os.mkdir(dir_path)
+        dict_data = {}
     except Error as e:
         print("Joblib threading did not work")
         print(e)
@@ -179,6 +181,7 @@ def compute_kmers(seq_data, method, dict_data, kmers_list, k, dir_path, faSplit,
         print("Joblib dask : {:.3f}s".format(time.time() - t_start))
         rmtree(dir_path)
         os.mkdir(dir_path)
+        dict_data = {}
     except Error as e:
         print("Joblib dask did not work")
         print(e)
@@ -188,6 +191,7 @@ def compute_kmers(seq_data, method, dict_data, kmers_list, k, dir_path, faSplit,
         print("Dask client : {:.3f}s".format(time.time() - t_start))
         rmtree(dir_path)
         os.mkdir(dir_path)
+        dict_data = {}
     except Error as e:
         print("Dask client did not work")
         print(e)
