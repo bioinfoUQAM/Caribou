@@ -187,6 +187,7 @@ def caribou(argv):
             (host_seq_file, host_cls_file),
             outdirs["data_dir"],
             database,
+            host,
             k = k_length,
         )
     else:
@@ -195,6 +196,7 @@ def caribou(argv):
             host,
             outdirs["data_dir"],
             database,
+            host,
             k = k_length,
         )
 
@@ -203,6 +205,7 @@ def caribou(argv):
         "none",
         outdirs["data_dir"],
         metagenome,
+        host,
         kmers_list = k_profile_database["kmers_list"]
     )
 

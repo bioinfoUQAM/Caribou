@@ -11,3 +11,4 @@ tables
 tensorflow
 keras < 2.8 , >= 2.7.0rc0
 dask[complete]
+deepdiff

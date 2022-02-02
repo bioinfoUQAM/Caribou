@@ -13,13 +13,13 @@ __author__ = "Nicolas de Montigny"
 
 __all__ = ['build_load_save_data', 'build_Xy_data', 'build_X_data']
 
-def build_load_save_data(file, hostfile, prefix, dataset, kmers_list=None, k=4):
+def build_load_save_data(file, hostfile, prefix, dataset, host, kmers_list=None, k=4):
 
     # Generate the names of files
     Xy_file = "{}/Xy_genome_{}_data_K{}.h5f".format(prefix,dataset,k)
     data_file = "{}/Xy_genome_{}_data_K{}.npz".format(prefix,dataset,k)
-    Xy_file_host = "{}/Xy_genome_{}_data_K{}.h5f".format(prefix,dataset,k)
-    data_file_host = "{}/Xy_genome_{}_data_K{}.npz".format(prefix,dataset,k)
+    Xy_file_host = "{}/Xy_genome_{}_data_K{}.h5f".format(prefix,host,k)
+    data_file_host = "{}/Xy_genome_{}_data_K{}.npz".format(prefix,host,k)
     seqfile = "{}/seqdata_{}.txt".format(prefix, dataset)
     seqfile_host = "{}/seqdata_{}.txt".format(prefix, dataset)
 
@@ -94,8 +94,8 @@ def build_X_data(seq_data, k, X_file, kmers_list, length = 0):
     data = dict()
 
     X, kmers, ids = build_kmers_X_data(seq_data, X_file,
-                                       kmers_list = kmers_list,
                                        k = k,
+                                       kmers_list = kmers_list,
                                        length = length)
 
     # Data in a dictionnary
