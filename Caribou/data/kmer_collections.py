@@ -74,7 +74,6 @@ def build_kmers_X_data(seq_data, X_file, kmers_list, k, length = 0):
 # ##################
 
 def kmers_collection(seq_data, Xy_file, length, k, method = 'seen', kmers_list = None):
-    print(Xy_file)
     collection = {}
     #
     collection['data'] = Xy_file
@@ -173,7 +172,6 @@ def compute_kmers(seq_data, method, dict_data, kmers_list, k, dir_path, faSplit,
         print("Joblib loky did not work")
         print(e)
     os.system(cmd_split)
-    """
     try:
         t_start = time.time()
         dict_data = threading(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path)
@@ -195,7 +193,7 @@ def compute_kmers(seq_data, method, dict_data, kmers_list, k, dir_path, faSplit,
         print("Joblib dask did not work")
         print(e)
     os.system(cmd_split)
-
+    """
     try:
         t_start = time.time()
         dict_data = dask_client(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path)
