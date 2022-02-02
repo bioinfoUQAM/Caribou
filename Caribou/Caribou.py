@@ -165,7 +165,7 @@ def caribou(argv):
 
     # Folders creation for output
     outdirs = {}
-    outdirs["main_outdir"] = os.path.join(outdir, metagenome)
+    outdirs["main_outdir"] = outdir
     outdirs["data_dir"] = os.path.join(outdirs["main_outdir"], "data/")
     outdirs["models_dir"] = os.path.join(outdirs["main_outdir"], "models/")
     outdirs["results_dir"] = os.path.join(outdirs["main_outdir"], "results/")

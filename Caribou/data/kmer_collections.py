@@ -1,41 +1,28 @@
 from Caribou.data.seq_collections import SeqCollection
 
-import re
 import os
-import time
-import gzip
 
-from abc import ABC, abstractmethod
 from collections import defaultdict
-from itertools import product
-from Bio import SeqIO
-from os.path import splitext
 from subprocess import run
 from shutil import rmtree
-from deepdiff import DeepDiff
 
-from joblib import Parallel, parallel_backend
+from joblib import Parallel, delayed, parallel_backend
 from dask.distributed import Client, LocalCluster
 
 from tensorflow.config import list_physical_devices
 
 import numpy as np
-import pandas as pd
 import tables as tb
-
-import dask
-import joblib
 
 # From mlr_kgenomvir
 __author__ = ['Amine Remita', 'Nicolas de Montigny']
 
 __all__ = ['kmers_collection','construct_data','compute_seen_kmers_of_sequence','compute_given_kmers_of_sequence',
-           'compute_kmers','loky','multiprocessing','threading','joblib_dask','dask_client','numba_parallel',
-           'build_kmers_Xy_data','build_kmers_X_data']
+           'compute_kmers','threading','dask_client','build_kmers_Xy_data','build_kmers_X_data']
 
 """
 Module adapted from module kmer_collections.py of
-mlr_kgenomvir package [Remita et al. 2021]
+mlr_kgenomvir package [Remita et al. 2022]
 
 Save kmers directly to drive instead of memory and
 adapted / added functions to do so.
@@ -103,11 +90,9 @@ def compute_seen_kmers_of_sequence(dict_data, kmc_path, k, dir_path, ind, file):
     os.mkdir(tmp_folder)
     # Count k-mers with KMC
     cmd_count = "{}/kmc -k{} -fm -cs1000000000 -t68 -hp -sm {} {}/{} {}".format(kmc_path, k, file, dir_path, ind, tmp_folder)
-    #$SLURM_TMPDIR/env/lib/python3.8/site-packages/Caribou/data/KMC/bin/kmc -k35 -fm -cs1000000000 -t68 -hp -sm $SLURM_TMPDIR/output/mock/data/tmp/NC_014830.1.fa $SLURM_TMPDIR/output/mock/data/tmp/0 $SLURM_TMPDIR/output/mock/data/tmp/
     run(cmd_count, shell = True, capture_output=True)
     # Transform k-mers db with KMC
     cmd_transform = "{}/kmc_tools transform {}/{} dump {}/{}.txt".format(kmc_path, dir_path, ind, dir_path, ind)
-    #$SLURM_TMPDIR/env/lib/python3.8/site-packages/Caribou/data/KMC/bin/kmc_tools transform $SLURM_TMPDIR/output/mock/data/tmp/0 dump $SLURM_TMPDIR/output/mock/data/tmp/0.txt
     run(cmd_transform, shell = True, capture_output=True)
     # Parse k-mers file to pandas
     profile = np.loadtxt('{}/{}.txt'.format(dir_path, ind), delimiter = '\t', dtype = object)
@@ -136,18 +121,24 @@ def compute_given_kmers_of_sequence(dict_data, kmers_list, kmc_path, k, dir_path
     # Parse k-mers file to pandas
     profile = np.loadtxt('{}/{}.txt'.format(dir_path, ind), delimiter = '\t', dtype = object)
 
-    for kmer in kmers_list:
-        ind_kmer = kmers_list.index(kmer)
-        for row in profile:
-            if row[0] == kmer:
-                dict_data[row[0]][ind] = int(row[1])
-            else:
-                dict_data[row[0]][ind] = 0
+    try:
+        for kmer in kmers_list:
+            ind_kmer = kmers_list.index(kmer)
+            for row in profile:
+                if row[0] == kmer:
+                    dict_data[row[0]][ind] = int(row[1])
+                else:
+                    dict_data[row[0]][ind] = 0
+    except ValueError as e:
+        print(e)
+        print("profile : ", profile)
+        print("ind : ", ind)
+        print("dict_data :", dict_data)
 
     return dict_data
 
 def compute_kmers(seq_data, method, dict_data, kmers_list, k, dir_path, faSplit, kmc_path):
-    path, ext = splitext(seq_data.data)
+    path, ext = os.path.splitext(seq_data.data)
     ext = ext.lstrip(".")
     file_list = []
 
@@ -161,76 +152,14 @@ def compute_kmers(seq_data, method, dict_data, kmers_list, k, dir_path, faSplit,
     for id in seq_data.ids:
         file = dir_path + id + '.fa'
         file_list.append(file)
-    """
-    try:
-        t_start = time.time()
-        dict_data = loky(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path)
-        print("Joblib loky : {:.3f}s".format(time.time() - t_start))
-        rmtree(dir_path)
-        os.mkdir(dir_path)
-    except Error as e:
-        print("Joblib loky did not work")
-        print(e)
-    os.system(cmd_split)
-    try:
-        t_start = time.time()
-        dict_data = threading(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path)
-        print("Joblib threading : {:.3f}s".format(time.time() - t_start))
-        rmtree(dir_path)
-        os.mkdir(dir_path)
-    except Error as e:
-        print("Joblib threading did not work")
-        print(e)
-    os.system(cmd_split)
-    try:
-        t_start = time.time()
-        dict_data = joblib_dask(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path)
-        print("Joblib dask : {:.3f}s".format(time.time() - t_start))
-        rmtree(dir_path)
-        os.mkdir(dir_path)
-    except Error as e:
-        print("Joblib dask did not work")
-        print(e)
-    os.system(cmd_split)
-    """
-    try:
-        t_start = time.time()
-        dict_data = dask_client(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path)
-        print("Dask client : {:.3f}s".format(time.time() - t_start))
-        rmtree(dir_path)
-    except Error as e:
-        print("Dask client did not work")
-        print(e)
 
-    """
     # Detect if a GPU is available
     if list_physical_devices('GPU'):
-        dict_data = dask(file_list, fx)
+        dict_data = dask_client(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path)
     else:
-        dict_data = numba(file_list)
-        #loky(file_list, fx)
+        dict_data = threading(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path)
 
     rmtree(dir_path)
-    """
-    return dict_data
-
-def loky(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path):
-    if method == 'seen':
-        with parallel_backend('loky'):
-            results = Parallel(n_jobs = -1, prefer = 'processes', verbose = 100)(
-            joblib.delayed(compute_seen_kmers_of_sequence)
-            (dict_data, kmc_path, k, dir_path, i, file) for i, file in enumerate(file_list))
-    elif method == 'given':
-        with parallel_backend('loky'):
-            results = Parallel(n_jobs = -1, prefer = 'processes', verbose = 100)(
-            joblib.delayed(compute_given_kmers_of_sequence)
-            (dict_data, kmers_list, kmc_path, k, dir_path, i, file) for i, file in enumerate(file_list))
-
-    for result in results:
-        for kmer in result.keys():
-            for i in range(len(result[kmer])):
-                if dict_data[kmer][i] == 0:
-                    dict_data[kmer][i] = result[kmer][i]
 
     return dict_data
 
@@ -238,35 +167,18 @@ def threading(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path):
     if method == 'seen':
         with parallel_backend('threading'):
             results = Parallel(n_jobs = -1, prefer = 'processes', verbose = 100)(
-            joblib.delayed(compute_seen_kmers_of_sequence)
+            delayed(compute_seen_kmers_of_sequence)
             (dict_data, kmc_path, k, dir_path, i, file) for i, file in enumerate(file_list))
     elif method == 'given':
         with parallel_backend('threading'):
             results = Parallel(n_jobs = -1, prefer = 'processes', verbose = 100)(
-            joblib.delayed(compute_given_kmers_of_sequence)
-            (dict_data, kmers_list, kmc_path, k, dir_path, i, file) for i, file in enumerate(file_list))
-
-    return results[0]
-
-def joblib_dask(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path):
-    client = Client(processes=False)
-    if method == 'seen':
-        with parallel_backend('dask'):
-            results = Parallel(n_jobs = -1, prefer = 'processes', verbose = 100)(
-            joblib.delayed(compute_seen_kmers_of_sequence)
-            (dict_data, kmc_path, k, dir_path, i, file) for i, file in enumerate(file_list))
-    elif method == 'given':
-        with parallel_backend('dask'):
-            results = Parallel(n_jobs = -1, prefer = 'processes', verbose = 100)(
-            joblib.delayed(compute_given_kmers_of_sequence)
+            delayed(compute_given_kmers_of_sequence)
             (dict_data, kmers_list, kmc_path, k, dir_path, i, file) for i, file in enumerate(file_list))
 
     return results[0]
 
 def dask_client(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path):
-    #See on Narval if detects well and need to specify nb of threads
-    cluster = LocalCluster(processes = True, n_workers = 6, threads_per_worker = 68)
-    #cluster = LocalCluster(processes = True)
+    cluster = LocalCluster(processes = True, n_workers = 12, threads_per_worker = 68)
     client = Client(cluster)
     print("Client : ", client)
     jobs = []
