@@ -40,7 +40,7 @@ def caribou(opt):
 # Part 1 - K-mers profile extraction
 ################################################################################
 
-    if opt['cls_file'] is not None and kmers_list is None:
+    if opt['cls_file'] is not None and opt['kmers_list'] is None:
         # Reference Database Only
         k_profile_database = build_load_save_data((opt['seq_file'], opt['cls_file']),
             "none",
