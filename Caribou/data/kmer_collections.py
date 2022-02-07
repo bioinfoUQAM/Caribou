@@ -178,7 +178,7 @@ def threading(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path):
     return results[0]
 
 def dask_client(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path):
-    cluster = LocalCluster(processes = True, n_workers = 12, threads_per_worker = 48)
+    cluster = LocalCluster(processes = True, n_workers = 48, threads_per_worker = 1)
     client = Client(cluster)
     print("Client : ", client)
     jobs = []
