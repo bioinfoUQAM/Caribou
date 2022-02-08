@@ -182,27 +182,24 @@ def threads(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path):
     return results[0]
 
 def dask_client(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path):
-    cluster = LocalCluster(processes = True, n_workers = 48, threads_per_worker = 1)
-    client = Client(cluster)
-    print("Client : ", client)
-    jobs = []
+    with LocalCluster(processes = True, n_workers = 48, threads_per_worker = 1) as cluster, Client(cluster) as client:
+        print("Client : ", client)
+        jobs = []
 
-    if method == 'seen':
-        for i, file in enumerate(file_list):
-            job = client.submit(compute_seen_kmers_of_sequence, dict_data, kmc_path, k, dir_path, i, file, pure = False)
-            jobs.append(job)
-    elif method == 'given':
-        for i, file in enumerate(file_list):
-            job = client.submit(compute_given_kmers_of_sequence, dict_data, kmers_list, kmc_path, k, dir_path, i, file, pure = False)
-            jobs.append(job)
+        if method == 'seen':
+            for i, file in enumerate(file_list):
+                job = client.submit(compute_seen_kmers_of_sequence, dict_data, kmc_path, k, dir_path, i, file, pure = False)
+                jobs.append(job)
+        elif method == 'given':
+            for i, file in enumerate(file_list):
+                job = client.submit(compute_given_kmers_of_sequence, dict_data, kmers_list, kmc_path, k, dir_path, i, file, pure = False)
+                jobs.append(job)
 
-    results = client.gather(jobs)
+        results = client.gather(jobs)
 
     for result in results:
         for kmer in result.keys():
             for i in range(len(result[kmer])):
                 if dict_data[kmer][i] == 0:
                     dict_data[kmer][i] = result[kmer][i]
-    client.close()
-    cluster.close()
     return dict_data
