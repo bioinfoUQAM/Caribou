@@ -90,10 +90,10 @@ def compute_seen_kmers_of_sequence(dict_data, kmc_path, k, dir_path, ind, file):
     os.mkdir(tmp_folder)
     # Count k-mers with KMC
     cmd_count = "{}/kmc -k{} -fm -cs1000000000 -t68 -hp -sm {} {}/{} {}".format(kmc_path, k, file, dir_path, ind, tmp_folder)
-    os.system(cmd_count)#, shell = True, capture_output=False)
+    run(cmd_count, shell = True, capture_output=False)
     # Transform k-mers db with KMC
     cmd_transform = "{}/kmc_tools transform {}/{} dump {}/{}.txt".format(kmc_path, dir_path, ind, dir_path, ind)
-    os.system(cmd_transform)#, shell = True, capture_output=False)
+    run(cmd_transform, shell = True, capture_output=False)
     # Parse k-mers file to pandas
     profile = np.loadtxt('{}/{}.txt'.format(dir_path, ind), delimiter = '\t', dtype = object)
     # Save to Xyfile
@@ -114,10 +114,10 @@ def compute_given_kmers_of_sequence(dict_data, kmers_list, kmc_path, k, dir_path
     os.mkdir(tmp_folder)
     # Count k-mers with KMC
     cmd_count = "{}/kmc -k{} -fm -cs1000000000 -t68 -hp -sm {} {}/{} {}".format(kmc_path, k, file, dir_path, ind, tmp_folder)
-    os.system(cmd_count)#, shell = True, capture_output=True)
+    run(cmd_count, shell = True, capture_output=True)
     # Transform k-mers db with KMC
     cmd_transform = "{}/kmc_tools transform {}/{} dump {}/{}.txt".format(kmc_path, dir_path, ind, dir_path, ind)
-    os.system(cmd_transform)#, shell = True, capture_output=True)
+    run(cmd_transform, shell = True, capture_output=True)
     # Parse k-mers file to numpy
     profile = np.loadtxt('{}/{}.txt'.format(dir_path, ind), delimiter = '\t', dtype = object)
 
@@ -155,7 +155,7 @@ def compute_kmers(seq_data, method, dict_data, kmers_list, k, dir_path, faSplit,
 
     # Detect if a GPU is available
     if list_physical_devices('GPU'):
-        dict_data = dask_client(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path)
+        dict_data = joblib_loky(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path)
     else:
         dict_data = threads(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path)
 
@@ -201,3 +201,17 @@ def dask_client(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path)
                     dict_data[kmer][i] = result[kmer][i]
     client.close()
     return dict_data
+
+def joblib_loky(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path):
+    if method == 'seen':
+        with parallel_backend('loky'):
+            results = Parallel(n_jobs = -1, prefer = 'processes', verbose = 100)(
+            delayed(compute_seen_kmers_of_sequence)
+            (dict_data, kmc_path, k, dir_path, i, file) for i, file in enumerate(file_list))
+    elif method == 'given':
+        with parallel_backend('loky'):
+            results = Parallel(n_jobs = -1, prefer = 'processes', verbose = 100)(
+            delayed(compute_given_kmers_of_sequence)
+            (dict_data, kmers_list, kmc_path, k, dir_path, i, file) for i, file in enumerate(file_list))
+
+    return results[0]
