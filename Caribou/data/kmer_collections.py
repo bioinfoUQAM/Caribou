@@ -163,7 +163,7 @@ def compute_kmers(seq_data, method, dict_data, kmers_list, k, dir_path, faSplit,
     else:
         dict_data = threads(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path)
 
-    #rmtree(dir_path)
+    rmtree(dir_path)
 
     return dict_data
 
