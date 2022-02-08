@@ -1,6 +1,7 @@
 from Caribou.data.seq_collections import SeqCollection
 
 import os
+import warnings
 
 from collections import defaultdict
 from subprocess import run
