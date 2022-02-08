@@ -170,12 +170,12 @@ def compute_kmers(seq_data, method, dict_data, kmers_list, k, dir_path, faSplit,
 def threads(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path):
     if method == 'seen':
         with parallel_backend('threading'):
-            results = Parallel(n_jobs = -1, prefer = 'processes', verbose = 100)(
+            results = Parallel(n_jobs = -1, prefer = 'threads', verbose = 100)(
             delayed(compute_seen_kmers_of_sequence)
             (dict_data, kmc_path, k, dir_path, i, file) for i, file in enumerate(file_list))
     elif method == 'given':
         with parallel_backend('threading'):
-            results = Parallel(n_jobs = -1, prefer = 'processes', verbose = 100)(
+            results = Parallel(n_jobs = -1, prefer = 'threads', verbose = 100)(
             delayed(compute_given_kmers_of_sequence)
             (dict_data, kmers_list, kmc_path, k, dir_path, i, file) for i, file in enumerate(file_list))
 
