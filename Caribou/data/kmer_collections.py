@@ -18,7 +18,7 @@ import tables as tb
 __author__ = ['Amine Remita', 'Nicolas de Montigny']
 
 __all__ = ['kmers_collection','construct_data','compute_seen_kmers_of_sequence','compute_given_kmers_of_sequence',
-           'compute_kmers','threading','dask_client','build_kmers_Xy_data','build_kmers_X_data']
+           'compute_kmers','threads','dask_client','build_kmers_Xy_data','build_kmers_X_data']
 
 """
 Module adapted from module kmer_collections.py of
@@ -85,11 +85,8 @@ def construct_data(dict_data, Xy_file):
     data = Xy_file.create_carray("/", "data", obj = np.array([dict_data[x] for x in dict_data],dtype=np.uint64).T)
 
 def compute_seen_kmers_of_sequence(dict_data, kmc_path, k, dir_path, ind, file):
-    # Make tmp folder per sequence
-    tmp_folder = "{}tmp_{}".format(dir_path, ind)
-    os.mkdir(tmp_folder)
     # Count k-mers with KMC
-    cmd_count = "{}/kmc -k{} -fm -cs1000000000 -t68 -hp -sm {} {}/{} {}".format(kmc_path, k, file, dir_path, ind, tmp_folder)
+    cmd_count = "{}/kmc -k{} -fm -cs1000000000 -t68 -hp -sm {} {}/{} {}".format(kmc_path, k, file, dir_path, ind)
     run(cmd_count, shell = True, capture_output=True)
     # Transform k-mers db with KMC
     cmd_transform = "{}/kmc_tools transform {}/{} dump {}/{}.txt".format(kmc_path, dir_path, ind, dir_path, ind)
@@ -110,7 +107,7 @@ def compute_seen_kmers_of_sequence(dict_data, kmc_path, k, dir_path, ind, file):
 
 def compute_given_kmers_of_sequence(dict_data, kmers_list, kmc_path, k, dir_path, ind, file):
     # Count k-mers with KMC
-    cmd_count = "{}/kmc -k{} -fm -cs1000000000 -t68 -hp -sm {} {}/{} {}".format(kmc_path, k, file, dir_path, ind, tmp_folder)
+    cmd_count = "{}/kmc -k{} -fm -cs1000000000 -t68 -hp -sm {} {}/{} {}".format(kmc_path, k, file, dir_path, ind)
     run(cmd_count, shell = True, capture_output=True)
     # Transform k-mers db with KMC
     cmd_transform = "{}/kmc_tools transform {}/{} dump {}/{}.txt".format(kmc_path, dir_path, ind, dir_path, ind)
@@ -154,13 +151,13 @@ def compute_kmers(seq_data, method, dict_data, kmers_list, k, dir_path, faSplit,
     if list_physical_devices('GPU'):
         dict_data = dask_client(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path)
     else:
-        dict_data = threading(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path)
+        dict_data = threads(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path)
 
-    rmtree(dir_path)
+    #rmtree(dir_path)
 
     return dict_data
 
-def threading(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path):
+def threads(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path):
     if method == 'seen':
         with parallel_backend('threading'):
             results = Parallel(n_jobs = -1, prefer = 'processes', verbose = 100)(
