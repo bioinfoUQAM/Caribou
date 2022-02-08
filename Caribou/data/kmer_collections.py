@@ -204,4 +204,5 @@ def dask_client(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path)
                 if dict_data[kmer][i] == 0:
                     dict_data[kmer][i] = result[kmer][i]
     client.close()
+    cluster.close()
     return dict_data
