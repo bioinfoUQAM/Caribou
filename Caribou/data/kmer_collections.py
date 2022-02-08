@@ -159,7 +159,7 @@ def compute_kmers(seq_data, method, dict_data, kmers_list, k, dir_path, faSplit,
 
     # Detect if a GPU is available
     if list_physical_devices('GPU'):
-        dict_data = joblib_loky(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path)
+        dict_data = dask_client(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path)
     else:
         dict_data = threads(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path)
 
