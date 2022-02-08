@@ -87,10 +87,10 @@ def construct_data(dict_data, Xy_file):
 def compute_seen_kmers_of_sequence(dict_data, kmc_path, k, dir_path, ind, file):
     # Count k-mers with KMC
     cmd_count = "{}/kmc -k{} -fm -cs1000000000 -t68 -hp -sm {} {}/{}".format(kmc_path, k, file, dir_path, ind)
-    run(cmd_count, shell = True, capture_output=True)
+    run(cmd_count, shell = True, capture_output=False)
     # Transform k-mers db with KMC
     cmd_transform = "{}/kmc_tools transform {}/{} dump {}/{}.txt".format(kmc_path, dir_path, ind, dir_path, ind)
-    run(cmd_transform, shell = True, capture_output=True)
+    run(cmd_transform, shell = True, capture_output=False)
     # Parse k-mers file to pandas
     profile = np.loadtxt('{}/{}.txt'.format(dir_path, ind), delimiter = '\t', dtype = object)
     # Save to Xyfile
@@ -108,10 +108,10 @@ def compute_seen_kmers_of_sequence(dict_data, kmc_path, k, dir_path, ind, file):
 def compute_given_kmers_of_sequence(dict_data, kmers_list, kmc_path, k, dir_path, ind, file):
     # Count k-mers with KMC
     cmd_count = "{}/kmc -k{} -fm -cs1000000000 -t68 -hp -sm {} {}/{}".format(kmc_path, k, file, dir_path, ind)
-    run(cmd_count, shell = True, capture_output=True)
+    run(cmd_count, shell = True, capture_output=False)
     # Transform k-mers db with KMC
     cmd_transform = "{}/kmc_tools transform {}/{} dump {}/{}.txt".format(kmc_path, dir_path, ind, dir_path, ind)
-    run(cmd_transform, shell = True, capture_output=True)
+    run(cmd_transform, shell = True, capture_output=False)
     # Parse k-mers file to pandas
     profile = np.loadtxt('{}/{}.txt'.format(dir_path, ind), delimiter = '\t', dtype = object)
 
