@@ -204,14 +204,12 @@ def dask_client(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path)
 
 def joblib_loky(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path):
     if method == 'seen':
-        with parallel_backend('loky'):
-            results = Parallel(n_jobs = -1, prefer = 'processes', verbose = 100)(
-            delayed(compute_seen_kmers_of_sequence)
-            (dict_data, kmc_path, k, dir_path, i, file) for i, file in enumerate(file_list))
+        results = Parallel(n_jobs = -1, prefer = 'processes', verbose = 100)(
+        delayed(compute_seen_kmers_of_sequence)
+        (dict_data, kmc_path, k, dir_path, i, file) for i, file in enumerate(file_list))
     elif method == 'given':
-        with parallel_backend('loky'):
-            results = Parallel(n_jobs = -1, prefer = 'processes', verbose = 100)(
-            delayed(compute_given_kmers_of_sequence)
-            (dict_data, kmers_list, kmc_path, k, dir_path, i, file) for i, file in enumerate(file_list))
+        results = Parallel(n_jobs = -1, prefer = 'processes', verbose = 100)(
+        delayed(compute_given_kmers_of_sequence)
+        (dict_data, kmers_list, kmc_path, k, dir_path, i, file) for i, file in enumerate(file_list))
 
     return results[0]
