@@ -223,5 +223,4 @@ def jl(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path):
                 if dict_data[kmer][i] == 0:
                     dict_data[kmer][i] = result[kmer][i]
 
-    print(dict_data)
     return dict_data
