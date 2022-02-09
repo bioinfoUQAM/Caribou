@@ -8,7 +8,7 @@ from subprocess import run
 from shutil import rmtree
 
 from joblib import Parallel, delayed, parallel_backend
-from dask.distributed import Client, LocalCluster
+#from dask.distributed import Client, LocalCluster
 
 from tensorflow.config import list_physical_devices
 
@@ -157,20 +157,17 @@ def compute_kmers(seq_data, method, dict_data, kmers_list, k, dir_path, faSplit,
         file = dir_path + id + '.fa'
         file_list.append(file)
 
-    dict_data = jl(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path)
-    """
     # Detect if a GPU is available
     if list_physical_devices('GPU'):
-        dict_data = dask_client(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path)
+        dict_data = parallel_GPU(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path)
     else:
-        dict_data = threads(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path)
-    """
+        dict_data = parallel_CPU(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path)
 
     rmtree(dir_path)
 
     return dict_data
 
-def threads(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path):
+def parallel_CPU(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path):
     if method == 'seen':
         with parallel_backend('threading'):
             results = Parallel(n_jobs = -1, prefer = 'threads', verbose = 100)(
@@ -184,6 +181,25 @@ def threads(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path):
 
     return results[0]
 
+def parallel_GPU(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path):
+    if method == 'seen':
+        results = Parallel(n_jobs = -1, prefer = 'processes', verbose = 100)(
+        delayed(compute_seen_kmers_of_sequence)
+        (dict_data, kmc_path, k, dir_path, i, file) for i, file in enumerate(file_list))
+    elif method == 'given':
+        results = Parallel(n_jobs = -1, prefer = 'processes', verbose = 100)(
+        delayed(compute_given_kmers_of_sequence)
+        (dict_data, kmers_list, kmc_path, k, dir_path, i, file) for i, file in enumerate(file_list))
+
+    for result in results:
+        for kmer in result.keys():
+            for i in range(len(result[kmer])):
+                if dict_data[kmer][i] == 0:
+                    dict_data[kmer][i] = result[kmer][i]
+
+    return dict_data
+
+"""
 def dask_client(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path):
     with LocalCluster(processes = True, n_workers = 48, threads_per_worker = 1) as cluster, Client(cluster) as client:
         print("Client : ", client)
@@ -206,21 +222,4 @@ def dask_client(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path)
                 if dict_data[kmer][i] == 0:
                     dict_data[kmer][i] = result[kmer][i]
     return dict_data
-
-def jl(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path):
-    if method == 'seen':
-        results = Parallel(n_jobs = -1, prefer = 'processes', verbose = 100)(
-        delayed(compute_seen_kmers_of_sequence)
-        (dict_data, kmc_path, k, dir_path, i, file) for i, file in enumerate(file_list))
-    elif method == 'given':
-        results = Parallel(n_jobs = -1, prefer = 'processes', verbose = 100)(
-        delayed(compute_given_kmers_of_sequence)
-        (dict_data, kmers_list, kmc_path, k, dir_path, i, file) for i, file in enumerate(file_list))
-
-    for result in results:
-        for kmer in result.keys():
-            for i in range(len(result[kmer])):
-                if dict_data[kmer][i] == 0:
-                    dict_data[kmer][i] = result[kmer][i]
-
-    return dict_data
+"""
