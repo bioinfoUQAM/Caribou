@@ -217,5 +217,5 @@ def jl(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path):
         delayed(compute_given_kmers_of_sequence)
         (dict_data, kmers_list, kmc_path, k, dir_path, i, file) for i, file in enumerate(file_list))
 
-    print(results[0])
+    print(results.keys())
     return results[0]
