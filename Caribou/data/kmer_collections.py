@@ -90,13 +90,13 @@ def construct_data(dict_data, Xy_file):
 
 def compute_seen_kmers_of_sequence(dict_data, kmc_path, k, dir_path, ind, file):
     # Make tmp folder per sequence
-    tmp_folder = "{}tmp_{}".format(dir_path, ind)
+    tmp_folder = "{}tmp_{}/".format(dir_path, ind)
     os.mkdir(tmp_folder)
     # Count k-mers with KMC
-    cmd_count = "{}/kmc -k{} -fm -cs1000000000 -t68 -hp -sm {} {}/{} {}".format(kmc_path, k, file, dir_path, ind, tmp_folder)
+    cmd_count = "{}/kmc -k{} -fm -cs1000000000 -m10 -hp {} {}/{} {}".format(kmc_path, k, file, tmp_folder, ind, tmp_folder)
     run(cmd_count, shell = True, capture_output=True)
     # Transform k-mers db with KMC
-    cmd_transform = "{}/kmc_tools transform {}/{} dump {}/{}.txt".format(kmc_path, dir_path, ind, dir_path, ind)
+    cmd_transform = "{}/kmc_tools transform {}/{} dump {}/{}.txt".format(kmc_path, tmp_folder, ind, dir_path, ind)
     run(cmd_transform, shell = True, capture_output=True)
     # Parse k-mers file to pandas
     profile = np.loadtxt('{}/{}.txt'.format(dir_path, ind), delimiter = '\t', dtype = object)
@@ -117,10 +117,10 @@ def compute_given_kmers_of_sequence(dict_data, kmers_list, kmc_path, k, dir_path
     tmp_folder = "{}tmp_{}".format(dir_path, ind)
     os.mkdir(tmp_folder)
     # Count k-mers with KMC
-    cmd_count = "{}/kmc -k{} -fm -cs1000000000 -t68 -hp -sm {} {}/{} {}".format(kmc_path, k, file, dir_path, ind, tmp_folder)
+    cmd_count = "{}/kmc -k{} -fm -cs1000000000 -m10 -hp {} {}/{} {}".format(kmc_path, k, file, tmp_folder, ind, tmp_folder)
     run(cmd_count, shell = True, capture_output=True)
     # Transform k-mers db with KMC
-    cmd_transform = "{}/kmc_tools transform {}/{} dump {}/{}.txt".format(kmc_path, dir_path, ind, dir_path, ind)
+    cmd_transform = "{}/kmc_tools transform {}/{} dump {}/{}.txt".format(kmc_path, tmp_folder, ind, dir_path, ind)
     run(cmd_transform, shell = True, capture_output=True)
     # Parse k-mers file to numpy
     profile = np.loadtxt('{}/{}.txt'.format(dir_path, ind), delimiter = '\t', dtype = object)
@@ -157,11 +157,14 @@ def compute_kmers(seq_data, method, dict_data, kmers_list, k, dir_path, faSplit,
         file = dir_path + id + '.fa'
         file_list.append(file)
 
+    dict_data = jl(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path)
+    """
     # Detect if a GPU is available
     if list_physical_devices('GPU'):
         dict_data = dask_client(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path)
     else:
         dict_data = threads(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path)
+    """
 
     rmtree(dir_path)
 
@@ -203,3 +206,15 @@ def dask_client(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path)
                 if dict_data[kmer][i] == 0:
                     dict_data[kmer][i] = result[kmer][i]
     return dict_data
+
+def jl(file_list, method, dict_data, kmers_list, kmc_path, k, dir_path):
+    if method == 'seen':
+        results = Parallel(n_jobs = -1, prefer = 'processes', verbose = 100)(
+        delayed(compute_seen_kmers_of_sequence)
+        (dict_data, kmc_path, k, dir_path, i, file) for i, file in enumerate(file_list))
+    elif method == 'given':
+        results = Parallel(n_jobs = -1, prefer = 'processes', verbose = 100)(
+        delayed(compute_given_kmers_of_sequence)
+        (dict_data, kmers_list, kmc_path, k, dir_path, i, file) for i, file in enumerate(file_list))
+
+    return results[0]
