@@ -1,15 +1,10 @@
-from Caribou.data.seq_collections import SeqCollection
-
 import os
 import warnings
 
-from collections import defaultdict
 from subprocess import run
 from shutil import rmtree
 
 from joblib import Parallel, delayed, parallel_backend
-#from dask.distributed import Client, LocalCluster
-from dask.array import to_hdf5
 
 from tensorflow.config import list_physical_devices
 
@@ -88,11 +83,11 @@ def kmers_collection(seq_data, Xy_file, length, k, method = 'seen', kmers_list =
     return collection
 
 def construct_data(Xy_file, collection, ddf):
-    # Convert dask df to numpy array and write directly to disk with pytables
-    #print(ddf)
+    # Extract ids and k-mers from dask dataframe
     ids = list(ddf.index)
     kmers_list = list(ddf.columns)
 
+    # Convert dask df to numpy array and write directly to disk with pytables
     arr = np.array(ddf.to_dask_array(), dtype = np.int64)
     data = Xy_file.create_carray("/", "data", obj = arr)
 
@@ -108,28 +103,11 @@ def compute_seen_kmers_of_sequence(kmc_path, k, dir_path, ind, file):
     # Transform k-mers db with KMC
     cmd_transform = "{}/kmc_tools transform {}/{} dump {}/{}.txt".format(kmc_path, tmp_folder, ind, dir_path, ind)
     run(cmd_transform, shell = True, capture_output=True)
-    # Parse k-mers file to pandas
+    # Parse k-mers file to dask dataframe
     id = os.path.splitext(os.path.basename(file))[0]
     profile = dd.from_pandas(pd.read_table('{}/{}.txt'.format(dir_path, ind), header = 0, names = [id], index_col = 0, dtype = object).T, chunksize = 1)
-    #profile = np.loadtxt('{}/{}.txt'.format(dir_path, ind), delimiter = '\t', dtype = object)
 
     return profile
-
-    #Append to tmp_dask file
-    #profile.to_hdf(tmp_dask, "data", append = True, format = 'table', min_itemsize = k + 1)
-    """
-    #Add to dict_data
-    try:
-        for row in profile:
-            dict_data[row[0]][ind] = int(row[1])
-    except ValueError as e:
-        print(e)
-        print("profile : ", profile)
-        print("ind : ", ind)
-        print("dict_data :", dict_data)
-
-    return dict_data
-    """
 
 def compute_given_kmers_of_sequence(kmers_list, kmc_path, k, dir_path, ind, file):
     # Make tmp folder per sequence
@@ -141,10 +119,9 @@ def compute_given_kmers_of_sequence(kmers_list, kmc_path, k, dir_path, ind, file
     # Transform k-mers db with KMC
     cmd_transform = "{}/kmc_tools transform {}/{} dump {}/{}.txt".format(kmc_path, tmp_folder, ind, dir_path, ind)
     run(cmd_transform, shell = True, capture_output=True)
-    # Parse k-mers file to numpy
+    # Parse k-mers file to dask dataframe
     id = os.path.splitext(os.path.basename(file))[0]
     profile = pd.read_table('{}/{}.txt'.format(dir_path, ind), header = 0, names = [id], index_col = 0, dtype = object).T
-    #np.loadtxt('{}/{}.txt'.format(dir_path, ind), delimiter = '\t', dtype = object)
 
     df = pd.DataFrame(np.zeros((1,len(kmers_list))), columns = kmers_list, index = [id])
 
@@ -156,25 +133,6 @@ def compute_given_kmers_of_sequence(kmers_list, kmc_path, k, dir_path, ind, file
 
     df = dd.from_pandas(df, chunksize = 1)
     return df
-
-    #df.to_hdf(tmp_dask, "data", append = True, format = 'table')
-    """
-    try:
-        for kmer in kmers_list:
-            ind_kmer = kmers_list.index(kmer)
-            for index, row in profile.iterrows():
-                if row[0] == kmer:
-                    dict_data[row[0]][ind] = int(row[1])
-                else:
-                    dict_data[row[0]][ind] = 0
-    except ValueError as e:
-        print(e)
-        print("profile : ", profile)
-        print("ind : ", ind)
-        print("dict_data :", dict_data)
-
-    return dict_data
-    """
 
 def compute_kmers(seq_data, method, kmers_list, k, dir_path, faSplit, kmc_path):
     file_list = []
@@ -217,7 +175,6 @@ def parallel_CPU(file_list, method, kmers_list, kmc_path, k, dir_path):
             ddf = ddf.append(results[i])
 
     return ddf
-    #return results[0]
 
 def parallel_GPU(file_list, method, kmers_list, kmc_path, k, dir_path):
     if method == 'seen':
@@ -236,13 +193,3 @@ def parallel_GPU(file_list, method, kmers_list, kmc_path, k, dir_path):
             ddf = ddf.append(results[i])
 
     return ddf
-
-    """
-    for result in results:
-        for kmer in result.keys():
-            for i in range(len(result[kmer])):
-                if dict_data[kmer][i] == 0:
-                    dict_data[kmer][i] = result[kmer][i]
-
-    return dict_data
-    """
