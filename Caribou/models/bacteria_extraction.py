@@ -25,19 +25,19 @@ def bacteria_extraction(metagenome_k_mers, database_k_mers, k, outdirs, dataset,
 
     train = False
 
-    bacteria_data_file = "{}_K{}_{}_Xy_bacteria_database_{}_data.npz".format(outdirs["data_dir"], k, classifier, dataset)
-    bacteria_kmers_file = "{}_K{}_{}_Xy_bacteria_database_{}_data.h5f".format(outdirs["data_dir"], k, classifier, dataset)
-    host_kmers_file = "{}_K{}_{}_Xy_host_database_{}_data.h5f".format(outdirs["data_dir"], k, classifier, dataset)
-    host_data_file = "{}_K{}_{}_Xy_host_database_{}_data.npz".format(outdirs["data_dir"], k, classifier, dataset)
-    unclassified_kmers_file = "{}_K{}_{}_Xy_unclassified_database_{}_data.h5f".format(outdirs["data_dir"], k, classifier, dataset)
-    unclassified_data_file = "{}_K{}_{}_Xy_unclassified_database_{}_data.npz".format(outdirs["data_dir"], k, classifier, dataset)
+    bacteria_data_file = "{}Xy_bacteria_database_K{}_{}_{}_data.npz".format(outdirs["data_dir"], k, classifier, dataset)
+    bacteria_kmers_file = "{}Xy_bacteria_database_K{}_{}_{}_data.h5f".format(outdirs["data_dir"], k, classifier, dataset)
+    host_kmers_file = "{}Xy_host_database_K{}_{}_{}_data.h5f".format(outdirs["data_dir"], k, classifier, dataset)
+    host_data_file = "{}Xy_host_database_K{}_{}_{}_data.npz".format(outdirs["data_dir"], k, classifier, dataset)
+    unclassified_kmers_file = "{}Xy_unclassified_database_K{}_{}_{}_data.h5f".format(outdirs["data_dir"], k, classifier, dataset)
+    unclassified_data_file = "{}Xy_unclassified_database_K{}_{}_{}_data.npz".format(outdirs["data_dir"], k, classifier, dataset)
 
     if classifier in ["onesvm","linearsvm"]:
-        clf_file ="{}_K{}_{}_bacteria_binary_classifier_{}_model.jb".format(outdirs["models_dir"], k, classifier, dataset)
+        clf_file ="{}bacteria_binary_classifier_K{}_{}_{}_model.jb".format(outdirs["models_dir"], k, classifier, dataset)
         if not os.path.isfile(clf_file):
             train = True
     elif classifier in ["attention","lstm","deeplstm"]:
-        clf_file ="{}_K{}_{}_bacteria_binary_classifier_{}_model".format(outdirs["models_dir"], k, classifier, dataset)
+        clf_file ="{}bacteria_binary_classifier_K{}_{}_{}_model".format(outdirs["models_dir"], k, classifier, dataset)
         if not os.path.isdir(clf_file):
             train = True
 

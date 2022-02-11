@@ -1,351 +1,195 @@
-from Caribou.data.seq_collections import SeqCollection
-
-import re
 import os
-import gzip
+import warnings
 
-from abc import ABC, abstractmethod
-from collections import defaultdict
-from itertools import product
-from Bio import SeqIO
-from os.path import splitext
 from subprocess import run
 from shutil import rmtree
 
+from joblib import Parallel, delayed, parallel_backend
+
+from tensorflow.config import list_physical_devices
+
 import numpy as np
-import pandas as pd
 import tables as tb
-from scipy.sparse import csr_matrix, csc_matrix
-from sklearn.feature_selection import VarianceThreshold
+import pandas as pd
+import dask.dataframe as dd
 
 # From mlr_kgenomvir
 __author__ = ['Amine Remita', 'Nicolas de Montigny']
 
-__all__ = [ 'FullKmersCollection', 'SeenKmersCollection',
-        'GivenKmersCollection' , 'VarKmersCollection',
-        'build_kmers', 'build_kmers_Xy_data']
+__all__ = ['kmers_collection','construct_data','compute_seen_kmers_of_sequence','compute_given_kmers_of_sequence',
+           'compute_kmers','threads','dask_client','build_kmers_Xy_data','build_kmers_X_data']
 
 """
 Module adapted from module kmer_collections.py of
-mlr_kgenomvir package [Remita et al. 2021]
+mlr_kgenomvir package [Remita et al. 2022]
 
 Save kmers directly to drive instead of memory and
 adapted / added functions to do so.
+Converted to be only functions instead of object for parallelization.
 """
 
-# #####
-# Helper functions
-# ################
-
-def get_index_from_kmer(kmer, k):
-    """
-    Function adapted from module enrich.pyx of
-    GenomeClassifier package [Sandberg et al. (2001)]
-
-    Instead of starting by f=1 and multiplying it by 4,
-    it starts with f= 4**(k-1) and divide it by 4
-    in each iteration
-
-    The returned index respects the result of itertools.product()
-    ["".join(t) for t in itertools.product('ACGT', repeat=k)]
-    """
-
-    f= 4 ** (k-1)
-    s=0
-    alpha_to_code = {'A':0, 'C':1, 'G':2, 'T':3}
-
-    for i in range(0, k):
-        alpha_code=alpha_to_code[kmer[i]]
-        s = s + alpha_code * f
-        f = f // 4
-
-    return s
-
-
-# #####
-# Kmers collections
-# ##################
-
-class KmersCollection(ABC):
-
-    def __compute_kmers_from_collection(self, sequences):
-        for i, seq in enumerate(sequences):
-            self._compute_kmers_of_sequence(seq.seq._data, i)
-            self.ids.append(seq.id)
-
-        return self
-
-    def __compute_kmers_from_file(self, sequences):
-        path, ext = splitext(sequences)
-        ext = ext.lstrip(".")
-
-        if not os.path.isdir(self.path):
-            os.mkdir(self.path)
-
-        if ext in ["fa","fna"]:
-            ext = "fasta"
-            with open(sequences, "rt") as handle:
-                records = SeqIO.parse(handle, "fasta")
-                i = 0
-                error = False
-                while not error:
-                    try:
-                        record = next(records)
-                        self.ids.append(record.id)
-                        file = "{}/{}.fa".format(self.path, record.id)
-                        with open(file, "w") as handle:
-                            SeqIO.write(record, handle, "fasta")
-                        self._compute_kmers_of_sequence(file, i)
-                        i += 1
-                    except StopIteration as e:
-                        error = True
-
-        elif ext == "gz":
-            path, ext = splitext(path)
-            ext = ext.lstrip(".")
-            if ext in ["fa","fna"]:
-                ext = "fasta"
-
-            with gzip.open(sequences, "rt") as handle:
-                records = SeqIO.parse(handle, "fasta")
-                i = 0
-                error = False
-                while not error:
-                    try:
-                        record = next(records)
-                        self.ids.append(record.id)
-                        file = "{}/{}.fa".format(self.path, record.id)
-                        with open(file, "w") as handle:
-                            SeqIO.write(record, handle, "fasta")
-                        self._compute_kmers_of_sequence(file, i)
-                        i += 1
-                    except StopIteration as e:
-                        error = True
-
-        rmtree(self.path)
-        return self
-
-    def __compute_kmers_from_strings(self, sequences):
-        for i, seq in enumerate(sequences):
-            self._compute_kmers_of_sequence(seq, i)
-            self.ids.append(i)
-
-        return self
-
-    def _compute_kmers(self, sequences):
-        if isinstance(sequences, SeqCollection):
-            if os.path.isfile(sequences.data):
-                self.__compute_kmers_from_file(sequences.data)
-            else:
-                self.__compute_kmers_from_collection(sequences)
-        else:
-            self.__compute_kmers_from_strings(sequences)
-
-    @abstractmethod
-    def _compute_kmers_of_sequence(self, seq, i):
-        """
-        """
-
-    def _convert_to_sparse_matrix(self):
-        if self.sparse == "csr":
-            self.data = csr_matrix(self.data, dtype=self.dtype)
-
-        elif self.sparse == "csc":
-            self.data = csc_matrix(self.data, dtype=self.dtype)
-
-
-class FullKmersCollection(KmersCollection):
-
-    def __init__(self, sequences, Xy_file, length, k=5, sparse=None,
-            dtype=np.uint64, alphabet="ACGT"):
-        self.k = k
-        self.sparse = sparse
-        self.dtype = dtype
-        self.alphabet = alphabet.lower() + alphabet.upper()
-        self.path = os.path.split(Xy_file)[0] + "/tmp/"
-        self.Xy_file = tb.open_file(Xy_file, "w")
-        self.length = length
-        #
-        self.ids = []
-        self.v_size = np.power(len(self.alphabet), int(self.k))
-        self.data = self.Xy_file.create_carray("/", "data", obj = np.zeros((self.length, self.v_size)))
-        self.kmers_list = ["".join(t) for t in product(alphabet, repeat=k)]
-        self.kmc_path = "{}/KMC/bin".format(os.path.dirname(os.path.realpath(__file__)))
-        #
-        self._compute_kmers(sequences)
-        self.Xy_file.close()
-
-    def _compute_kmers_of_sequence(self, file, ind):
-        # Count k-mers with KMC
-        cmd_count = "{}/kmc -k{} -fm -cs1000000000 -t48 -hp -sm -m1024 {} {}/{} {}".format(self.kmc_path, self.k, file, self.path, ind, self.path)
-        run(cmd_count, shell = True, capture_output=True)
-        # Transform k-mers db with KMC
-        cmd_transform = "{}/kmc_tools transform {}/{} dump {}/{}.txt".format(self.kmc_path, self.path, ind, self.path, ind)
-        run(cmd_transform, shell = True, capture_output=True)
-        # Parse k-mers file to pandas
-        profile = np.loadtxt('{}/{}.txt'.format(self.path, ind), dtype = object)
-        # Save to Xyfile
-        for row in profile:
-            ind_kmer = self.kmers_list.index(row[0])
-            self.data[ind, ind_kmer] = int(row[1])
-
-        return self
-
-
-class SeenKmersCollection(KmersCollection):
-
-    def __init__(self, sequences, Xy_file, length, k=5, sparse=None,
-            dtype=np.uint64, alphabet="ACGT"):
-        self.k = int(k)
-        self.sparse = sparse
-        self.dtype = dtype
-        self.alphabet = alphabet.lower() + alphabet.upper()
-        self.path = os.path.split(Xy_file)[0] + "/tmp/"
-        self.Xy_file = tb.open_file(Xy_file, "w")
-        self.length = length
-        #
-        self.ids = []
-        self.v_size = 0
-        self.dict_data = defaultdict(lambda: [0]*self.length)
-        self.kmers_list = []
-        self.data = "array"
-        self.kmc_path = "{}/KMC/bin".format(os.path.dirname(os.path.realpath(__file__)))
-        #
-        self._compute_kmers(sequences)
-        self.__construct_data()
-        self.Xy_file.close()
-
-    def _compute_kmers_of_sequence(self, file, ind):
-        # Count k-mers with KMC
-        cmd_count = "{}/kmc -k{} -fm -cs1000000000 -t48 -hp -sm -m1024 {} {}/{} {}".format(self.kmc_path, self.k, file, self.path, ind, self.path)
-        run(cmd_count, shell = True, capture_output=True)
-        # Transform k-mers db with KMC
-        cmd_transform = "{}/kmc_tools transform {}/{} dump {}/{}.txt".format(self.kmc_path, self.path, ind, self.path, ind)
-        run(cmd_transform, shell = True, capture_output=True)
-        # Parse k-mers file to pandas
-        profile = np.loadtxt('{}/{}.txt'.format(self.path, ind), dtype = object)
-        # Save to Xyfile
-        for row in profile:
-            self.dict_data[row[0]][ind] = int(row[1])
-
-        return self
-
-    def __construct_data(self):
-        # Get Kmers list
-        self.kmers_list = list(self.dict_data)
-        self.v_size = len(self.kmers_list)
-
-        # Convert to numpy array and write directly to disk
-        self.data = self.Xy_file.create_carray("/", "data", obj = np.array([ self.dict_data[x] for x in self.dict_data ],dtype=self.dtype).T)
-        return self
-
-# ADAPT WITH GENERATOR/EARRAY
-class VarKmersCollection(SeenKmersCollection):
-
-    def __init__(self, sequences, Xy_file, length = 0, low_var_threshold=0.01, k=5, sparse=None,
-            dtype=np.uint64, alphabet="ACGT"):
-        super().__init__(sequences, Xy_file = Xy_file, length = length, k=k, sparse=sparse,
-                dtype=dtype, alphabet=alphabet)
-
-        # Kmer selection based on variance
-        selection = VarianceThreshold(threshold=low_var_threshold)
-        with tb.open_file(Xy_file, "r") as handle:
-            self.data = selection.fit_transform(handle.get_node("/", "data").read())
-
-        # update kmer list
-        self.v_size = self.data.shape[1]
-        _support = selection.get_support()
-        self.kmers_list = [ kmer for i, kmer in enumerate(self.kmers_list) if _support[i] ]
-        with tb.open_file(Xy_file, "a") as handle:
-            self.data = handle.create_carray("/", "data", obj = np.array(self.data,dtype=self.dtype))
-
-class GivenKmersCollection(KmersCollection):
-
-    def __init__(self, sequences, Xy_file, length, kmers_list, sparse=None,
-            dtype=np.uint64, alphabet="ACGT"):
-        self.sparse = sparse
-        self.dtype = dtype
-        self.alphabet = alphabet.lower() + alphabet.upper()
-        self.path = os.path.split(Xy_file)[0] + "/tmp/"
-        self.kmers_list = kmers_list
-        self.Xy_file = tb.open_file(Xy_file, "w")
-        self.length = length
-        #
-        self.k = len(self.kmers_list[0])
-        self.__construct_kmer_indices()
-        #
-        self.ids = []
-        self.v_size = len(self.kmers_list)
-        self.data = self.Xy_file.create_carray("/", "data", obj = np.zeros((self.length, self.v_size), dtype = self.dtype))
-        self.kmc_path = "{}/KMC/bin".format(os.path.dirname(os.path.realpath(__file__)))
-        #
-        self._compute_kmers(sequences)
-        self.Xy_file.close()
-
-    def _compute_kmers_of_sequence(self, file, ind):
-        # Count k-mers with KMC
-        cmd_count = "{}/kmc -k{} -fm -cs1000000000 -t48 -hp -sm -m1024 {} {}/{} {}".format(self.kmc_path, self.k, file, self.path, ind, self.path)
-        run(cmd_count, shell = True, capture_output=True)
-        # Transform k-mers db with KMC
-        cmd_transform = "{}/kmc_tools transform {}/{} dump {}/{}.txt".format(self.kmc_path, self.path, ind, self.path, ind)
-        run(cmd_transform, shell = True, capture_output=True)
-        # Parse k-mers file to pandas
-        profile = np.loadtxt('{}/{}.txt'.format(self.path, ind), dtype = object)
-        # Save to Xyfile
-
-        for kmer in self.kmers_list:
-            ind_kmer = self.kmers_list.index(kmer)
-            for row in profile:
-                if row[0] == kmer:
-                    self.data[ind, ind_kmer] = int(row[1])
-                else:
-                    self.data[ind, ind_kmer] = 0
-
-        return self
-
-    def __construct_kmer_indices(self):
-        self.kmers_indices = {kmer:i for i, kmer in enumerate(self.kmers_list)}
-
-        return self
-
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+warnings.filterwarnings("ignore")
 
 # #####
 # Data build functions
 # ####################
 
-def build_kmers(seq_data, k, Xy_file, length = 0, full_kmers=False, low_var_threshold=None,
-        sparse=None, dtype=np.uint64):
-
-    if full_kmers:
-        return FullKmersCollection(
-                seq_data, Xy_file, length, k=k, sparse=sparse, dtype=dtype)
-
-    elif low_var_threshold:
-        return VarKmersCollection(
-                seq_data, Xy_file, length, low_var_threshold=low_var_threshold,
-                k=k, sparse=sparse, dtype=dtype)
-    else:
-        return SeenKmersCollection(
-                seq_data, Xy_file, length, k=k, sparse=sparse, dtype=dtype)
-
-
-def build_kmers_Xy_data(seq_data, k, Xy_file, length = 0, kmers_list = None, full_kmers=False, low_var_threshold=None,
-        sparse=None, dtype=np.uint64):
+def build_kmers_Xy_data(seq_data, k, Xy_file, length = 0, kmers_list = None):
 
     if kmers_list is not None:
-        collection = GivenKmersCollection(seq_data, Xy_file, length, kmers_list, sparse)
+        method = 'given'
     else:
-        collection = build_kmers(seq_data, k, Xy_file, length, full_kmers, low_var_threshold, sparse)
-    kmers_list = collection.kmers_list
-    X_data = collection.data
+        method = 'seen'
+
+    collection = kmers_collection(seq_data, Xy_file, length, k, method = method, kmers_list = kmers_list)
+
+    kmers_list = collection['kmers_list']
+    X_data = collection['data']
     y_data = np.array(seq_data.labels)
+    ids = seq_data.ids
+
     return X_data, y_data, kmers_list
 
-def build_kmers_X_data(seq_data, X_file, kmers_list, length = 0, sparse=None, dtype=np.uint64):
+def build_kmers_X_data(seq_data, X_file, kmers_list, k, length = 0):
 
-    collection = GivenKmersCollection(seq_data, X_file, length, kmers_list, sparse)
-    kmers_list = collection.kmers_list
-    X_data = collection.data
-    ids = collection.ids
+    collection = kmers_collection(seq_data, X_file, length, k, method = 'given', kmers_list = kmers_list)
+    kmers_list = collection['kmers_list']
+    X_data = collection['data']
+    ids = seq_data.ids
 
     return X_data, kmers_list, ids
+
+# #####
+# Kmers computing
+# ##################
+
+def kmers_collection(seq_data, Xy_file, length, k, method = 'seen', kmers_list = None):
+    collection = {}
+    #
+    collection['data'] = Xy_file
+    dir_path = os.path.split(Xy_file)[0] + "/tmp/"
+    Xy_file = tb.open_file(Xy_file, "w")
+    kmc_path = "{}/KMC/bin".format(os.path.dirname(os.path.realpath(__file__)))
+    faSplit = "{}/faSplit".format(os.path.dirname(os.path.realpath(__file__)))
+    #
+    ddf = compute_kmers(seq_data, method, kmers_list, k, dir_path, faSplit, kmc_path)
+    #
+    collection['ids'], collection['kmers_list'] = construct_data(Xy_file, collection, ddf)
+    #
+    Xy_file.close()
+    rmtree(dir_path)
+
+    return collection
+
+def construct_data(Xy_file, collection, ddf):
+    # Extract ids and k-mers from dask dataframe
+    ids = list(ddf.index)
+    kmers_list = list(ddf.columns)
+
+    # Convert dask df to numpy array and write directly to disk with pytables
+    arr = np.array(ddf.to_dask_array(), dtype = np.int64)
+    data = Xy_file.create_carray("/", "data", obj = arr)
+
+    return ids, kmers_list
+
+def compute_seen_kmers_of_sequence(kmc_path, k, dir_path, ind, file):
+    # Make tmp folder per sequence
+    tmp_folder = "{}tmp_{}/".format(dir_path, ind)
+    os.mkdir(tmp_folder)
+    # Count k-mers with KMC
+    cmd_count = "{}/kmc -k{} -fm -cs1000000000 -m10 -hp {} {}/{} {}".format(kmc_path, k, file, tmp_folder, ind, tmp_folder)
+    run(cmd_count, shell = True, capture_output=True)
+    # Transform k-mers db with KMC
+    cmd_transform = "{}/kmc_tools transform {}/{} dump {}/{}.txt".format(kmc_path, tmp_folder, ind, dir_path, ind)
+    run(cmd_transform, shell = True, capture_output=True)
+    # Parse k-mers file to dask dataframe
+    id = os.path.splitext(os.path.basename(file))[0]
+    profile = dd.from_pandas(pd.read_table('{}/{}.txt'.format(dir_path, ind), header = 0, names = [id], index_col = 0, dtype = object).T, chunksize = 1)
+
+    return profile
+
+def compute_given_kmers_of_sequence(kmers_list, kmc_path, k, dir_path, ind, file):
+    # Make tmp folder per sequence
+    tmp_folder = "{}tmp_{}".format(dir_path, ind)
+    os.mkdir(tmp_folder)
+    # Count k-mers with KMC
+    cmd_count = "{}/kmc -k{} -fm -cs1000000000 -m10 -hp {} {}/{} {}".format(kmc_path, k, file, tmp_folder, ind, tmp_folder)
+    run(cmd_count, shell = True, capture_output=True)
+    # Transform k-mers db with KMC
+    cmd_transform = "{}/kmc_tools transform {}/{} dump {}/{}.txt".format(kmc_path, tmp_folder, ind, dir_path, ind)
+    run(cmd_transform, shell = True, capture_output=True)
+    # Parse k-mers file to dask dataframe
+    id = os.path.splitext(os.path.basename(file))[0]
+    profile = pd.read_table('{}/{}.txt'.format(dir_path, ind), header = 0, names = [id], index_col = 0, dtype = object).T
+
+    df = pd.DataFrame(np.zeros((1,len(kmers_list))), columns = kmers_list, index = [id])
+
+    for kmer in kmers_list:
+        if kmer in profile.columns:
+            df.at[id,kmer] = profile.loc[id,kmer]
+        else:
+            df.at[id,kmer] = 0
+
+    df = dd.from_pandas(df, chunksize = 1)
+    return df
+
+def compute_kmers(seq_data, method, kmers_list, k, dir_path, faSplit, kmc_path):
+    file_list = []
+
+    if not os.path.isdir(dir_path):
+        os.mkdir(dir_path)
+
+    cmd_split = '{} byname {} {}'.format(faSplit, seq_data.data, dir_path)
+
+    os.system(cmd_split)
+
+    for id in seq_data.ids:
+        file = dir_path + id + '.fa'
+        file_list.append(file)
+
+    # Detect if a GPU is available
+    if list_physical_devices('GPU'):
+        ddf = parallel_GPU(file_list, method, kmers_list, kmc_path, k, dir_path)
+    else:
+        ddf = parallel_CPU(file_list, method, kmers_list, kmc_path, k, dir_path)
+
+    return ddf
+
+def parallel_CPU(file_list, method, kmers_list, kmc_path, k, dir_path):
+    if method == 'seen':
+        with parallel_backend('threading'):
+            results = Parallel(n_jobs = -1, prefer = 'threads', verbose = 100)(
+            delayed(compute_seen_kmers_of_sequence)
+            (kmc_path, k, dir_path, i, file) for i, file in enumerate(file_list))
+    elif method == 'given':
+        with parallel_backend('threading'):
+            results = Parallel(n_jobs = -1, prefer = 'threads', verbose = 100)(
+            delayed(compute_given_kmers_of_sequence)
+            (kmers_list, kmc_path, k, dir_path, i, file) for i, file in enumerate(file_list))
+
+    for i in range(1, len(results)):
+        if i == 1:
+            ddf = dd.multi.concat([results[0], results[1]])
+        else:
+            ddf = ddf.append(results[i])
+
+    return ddf
+
+def parallel_GPU(file_list, method, kmers_list, kmc_path, k, dir_path):
+    if method == 'seen':
+        results = Parallel(n_jobs = -1, prefer = 'processes', verbose = 100)(
+        delayed(compute_seen_kmers_of_sequence)
+        (kmc_path, k, dir_path, i, file) for i, file in enumerate(file_list))
+    elif method == 'given':
+        results = Parallel(n_jobs = -1, prefer = 'processes', verbose = 100)(
+        delayed(compute_given_kmers_of_sequence)
+        (kmers_list, kmc_path, k, dir_path, i, file) for i, file in enumerate(file_list))
+
+    for i in range(1, len(results)):
+        if i == 1:
+            ddf = dd.multi.concat([results[0], results[1]])
+        else:
+            ddf = ddf.append(results[i])
+
+    return ddf

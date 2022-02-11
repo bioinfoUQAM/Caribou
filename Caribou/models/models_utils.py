@@ -1,11 +1,9 @@
-
 import pandas as pd
 import numpy as np
 import tables as tb
 import matplotlib.pyplot as plt
 
 import os
-import sys
 import shutil
 import glob
 import re
@@ -21,9 +19,9 @@ from keras.callbacks import ModelCheckpoint, EarlyStopping
 from keras.models import load_model
 
 from tensorflow.keras.models import clone_model
+from tensorflow.config import list_physical_devices
 
-from joblib import dump, load, Parallel, delayed, wrap_non_picklable_objects
-
+from joblib import dump, load, Parallel, delayed, parallel_backend
 import warnings
 
 __author__ = "Nicolas de Montigny"
@@ -143,7 +141,6 @@ def cross_validation_training(X_train, y_train, batch_size, kmers, ids, classifi
     # each dict contains the results of the iteration
     cv_scores = []
     clf_scores = {}
-    parallel = Parallel(n_jobs = n_jobs if n_jobs <= os.cpu_count() else -1, backend = 'loky', prefer = "processes", verbose = 100 if verbose else 0)
 
     if classifier in ["onesvm","linearsvm","ridge","svm","mlr","mnb"]:
         clf_file, ext = os.path.splitext(clf_file)
@@ -151,12 +148,23 @@ def cross_validation_training(X_train, y_train, batch_size, kmers, ids, classifi
         X_data = ["{}_iter_{}".format(X_train, iter) for iter in range(n_jobs)]
         for file in X_data:
             shutil.copy(X_train,file)
-        cv_scores = parallel(delayed(fit_predict_cv)
-            (X_file, y_train, batch_size, kmers,
-            ids, classifier, labels_list, outdir_plots,
-            clone(clf), cv = 1, shuffle = True,
-            threshold = threshold, verbose = True, clf_file = clf_name)
-            for clf_name, X_file in zip(clf_names,X_data))
+        if list_physical_devices('GPU'):
+            cv_scores = Parallel(n_jobs = n_jobs if n_jobs <= os.cpu_count() else -1, prefer = "processes", verbose = 100 if verbose else 0)(
+                                delayed(fit_predict_cv)
+                                (X_file, y_train, batch_size, kmers,
+                                ids, classifier, labels_list, outdir_plots,
+                                clone(clf), cv = 1, shuffle = True,
+                                threshold = threshold, verbose = True, clf_file = clf_name)
+                                for clf_name, X_file in zip(clf_names,X_data))
+        else:
+            with parallel_backend('threading'):
+                cv_scores = Parallel(n_jobs = n_jobs if n_jobs <= os.cpu_count() else -1, prefer = "threads", verbose = 100 if verbose else 0)(
+                                    delayed(fit_predict_cv)
+                                    (X_file, y_train, batch_size, kmers,
+                                    ids, classifier, labels_list, outdir_plots,
+                                    clone(clf), cv = 1, shuffle = True,
+                                    threshold = threshold, verbose = True, clf_file = clf_name)
+                                    for clf_name, X_file in zip(clf_names,X_data))
         for file in X_data:
             os.remove(file)
     elif classifier in ["attention","lstm","deeplstm","lstm_attention","cnn","deepcnn"]:
@@ -164,12 +172,23 @@ def cross_validation_training(X_train, y_train, batch_size, kmers, ids, classifi
         X_data = ["{}_iter_{}".format(X_train, iter) for iter in range(n_jobs)]
         for file in X_data:
             shutil.copy(X_train,file)
-        cv_scores = parallel(delayed(fit_predict_cv)
-            (X_file, y_train, batch_size, kmers,
-            ids, classifier, labels_list, outdir_plots,
-            clone_model(clf), cv = 1, shuffle = True,
-            threshold = threshold, verbose = True, clf_file = clf_name)
-            for clf_name, X_file in zip(clf_names,X_data))
+        if list_physical_devices('GPU'):
+            cv_scores = Parallel(n_jobs = n_jobs if n_jobs <= os.cpu_count() else -1, prefer = "processes", verbose = 100 if verbose else 0)(
+                                delayed(fit_predict_cv)
+                                (X_file, y_train, batch_size, kmers,
+                                ids, classifier, labels_list, outdir_plots,
+                                clone(clf), cv = 1, shuffle = True,
+                                threshold = threshold, verbose = True, clf_file = clf_name)
+                                for clf_name, X_file in zip(clf_names,X_data))
+        else:
+            with parallel_backend('threading'):
+                cv_scores = Parallel(n_jobs = n_jobs if n_jobs <= os.cpu_count() else -1, prefer = "threads", verbose = 100 if verbose else 0)(
+                                    delayed(fit_predict_cv)
+                                    (X_file, y_train, batch_size, kmers,
+                                    ids, classifier, labels_list, outdir_plots,
+                                    clone_model(clf), cv = 1, shuffle = True,
+                                    threshold = threshold, verbose = True, clf_file = clf_name)
+                                    for clf_name, X_file in zip(clf_names,X_data))
         for file in X_data:
             os.remove(file)
     # Transform list of dictionnaries into one dictionnary
@@ -187,7 +206,6 @@ def cross_validation_training(X_train, y_train, batch_size, kmers, ids, classifi
 
     return clf_file
 
-@wrap_non_picklable_objects
 def fit_predict_cv(X_train, y_train, batch_size, kmers, ids, classifier, labels_list, outdir_plots, clf, cv = 1, shuffle = True, threshold = 0.8, verbose = True, clf_file = None):
     batch_size = 4
 

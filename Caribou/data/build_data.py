@@ -1,5 +1,5 @@
 from Caribou.data.seq_collections import SeqCollection
-from Caribou.data.kmer_collections import build_kmers_Xy_data, build_kmers_X_data, build_kmers
+from Caribou.data.kmer_collections import build_kmers_Xy_data, build_kmers_X_data
 from Caribou.utils import load_Xy_data, save_Xy_data
 
 import os.path
@@ -13,15 +13,15 @@ __author__ = "Nicolas de Montigny"
 
 __all__ = ['build_load_save_data', 'build_Xy_data', 'build_X_data']
 
-def build_load_save_data(file, hostfile, prefix, dataset, kmers_list=None, k=4, full_kmers=False, low_var_threshold=None):
+def build_load_save_data(file, hostfile, prefix, dataset, host, kmers_list=None, k=4):
 
     # Generate the names of files
-    Xy_file = "{}_K{}_Xy_genome_{}_data.h5f".format(prefix,k,dataset)
-    data_file = "{}_K{}_Xy_genome_{}_data.npz".format(prefix,k,dataset)
-    Xy_file_host = "{}_K{}_Xy_genome_{}_host_data.h5f".format(prefix,k,dataset)
-    data_file_host = "{}_K{}_Xy_genome_{}_host_data.npz".format(prefix,k,dataset)
-    seqfile = "{}_seqdata_db_{}.txt".format(prefix, dataset)
-    seqfile_host = "{}_seqdata_host_{}.txt".format(prefix, dataset)
+    Xy_file = "{}/Xy_genome_{}_data_K{}.h5f".format(prefix,dataset,k)
+    data_file = "{}/Xy_genome_{}_data_K{}.npz".format(prefix,dataset,k)
+    Xy_file_host = "{}/Xy_genome_{}_data_K{}.h5f".format(prefix,host,k)
+    data_file_host = "{}/Xy_genome_{}_data_K{}.npz".format(prefix,host,k)
+    seqfile = "{}/seqdata_{}.txt".format(prefix, dataset)
+    seqfile_host = "{}/seqdata_{}.txt".format(prefix, dataset)
 
     # Load file if already exists
     if os.path.isfile(data_file) and os.path.isfile(data_file_host) and isinstance(hostfile, tuple):
@@ -53,14 +53,14 @@ def build_load_save_data(file, hostfile, prefix, dataset, kmers_list=None, k=4, 
             # Build Xy_data to drive
             if isinstance(hostfile, tuple):
                 print("Xy_data with host, k = {}".format(k))
-                data = build_Xy_data(seq_data, k, Xy_file, seq_data.length, kmers_list = None, full_kmers = full_kmers, low_var_threshold = low_var_threshold)
+                data = build_Xy_data(seq_data, k, Xy_file, seq_data.length, kmers_list = None)
                 save_Xy_data(data, data_file)
-                data_host = build_Xy_data(seq_data_host, k, Xy_file_host, seq_data_host.length, kmers_list = data["kmers_list"], full_kmers = full_kmers, low_var_threshold = low_var_threshold)
+                data_host = build_Xy_data(seq_data_host, k, Xy_file_host, seq_data_host.length, kmers_list = data["kmers_list"])
                 save_Xy_data(data_host, data_file_host)
                 return data, data_host
             else:
                 print("Xy_data without host, k = {}".format(k))
-                data = build_Xy_data(seq_data, k, Xy_file, seq_data.length, full_kmers, low_var_threshold)
+                data = build_Xy_data(seq_data, k, Xy_file, seq_data.length, None)
                 save_Xy_data(data, data_file)
                 return data
 
@@ -68,20 +68,17 @@ def build_load_save_data(file, hostfile, prefix, dataset, kmers_list=None, k=4, 
             # Build X_data of dataset
             print("X_data, k = {}".format(k))
             seq_data = SeqCollection(file)
-            data = build_X_data(seq_data, Xy_file, kmers_list, seq_data.length)
+            data = build_X_data(seq_data, k, Xy_file, kmers_list, seq_data.length)
             save_Xy_data(data, data_file)
             return data
 
 # Build kmers collections with known classes
-def build_Xy_data(seq_data, k, Xy_file, length = 0, kmers_list = None, full_kmers = False, low_var_threshold = None):
+def build_Xy_data(seq_data, k, Xy_file, length = 0, kmers_list = None):
     data = dict()
 
     X, y, kmers = build_kmers_Xy_data(seq_data, k, Xy_file,
-        length = length,
-        full_kmers = full_kmers,
-        kmers_list = kmers_list,
-        low_var_threshold = low_var_threshold,
-        dtype = np.float32)
+                                      length = length,
+                                      kmers_list = kmers_list)
 
     # Data in a dictionnary
     data["X"] = str(Xy_file)
@@ -93,10 +90,13 @@ def build_Xy_data(seq_data, k, Xy_file, length = 0, kmers_list = None, full_kmer
     return data
 
 # Build kmers collection without known classes
-def build_X_data(seq_data, X_file, kmers_list, length = 0):
+def build_X_data(seq_data, k, X_file, kmers_list, length = 0):
     data = dict()
 
-    X, kmers, ids = build_kmers_X_data(seq_data, X_file, kmers_list, length = length, dtype = np.float32)
+    X, kmers, ids = build_kmers_X_data(seq_data, X_file,
+                                       k = k,
+                                       kmers_list = kmers_list,
+                                       length = length)
 
     # Data in a dictionnary
     data["X"] = str(X_file)

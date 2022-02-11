@@ -18,12 +18,12 @@ __author__ = "Nicolas de Montigny"
 __all__ = ["outputs","get_abundances","out_abundances","abundance_table","out_summary","out_kronagram","create_krona_file","out_report"]
 
 def outputs(database_kmers, results_dir, k, classifier, dataset, host, classified_data, seq_file, abundance_stats = True, kronagram = True, full_report = True):
-    abund_file = "{}/K{}_{}_abundance_{}.tsv".format(results_dir, k, classifier, dataset)
-    summary_file = "{}/K{}_{}_summary_{}.tsv".format(results_dir, k, classifier, dataset)
-    krona_file = "{}/K{}_{}_kronagram_{}.tsv".format(results_dir, k, classifier, dataset)
-    krona_out = "{}/K{}_{}_kronagram_{}.html".format(results_dir, k, classifier, dataset)
-    report_file = "{}/K{}_{}_full_report_{}.tsv".format(results_dir, k, classifier, dataset)
-    tree_file = "{}/K{}_{}_taxonomic_tree_{}.nwk".format(results_dir, k, classifier, dataset)
+    abund_file = "{}abundance_K{}_{}_{}.tsv".format(results_dir, k, classifier, dataset)
+    summary_file = "{}summary_K{}_{}_{}.tsv".format(results_dir, k, classifier, dataset)
+    krona_file = "{}kronagram_K{}_{}_{}.tsv".format(results_dir, k, classifier, dataset)
+    krona_out = "{}kronagram_K{}_{}_{}.html".format(results_dir, k, classifier, dataset)
+    report_file = "{}full_report_K{}_{}_{}.tsv".format(results_dir, k, classifier, dataset)
+    tree_file = "{}taxonomic_tree_K{}_{}_{}.nwk".format(results_dir, k, classifier, dataset)
 
     with open(seq_file, "rb") as handle:
         seq_data = pickle.load(handle)

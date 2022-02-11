@@ -103,9 +103,12 @@ class DataGeneratorKeras(Sequence):
         for i, pos in enumerate(list_pos_temp):
             # Store sample
             X[i,] = self.array.read()[pos,]
-
             # Store class
-            y[i] = self.labels[pos]
+            try :
+                y[i] = self.labels[pos]
+            except ValueError as e:
+                print("Invalid labels ! Please use valid labels in the class.csv file ! Exiting")
+                print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
 
         if self.classifier in ["lstm","deeplstm","lstm_attention"]:
             X = X.reshape(1, self.batch_size, len(self.kmers))
