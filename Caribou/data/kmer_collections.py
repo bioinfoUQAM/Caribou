@@ -5,19 +5,27 @@ from subprocess import run
 from shutil import rmtree
 
 from joblib import Parallel, delayed, parallel_backend
-
 from tensorflow.config import list_physical_devices
 
 import numpy as np
 import tables as tb
 import pandas as pd
-import dask.dataframe as dd
+
+# Use cudf/dask_cudf only if GPU is available
+if list_physical_devices('GPU'):
+    import cudf
+    import dask_cudf
+    from dask.distributed import Client
+    from dask_cuda import LocalCUDACluster
+else:
+    from collections import defaultdict
+
 
 # From mlr_kgenomvir
 __author__ = ['Amine Remita', 'Nicolas de Montigny']
 
-__all__ = ['kmers_collection','construct_data','compute_seen_kmers_of_sequence','compute_given_kmers_of_sequence',
-           'compute_kmers','threads','dask_client','build_kmers_Xy_data','build_kmers_X_data']
+__all__ = ['kmers_collection','construct_data_GPU','construct_data_CPU','compute_seen_kmers_of_sequence','compute_given_kmers_of_sequence',
+           'compute_kmers','parallel_CPU','parallel_GPU','build_kmers_Xy_data','build_kmers_X_data']
 
 """
 Module adapted from module kmer_collections.py of
@@ -69,27 +77,44 @@ def kmers_collection(seq_data, Xy_file, length, k, method = 'seen', kmers_list =
     #
     collection['data'] = Xy_file
     dir_path = os.path.split(Xy_file)[0] + "/tmp/"
-    Xy_file = tb.open_file(Xy_file, "w")
     kmc_path = "{}/KMC/bin".format(os.path.dirname(os.path.realpath(__file__)))
     faSplit = "{}/faSplit".format(os.path.dirname(os.path.realpath(__file__)))
     #
-    ddf = compute_kmers(seq_data, method, kmers_list, k, dir_path, faSplit, kmc_path)
+    collection['ids'], collection['kmers_list'] = compute_kmers(seq_data, method, kmers_list, k, dir_path, faSplit, kmc_path, Xy_file)
     #
-    collection['ids'], collection['kmers_list'] = construct_data(Xy_file, collection, ddf)
-    #
-    Xy_file.close()
     rmtree(dir_path)
 
     return collection
 
-def construct_data(Xy_file, collection, ddf):
+def construct_data_CPU(Xy_file, results):
+    dict_data = defaultdict(lambda: [0]*len(results))
+    ids = []
+    for ind, result in enumerate(results):
+        kmers_list = list(result)
+        ids.append(result.index[0])
+        for kmer in kmers_list:
+            dict_data[kmer][ind] = result[kmer][0]
+
+    print('kmers_list :', kmers_list)
+    print('ids : ', ids)
+
+    with tb.open_file(Xy_file, "w") as handle:
+        data = handle.create_carray("/", "data", obj = np.array([ dict_data[x] for x in dict_data ], dtype=np.int64).T)
+
+    return ids, kmers_list
+
+def construct_data_GPU(Xy_file, ddf):
     # Extract ids and k-mers from dask dataframe
     ids = list(ddf.index)
     kmers_list = list(ddf.columns)
 
+    print('kmers_list :', kmers_list)
+    print('ids : ', ids)
+
     # Convert dask df to numpy array and write directly to disk with pytables
-    arr = np.array(ddf.to_dask_array(), dtype = np.int64)
-    data = Xy_file.create_carray("/", "data", obj = arr)
+    arr = ddf.as_matrix()
+    with tb.open_file(Xy_file, "w") as handle:
+        data = handle.create_carray("/", "data", obj = arr)
 
     return ids, kmers_list
 
@@ -105,7 +130,7 @@ def compute_seen_kmers_of_sequence(kmc_path, k, dir_path, ind, file):
     run(cmd_transform, shell = True, capture_output=True)
     # Parse k-mers file to dask dataframe
     id = os.path.splitext(os.path.basename(file))[0]
-    profile = dd.from_pandas(pd.read_table('{}/{}.txt'.format(dir_path, ind), header = 0, names = [id], index_col = 0, dtype = object).T, chunksize = 1)
+    profile = pd.read_table('{}/{}.txt'.format(dir_path, ind), header = 0, names = [id], index_col = 0, dtype = object).T
 
     return profile
 
@@ -131,10 +156,9 @@ def compute_given_kmers_of_sequence(kmers_list, kmc_path, k, dir_path, ind, file
         else:
             df.at[id,kmer] = 0
 
-    df = dd.from_pandas(df, chunksize = 1)
     return df
 
-def compute_kmers(seq_data, method, kmers_list, k, dir_path, faSplit, kmc_path):
+def compute_kmers(seq_data, method, kmers_list, k, dir_path, faSplit, kmc_path, Xy_file):
     file_list = []
 
     if not os.path.isdir(dir_path):
@@ -151,10 +175,12 @@ def compute_kmers(seq_data, method, kmers_list, k, dir_path, faSplit, kmc_path):
     # Detect if a GPU is available
     if list_physical_devices('GPU'):
         ddf = parallel_GPU(file_list, method, kmers_list, kmc_path, k, dir_path)
+        ids, kmers_list = construct_data_GPU(Xy_file, ddf)
     else:
-        ddf = parallel_CPU(file_list, method, kmers_list, kmc_path, k, dir_path)
+        results = parallel_CPU(file_list, method, kmers_list, kmc_path, k, dir_path)
+        ids, kmers_list = construct_data_CPU(Xy_file, results)
 
-    return ddf
+    return ids, kmers_list
 
 def parallel_CPU(file_list, method, kmers_list, kmc_path, k, dir_path):
     if method == 'seen':
@@ -168,28 +194,26 @@ def parallel_CPU(file_list, method, kmers_list, kmc_path, k, dir_path):
             delayed(compute_given_kmers_of_sequence)
             (kmers_list, kmc_path, k, dir_path, i, file) for i, file in enumerate(file_list))
 
-    for i in range(1, len(results)):
-        if i == 1:
-            ddf = dd.multi.concat([results[0], results[1]])
-        else:
-            ddf = ddf.append(results[i])
-
-    return ddf
+    return results
 
 def parallel_GPU(file_list, method, kmers_list, kmc_path, k, dir_path):
-    if method == 'seen':
-        results = Parallel(n_jobs = -1, prefer = 'processes', verbose = 100)(
-        delayed(compute_seen_kmers_of_sequence)
-        (kmc_path, k, dir_path, i, file) for i, file in enumerate(file_list))
-    elif method == 'given':
-        results = Parallel(n_jobs = -1, prefer = 'processes', verbose = 100)(
-        delayed(compute_given_kmers_of_sequence)
-        (kmers_list, kmc_path, k, dir_path, i, file) for i, file in enumerate(file_list))
+    with LocalCUDACluster() as cluster, Client(cluster) as client:
+        if method == 'seen':
+            results = dask_cudf.from_cudf(cudf.from_pandas(Parallel(n_jobs = -1, prefer = 'processes', verbose = 100)(
+            delayed(compute_seen_kmers_of_sequence)
+            (kmc_path, k, dir_path, i, file) for i, file in enumerate(file_list))), chunksize = 1)
+        elif method == 'given':
+            results = dask_cudf.from_cudf(cudf.from_pandas(Parallel(n_jobs = -1, prefer = 'processes', verbose = 100)(
+            delayed(compute_given_kmers_of_sequence)
+            (kmers_list, kmc_path, k, dir_path, i, file) for i, file in enumerate(file_list))), chunksize = 1)
 
+        ddf = dask_cudf.concat(results).compute()
+
+    """
     for i in range(1, len(results)):
         if i == 1:
             ddf = dd.multi.concat([results[0], results[1]])
         else:
             ddf = ddf.append(results[i])
-
+    """
     return ddf

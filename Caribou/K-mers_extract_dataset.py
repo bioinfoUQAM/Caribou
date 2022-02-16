@@ -16,7 +16,7 @@ from os import makedirs
 
 __author__ = "Nicolas de Montigny"
 
-__all__ = ['caribou']
+__all__ = ['kmers_dataset']
 
 # GPU & CPU setup
 ################################################################################
@@ -28,7 +28,7 @@ if gpus:
 
 # Part 0 - Initialisation / extraction of parameters from command line
 ################################################################################
-def caribou(opt):
+def kmers_dataset(opt):
 
     # Folders creation for output
     outdirs = {}
@@ -89,4 +89,4 @@ if __name__ == "__main__":
 
     opt = vars(args)
 
-    caribou(opt)
+    kmers_dataset(opt)
