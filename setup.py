@@ -1,4 +1,8 @@
 from setuptools import setup, find_namespace_packages
+from setuptools.command.build_py import build_py
+from subprocess import check_call
+
+import os
 
 __author__ = "Nicolas de Montigny"
 

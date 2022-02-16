@@ -178,6 +178,8 @@ def caribou(argv):
         outdirs["plots_dir"] = os.path.join(outdirs["main_outdir"], "plots/")
         makedirs(outdirs["plots_dir"], mode=0o700, exist_ok=True)
 
+# ADAPT FOR MAIN SCRIPT TO VERIFY/ LOAD PRECOMPUTED DATA BEFORE CALLING OTHER SCRIPTS
+
 # Part 1 - K-mers profile extraction
 ################################################################################
 
