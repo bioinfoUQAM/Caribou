@@ -12,7 +12,7 @@ import tables as tb
 import pandas as pd
 
 # Use cudf/dask_cudf only if GPU is available
-if list_physical_devices('GPU'):
+if len(list_physical_devices('GPU')) > 1:
     import cudf
     import dask_cudf
     from dask.distributed import Client
@@ -174,7 +174,7 @@ def compute_kmers(seq_data, method, kmers_list, k, dir_path, faSplit, kmc_path, 
 
     # Detect if a GPU is available
     print(list_physical_devices('GPU'))
-    if list_physical_devices('GPU'):
+    if len(list_physical_devices('GPU')) > 1:
         ddf = parallel_GPU(file_list, method, kmers_list, kmc_path, k, dir_path)
         ids, kmers_list = construct_data_GPU(Xy_file, ddf)
     else:

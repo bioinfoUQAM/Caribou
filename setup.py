@@ -10,7 +10,7 @@ __all__ = []
 
 INSTALL_REQUIRES = []
 
-with open("requirements.txt", "r") as fh:
+with open("requirements_pip.txt", "r") as fh:
     for line in fh:
         INSTALL_REQUIRES.append(line.rstrip())
 
