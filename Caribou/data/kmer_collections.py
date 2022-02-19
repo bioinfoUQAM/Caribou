@@ -5,14 +5,18 @@ from subprocess import run
 from shutil import rmtree
 
 from joblib import Parallel, delayed, parallel_backend
-from tensorflow.config import list_physical_devices
+#from tensorflow.config import list_physical_devices
 
 import numpy as np
 import tables as tb
 import pandas as pd
 
+import GPUtil
+
 # Use cudf/dask_cudf only if GPU is available
-if len(list_physical_devices('GPU')) > 1:
+#if len(list_physical_devices('GPU')) > 1:
+print(GPUtil.getAvailable())
+if len(GPUtil.getAvailable()) > 1:
     import cudf
     import dask_cudf
     from dask.distributed import Client

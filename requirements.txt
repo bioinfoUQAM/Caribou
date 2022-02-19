@@ -11,3 +11,4 @@ tables
 tensorflow
 keras
 dask[complete]
+GPUtil
