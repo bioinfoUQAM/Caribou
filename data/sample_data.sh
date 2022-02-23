@@ -27,12 +27,13 @@ then
   -f --fasta Path to a fasta file containing multiple sequences from which to extract a percentage of sequences
   -p --percent Percentage of sequences to extract from the fasta file
   -o --output Path to output file where the extracted sequences will be stored
-  -h --help Show this help message
+  -h --help Show this message
   """
 fi
 
 # Make tmp dir
-DIR=$( realpath $FILE  ) && dirname "$DIR"
+DIR=$( realpath $FILE  )
+DIR=$( dirname "$DIR" )
 TMP=$DIR/tmp
 
 mkdir $TMP
@@ -41,6 +42,21 @@ mkdir $TMP
 ../Caribou/data/faSplit sequence $FILE 1000000000 $TMP/fasta
 
 # List of files in tmp
-for i in $(find $DIR -maxdepth 10 -type f); do
-  echo $i >> $OUTFILE
+for file in $TMP/*; do
+  echo $file >> $TMP/fileList.txt
 done
+
+fileList=$TMP/fileList.txt
+
+length=$(wc -l < $TMP/fileList.txt)
+
+nbSeq=$(expr $PERCENT \* $length / 100)
+
+range=$(shuf -i 1-$length -n$nbSeq)
+
+for i in $range; do
+  sequence=$(sed -n "${i}p" $fileList)
+  cat $sequence >> $OUTFILE
+done
+
+rm -r $TMP
