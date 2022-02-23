@@ -9,8 +9,8 @@ while getopts f:p:o:hfastapercentoutputhelp option; do
     fasta) FILE=${OPTARG};;
     p) PERCENT=${OPTARG};;
     percent) PERCENT=${OPTARG};;
-    o) OUTFILE=${OPTARG};;
-    output) OUTFILE=${OPTARG};;
+    o) OUTDIR=${OPTARG};;
+    output) OUTDIR=${OPTARG};;
     h) HELP=1;;
     help) HELP=1;;
   esac
@@ -26,7 +26,7 @@ then
 
   -f --fasta Path to a fasta file containing multiple sequences from which to extract a percentage of sequences
   -p --percent Percentage of sequences to extract from the fasta file
-  -o --output Path to output file where the extracted sequences will be stored
+  -o --output Path to directory where the extracted sequences file will be created
   -h --help Show this message
   """
 fi
@@ -35,6 +35,8 @@ fi
 DIR=$( realpath $FILE  )
 DIR=$( dirname "$DIR" )
 TMP=$DIR/tmp
+
+OUTFILE=$DIR/extracted_data_${PERCENT}.fna
 
 mkdir $TMP
 
