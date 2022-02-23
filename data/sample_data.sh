@@ -59,4 +59,6 @@ for i in $range; do
   cat $sequence >> $OUTFILE
 done
 
+gzip $OUTFILE
+
 rm -r $TMP
