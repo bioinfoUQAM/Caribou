@@ -3,7 +3,7 @@
 __author__="Nicolas de Montigny"
 
 HELP=0
-while getopts f:p:o:hfastapercentoutputhelp option; do
+while getopts f:p:o:fa:hfastapercentoutputfasplithelp option; do
   case "${option}" in
     f) FILE=${OPTARG};;
     fasta) FILE=${OPTARG};;
@@ -11,6 +11,8 @@ while getopts f:p:o:hfastapercentoutputhelp option; do
     percent) PERCENT=${OPTARG};;
     o) OUTDIR=${OPTARG};;
     output) OUTDIR=${OPTARG};;
+    fa) FASPLITPATH=${OPTARG};;
+    fasplit) FASPLITPATH=${OPTARG};;
     h) HELP=1;;
     help) HELP=1;;
   esac
@@ -41,7 +43,7 @@ OUTFILE=$DIR/extracted_data_${PERCENT}.fna
 mkdir $TMP
 
 # Split fasta by sequences
-../Caribou/data/faSplit sequence $FILE 1000000000 $TMP/fasta
+$FASPLITPATH sequence $FILE 1000000000 $TMP/fasta
 
 # List of files in tmp
 for file in $TMP/*; do
