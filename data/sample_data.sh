@@ -3,7 +3,7 @@
 __author__="Nicolas de Montigny"
 
 HELP=0
-while getopts f:p:o:fa:hfastapercentoutputfasplithelp option; do
+while getopts f:p:o:s:hfastapercentoutputfasplithelp option; do
   case "${option}" in
     f) FILE=${OPTARG};;
     fasta) FILE=${OPTARG};;
@@ -11,7 +11,7 @@ while getopts f:p:o:fa:hfastapercentoutputfasplithelp option; do
     percent) PERCENT=${OPTARG};;
     o) OUTDIR=${OPTARG};;
     output) OUTDIR=${OPTARG};;
-    fa) FASPLITPATH=${OPTARG};;
+    s) FASPLITPATH=${OPTARG};;
     fasplit) FASPLITPATH=${OPTARG};;
     h) HELP=1;;
     help) HELP=1;;
@@ -29,6 +29,7 @@ then
   -f --fasta Path to a fasta file containing multiple sequences from which to extract a percentage of sequences
   -p --percent Percentage of sequences to extract from the fasta file
   -o --output Path to directory where the extracted sequences file will be created
+  -s --fasplit Path to the faSplit executable on disk located at Caribou/Caribou/data/faSplit
   -h --help Show this message
   """
 fi
