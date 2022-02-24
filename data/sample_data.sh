@@ -43,7 +43,7 @@ OUTFILE=$DIR/extracted_data_${PERCENT}.fna
 mkdir $TMP
 
 # Split fasta by sequences
-$FASPLITPATH sequence $FILE 1000000000 $TMP/fasta
+$FASPLITPATH 'sequence' $FILE '1000000000' $TMP'/fasta'
 
 # List of files in tmp
 for file in $TMP/*; do

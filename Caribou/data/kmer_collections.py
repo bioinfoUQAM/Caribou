@@ -12,7 +12,7 @@ import tables as tb
 import pandas as pd
 
 # Use cudf/dask_cudf only if GPU is available
-if len(list_physical_devices('GPU')) > 1:
+if len(list_physical_devices('GPU')) > 0:
     import cudf
     import dask_cudf
     from dask.distributed import Client
@@ -198,7 +198,7 @@ def parallel_CPU(file_list, method, kmers_list, kmc_path, k, dir_path):
     return results
 
 def parallel_GPU(file_list, method, kmers_list, kmc_path, k, dir_path):
-    with LocalCUDACluster() as cluster, Client(cluster) as client:
+    with LocalCUDACluster(threads_per_worker=12) as cluster, Client(cluster) as client:
         if method == 'seen':
             results = dask_cudf.from_cudf(cudf.from_pandas(Parallel(n_jobs = -1, prefer = 'processes', verbose = 100)(
             delayed(compute_seen_kmers_of_sequence)
