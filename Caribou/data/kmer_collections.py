@@ -130,9 +130,9 @@ def compute_seen_kmers_of_sequence(kmc_path, k, dir_path, ind, file):
     run(cmd_transform, shell = True, capture_output=True)
     # Parse k-mers file to dask dataframe
     id = os.path.splitext(os.path.basename(file))[0]
-    df = pd.read_table('{}/{}.txt'.format(dir_path, ind), header = 0, names = [id], index_col = 0, dtype = object).T
+    profile = pd.read_table('{}/{}.txt'.format(dir_path, ind), header = 0, names = [id], index_col = 0, dtype = object).T
 
-    return dask_cudf.from_cudf(cudf.from_pandas(df), chunksize = 1)
+    return profile
 
 def compute_given_kmers_of_sequence(kmers_list, kmc_path, k, dir_path, ind, file):
     # Make tmp folder per sequence
@@ -156,7 +156,7 @@ def compute_given_kmers_of_sequence(kmers_list, kmc_path, k, dir_path, ind, file
         else:
             df.at[id,kmer] = 0
 
-    return dask_cudf.from_cudf(cudf.from_pandas(df), chunksize = 1)
+    return df
 
 def compute_kmers(seq_data, method, kmers_list, k, dir_path, faSplit, kmc_path, Xy_file):
     file_list = []
@@ -203,9 +203,12 @@ def parallel_GPU(file_list, method, kmers_list, kmc_path, k, dir_path):
             delayed(compute_seen_kmers_of_sequence)
             (kmc_path, k, dir_path, i, file) for i, file in enumerate(file_list))
         elif method == 'given':
-            results = dask_cudf.from_cudf(cudf.from_pandas(Parallel(n_jobs = -1, prefer = 'processes', verbose = 100)(
+            results = Parallel(n_jobs = -1, prefer = 'processes', verbose = 100)(
             delayed(compute_given_kmers_of_sequence)
-            (kmers_list, kmc_path, k, dir_path, i, file) for i, file in enumerate(file_list))), chunksize = 1)
+            (kmers_list, kmc_path, k, dir_path, i, file) for i, file in enumerate(file_list))
+
+        for result in results:
+            result = dask_cudf.from_cudf(cudf.from_pandas(result), chunksize = 1)
 
         ddf = dask_cudf.concat(results).compute()
 
