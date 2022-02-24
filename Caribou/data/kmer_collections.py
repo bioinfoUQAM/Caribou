@@ -173,8 +173,7 @@ def compute_kmers(seq_data, method, kmers_list, k, dir_path, faSplit, kmc_path, 
         file_list.append(file)
 
     # Detect if a GPU is available
-    print(list_physical_devices('GPU'))
-    if len(list_physical_devices('GPU')) > 1:
+    if len(list_physical_devices('GPU')) > 0:
         ddf = parallel_GPU(file_list, method, kmers_list, kmc_path, k, dir_path)
         ids, kmers_list = construct_data_GPU(Xy_file, ddf)
     else:
