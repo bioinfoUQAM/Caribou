@@ -113,7 +113,7 @@ def construct_data_GPU(Xy_file, dir_path):
             ddf = dask_cudf.from_cudf(cudf.read_csv(file_list[0], sep = "\t", header = 0, names = [id], index_col = 0, dtype = object).T, chunksize = 1)
         else:
             tmp_df = dask_cudf.from_cudf(cudf.read_csv(file_list[i], sep = "\t", header = 0, names = [id], index_col = 0, dtype = object).T, chunksize = 1)
-            ddf = ddf.append(tmp_df)
+            ddf = ddf.merge(tmp_df, left_index = True, right_index = True, how = 'left')
     """
     # Dask_cudf read all .txt in folder and concatenate
     ddf_csv = dask_cudf.read_csv('{}/*.csv'.format(dir_path))
