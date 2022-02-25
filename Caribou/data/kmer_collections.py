@@ -123,7 +123,7 @@ def construct_data_GPU(Xy_file, dir_path):
             if data is None:
                 data = handle.create_earray("/", "data", obj = np.delete(ddf[ddf[ids_columns_name] == id].compute().to_numpy(), 0).astype(np.int64))
             else:
-                data.append(arr)
+                data.append(np.delete(ddf[ddf[ids_columns_name] == id].compute().to_numpy(), 0).astype(np.int64))
 
     return ids, kmers_list
 
