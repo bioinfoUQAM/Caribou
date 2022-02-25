@@ -117,12 +117,14 @@ def construct_data_GPU(Xy_file, dir_path):
     # Convert dask df to numpy array and write directly to disk with pytables
     with tb.open_file(Xy_file, "a") as handle:
         for id in ids:
-            arr = ddf.loc[id,1:].compute().to_array()
-            print(arr)
-            if not os.path.isfile(Xyfile):
-                data = handle.create_earray("/", "data", obj = arr)
-            else:
-                data.append(arr)
+            print(id)
+            print(ddf.loc[id].compute().to_array())
+            #arr = ddf.loc[id,1:].compute().to_array()
+            #print(arr)
+            #if not os.path.isfile(Xyfile):
+            #    data = handle.create_earray("/", "data", obj = arr)
+            #else:
+            #    data.append(arr)
 
     return ids, kmers_list
 
