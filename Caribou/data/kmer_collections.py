@@ -138,11 +138,13 @@ def construct_data_GPU(Xy_file, dir_path, list_ids_kmers):
             ddf = ddf.merge(tmp_df, left_index = True, right_index = True, how = 'left')
     """
     # Dask_cudf read all .txt in folder and concatenate
-    ddf = dask_cudf.read_csv('{}/*.csv'.format(dir_path))
+    ddf = dask_cudf.read_csv('{}/*.csv'.format(dir_path), header = 0, index_col = 0, dtype = object)
     # Extract ids and k-mers from dask dataframe
     ids = list(ddf.index)
-    kmers_list = len(list(ddf.columns))
-    print(ddf.compute())
+    kmers_list = list(ddf.columns)
+    print(ids)
+    print(len(kmers_list))
+
 
     # Convert dask df to numpy array and write directly to disk with pytables
     arr = ddf.compute().as_matrix()
@@ -166,10 +168,7 @@ def compute_seen_kmers_of_sequence(kmc_path, k, dir_path, ind, file):
     id = os.path.splitext(os.path.basename(file))[0]
     df = pd.read_table('{}/{}.txt'.format(dir_path, ind), header = 0, names = [id], index_col = 0, dtype = object).T
     df.to_csv('{}/{}.csv'.format(dir_path, ind))
-    kmers = df.columns
     #df_file = '{}/{}.txt'.format(dir_path, ind)
-
-    return id, kmers
 
 def compute_given_kmers_of_sequence(kmers_list, kmc_path, k, dir_path, ind, file):
     # Make tmp folder per sequence
@@ -211,7 +210,7 @@ def compute_kmers(seq_data, method, kmers_list, k, dir_path, faSplit, kmc_path, 
 
     # Detect if a GPU is available
     if len(list_physical_devices('GPU')) > 0:
-        list_ids_kmers = parallel_GPU(file_list, method, kmers_list, kmc_path, k, dir_path)
+        parallel_GPU(file_list, method, kmers_list, kmc_path, k, dir_path)
         with LocalCUDACluster() as cluster, Client(cluster) as client:
             ids, kmers_list = construct_data_GPU(Xy_file, dir_path, list_ids_kmers)
     else:
@@ -236,15 +235,13 @@ def parallel_CPU(file_list, method, kmers_list, kmc_path, k, dir_path):
 
 def parallel_GPU(file_list, method, kmers_list, kmc_path, k, dir_path):
     if method == 'seen':
-        list_ids_kmers = Parallel(n_jobs = -1, prefer = 'processes', verbose = 100)(
+        Parallel(n_jobs = -1, prefer = 'processes', verbose = 100)(
         delayed(compute_seen_kmers_of_sequence)
         (kmc_path, k, dir_path, i, file) for i, file in enumerate(file_list))
     elif method == 'given':
-        list_ids_kmers = Parallel(n_jobs = -1, prefer = 'processes', verbose = 100)(
+        Parallel(n_jobs = -1, prefer = 'processes', verbose = 100)(
         delayed(compute_given_kmers_of_sequence)
         (kmers_list, kmc_path, k, dir_path, i, file) for i, file in enumerate(file_list))
-
-    return list_ids_kmers
 
     """
             df = dask_cudf.from_cudf(cudf.read_csv(, sep = "\t", header = 0, names = [id], index_col = 0, dtype = object).T, chunksize = 1)
