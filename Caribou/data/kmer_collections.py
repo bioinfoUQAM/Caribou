@@ -105,51 +105,23 @@ def construct_data_CPU(Xy_file, results):
     return ids, kmers_list
 
 def construct_data_GPU(Xy_file, dir_path):
-    """
-    ids = []
-    kmers_list = None
-    # List files in directory
-    file_list = glob.glob("{}/*.csv".format(dir_path))
-    # Loop through kmers list to get differences and a list of all kmers
-    for tuple in list_ids_kmers:
-        if kmers_list is None:
-            ids. append(tuple[0])
-            kmers_list = list(tuple[1])
-            print(len(kmers_list))
-        else:
-            ids.append(tuple[0])
-            for kmer in tuple[1]:
-                if kmer not in kmers_list:
-                    kmers_list.append(kmer)
-    # Initialize empty dask_cudf
-    ddf = dask_cudf.from_pandas(pd.Dataframe(np.zeros((len(kmers_list),len(ids))), index = ids, columns = kmers, dtype = object))
-    # Set each row to the dask_cuDF
-    for file in file_list:
-        tmp_df = pandas.read_csv(file, header = 0, dtype = object)
-        print(tmp_df)
-        ddf[:, tmp_df.index] = tmp_df
-    ddf.fillna(0)
-    for i in range(len(file_list)):
-        print(i)
-        if i == 0:
-            ddf = dask_cudf.from_cudf(cudf.read_csv(file_list[0], header = 0, index_col = 0, dtype = object).T, chunksize = 1)
-        else:
-            tmp_df = dask_cudf.from_cudf(cudf.read_csv(file_list[i], header = 0, index_col = 0, dtype = object).T, chunksize = 1)
-            ddf = ddf.merge(tmp_df, left_index = True, right_index = True, how = 'left')
-    """
     # Dask_cudf read all .csv in folder and concatenate
     ddf = dask_cudf.read_csv('{}/*.csv'.format(dir_path))
     # Extract ids and k-mers from dask dataframe
     ids = list(ddf.index)
     kmers_list = list(ddf.columns)
-    print(ids)
-    print(len(kmers_list))
+    print(ddf.info)
 
     # Convert dask df to numpy array and write directly to disk with pytables
-    arr = ddf.compute().as_matrix()
-    wait(arr)
-    with tb.open_file(Xy_file, "w") as handle:
-        data = handle.create_carray("/", "data", obj = arr)
+    #arr = ddf.compute().as_matrix()
+
+    with tb.open_file(Xy_file, "a") as handle:
+        for i in range(len(ids)):
+            arr = ddf.loc[i,:].compute().as_matrix()
+            if not os.path.isfile(Xyfile):
+                data = handle.create_earray("/", "data", obj = arr)
+            else:
+                data.append(arr)
 
     return ids, kmers_list
 
