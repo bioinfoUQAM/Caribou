@@ -111,7 +111,7 @@ def construct_data_GPU(Xy_file, dir_path, list_ids_kmers):
     file_list = glob.glob("{}/*.csv".format(dir_path))
     # Loop through kmers list to get differences and a list of all kmers
     for tuple in list_ids_kmers:
-        if kmers_list is None and ids is None:
+        if kmers_list is None:
             ids. append(tuple[0])
             kmers_list = tuple[1]
         else:
