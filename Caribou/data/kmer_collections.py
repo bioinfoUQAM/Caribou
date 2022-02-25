@@ -112,20 +112,18 @@ def construct_data_GPU(Xy_file, dir_path):
     ids_columns_name = kmers_list[0]
     kmers_list.pop(0)
     ids = ddf[ids_columns_name].compute().to_array()
-    print(ids)
-    print(kmers_list[0])
+    ddf.set_index(ids_columns_name)
+
     # Convert dask df to numpy array and write directly to disk with pytables
-    #arr = ddf.compute().as_matrix()
-    """
     with tb.open_file(Xy_file, "a") as handle:
-        for i in range(len(ids)):
-            arr = ddf.loc[i,1:].compute().as_matrix()
+        for id in ids:
+            arr = ddf.loc[id,1:].compute().to_array()
             print(arr)
             if not os.path.isfile(Xyfile):
                 data = handle.create_earray("/", "data", obj = arr)
             else:
                 data.append(arr)
-    """
+
     return ids, kmers_list
 
 def compute_seen_kmers_of_sequence(kmc_path, k, dir_path, ind, file):
