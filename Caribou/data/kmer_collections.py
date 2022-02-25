@@ -110,11 +110,11 @@ def construct_data_GPU(Xy_file, dir_path):
     # Append each row to the dask_cuDF
     for i in range(len(file_list)):
         if i == 0:
-            ddf = dask_cudf.from_cudf(cudf.read_csv(file_list[0], sep = "\t", header = 0, names = [id], index_col = 0, dtype = object).T)
+            ddf = dask_cudf.from_cudf(cudf.read_csv(file_list[0], sep = "\t", header = 0, names = [id], index_col = 0, dtype = object).T, chunksize = 1)
             ddf.persist()
             print(ddf)
         else:
-            tmp_df = dask_cudf.from_cudf(cudf.read_csv(file_list[i], sep = "\t", header = 0, names = [id], index_col = 0, dtype = object).T)
+            tmp_df = dask_cudf.from_cudf(cudf.read_csv(file_list[i], sep = "\t", header = 0, names = [id], index_col = 0, dtype = object).T, chunksize = 1)
             ddf = ddf.append(tmp_df)
             ddf.persist()
     """
