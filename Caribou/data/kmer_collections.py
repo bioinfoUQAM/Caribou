@@ -104,7 +104,7 @@ def construct_data_CPU(Xy_file, results):
 
     return ids, kmers_list
 
-def construct_data_GPU(Xy_file, dir_path, list_ids_kmers):
+def construct_data_GPU(Xy_file, dir_path):
     """
     ids = []
     kmers_list = None
@@ -144,7 +144,6 @@ def construct_data_GPU(Xy_file, dir_path, list_ids_kmers):
     kmers_list = list(ddf.columns)
     print(ids)
     print(len(kmers_list))
-
 
     # Convert dask df to numpy array and write directly to disk with pytables
     arr = ddf.compute().as_matrix()
@@ -212,7 +211,7 @@ def compute_kmers(seq_data, method, kmers_list, k, dir_path, faSplit, kmc_path, 
     if len(list_physical_devices('GPU')) > 0:
         parallel_GPU(file_list, method, kmers_list, kmc_path, k, dir_path)
         with LocalCUDACluster() as cluster, Client(cluster) as client:
-            ids, kmers_list = construct_data_GPU(Xy_file, dir_path, list_ids_kmers)
+            ids, kmers_list = construct_data_GPU(Xy_file, dir_path)
     else:
         results = parallel_CPU(file_list, method, kmers_list, kmc_path, k, dir_path)
         ids, kmers_list = construct_data_CPU(Xy_file, results)
