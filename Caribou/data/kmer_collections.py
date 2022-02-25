@@ -108,7 +108,7 @@ def construct_data_GPU(Xy_file, dir_path):
     # Dask_cudf read all .csv in folder and concatenate
     ddf = dask_cudf.read_csv('{}/*.csv'.format(dir_path))
     # Extract ids and k-mers from dask dataframe
-    ids = list(ddf[0].compute())
+    ids = list(ddf[list(ddf.columns)[0]].compute())
     kmers_list = list(ddf.columns).pop(0)
     wait(ids)
     print(ids)
