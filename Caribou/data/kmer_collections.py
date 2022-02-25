@@ -105,6 +105,7 @@ def construct_data_CPU(Xy_file, results):
     return ids, kmers_list
 
 def construct_data_GPU(Xy_file, dir_path):
+    data = None
     # Dask_cudf read all .csv in folder and concatenate
     ddf = dask_cudf.read_csv('{}/*.csv'.format(dir_path))
     # Extract ids and k-mers from dask dataframe
@@ -117,7 +118,7 @@ def construct_data_GPU(Xy_file, dir_path):
     with tb.open_file(Xy_file, "a") as handle:
         for id in ids:
             print(id)
-            if not os.path.isfile(Xy_file):
+            if data is None:
                 data = handle.create_earray("/", "data", obj = np.delete(ddf[ddf[ids_columns_name] == id].compute().to_numpy(), 0))
             else:
                 data.append(arr)
