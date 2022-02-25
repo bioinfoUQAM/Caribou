@@ -105,6 +105,7 @@ def construct_data_CPU(Xy_file, results):
     return ids, kmers_list
 
 def construct_data_GPU(Xy_file, dir_path, list_ids_kmers):
+    """
     ids = []
     kmers_list = None
     # List files in directory
@@ -128,7 +129,6 @@ def construct_data_GPU(Xy_file, dir_path, list_ids_kmers):
         print(tmp_df)
         ddf[:, tmp_df.index] = tmp_df
     ddf.fillna(0)
-    """
     for i in range(len(file_list)):
         print(i)
         if i == 0:
@@ -136,12 +136,13 @@ def construct_data_GPU(Xy_file, dir_path, list_ids_kmers):
         else:
             tmp_df = dask_cudf.from_cudf(cudf.read_csv(file_list[i], header = 0, index_col = 0, dtype = object).T, chunksize = 1)
             ddf = ddf.merge(tmp_df, left_index = True, right_index = True, how = 'left')
-    # Dask_cudf read all .txt in folder and concatenate
-    ddf_csv = dask_cudf.read_csv('{}/*.csv'.format(dir_path))
-    # Extract ids and k-mers from dask dataframe
-    ids = list(ddf_csv.index)
-    kmers_list = len(list(ddf_csv.columns))
     """
+    # Dask_cudf read all .txt in folder and concatenate
+    ddf = dask_cudf.read_csv('{}/*.csv'.format(dir_path))
+    # Extract ids and k-mers from dask dataframe
+    ids = list(ddf.index)
+    kmers_list = len(list(ddf.columns))
+    print(ddf.compute())
 
     # Convert dask df to numpy array and write directly to disk with pytables
     arr = ddf.compute().as_matrix()
