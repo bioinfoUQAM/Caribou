@@ -110,9 +110,8 @@ def construct_data_GPU(Xy_file, dir_path):
     # Extract ids and k-mers from dask dataframe
     kmers_list = list(ddf.columns)
     ids_columns_name = kmers_list[0]
-    print(ids_columns_name)
-    ids = ddf[ids_columns_name].compute()
-    wait(ids)
+    kmers_list.pop(0)
+    ids = ddf[ids_columns_name].compute().to_array()
     print(ids)
     print(kmers_list[0])
     # Convert dask df to numpy array and write directly to disk with pytables
