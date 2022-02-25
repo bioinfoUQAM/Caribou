@@ -106,15 +106,14 @@ def construct_data_CPU(Xy_file, results):
 def construct_data_GPU(Xy_file, dir_path):
     # List files in directory
     file_list = os.listdir(dir_path)
-    print(file_list)
     # Append each row to the dask_cuDF
     for i, file in enumerate(file_list):
         if i == 0:
             ddf = dask_cudf.read_csv("{}/{}".format(dir_path, file_list[0]))
         else:
             tmp_df = dask_cudf.read_csv("{}/{}".format(dir_path, file_list[i]))
-            print(tmp_df)
-            ddf = ddf.merge(tmp_df, on = ddf.index, how = 'left')
+            ddf = ddf.append(tmp_df)
+            ddf.persist()
     """
     # Dask_cudf read all .txt in folder and concatenate
     ddf_csv = dask_cudf.read_csv('{}/*.csv'.format(dir_path))
@@ -123,8 +122,8 @@ def construct_data_GPU(Xy_file, dir_path):
     kmers_list = len(list(ddf_csv.columns))
     """
 
-    print('kmers_list :', kmers_list)
-    print('ids : ', ids)
+    print('kmers_list :', ddf.columns)
+    print('ids : ', ddf.index)
 
     # Convert dask df to numpy array and write directly to disk with pytables
     arr = ddf.compute().as_matrix()
