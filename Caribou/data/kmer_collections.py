@@ -111,7 +111,7 @@ def construct_data_GPU(Xy_file, dir_path):
     kmers_list = list(ddf.columns)
     ids_columns_name = kmers_list[0]
     print(ids_columns_name)
-    ids = list(ddf[ids_columns_name].compute())
+    ids = ddf[ids_columns_name].compute()
     wait(ids)
     print(ids)
     print(kmers_list[0])
@@ -130,20 +130,21 @@ def construct_data_GPU(Xy_file, dir_path):
     return ids, kmers_list
 
 def compute_seen_kmers_of_sequence(kmc_path, k, dir_path, ind, file):
-    # Make tmp folder per sequence
-    tmp_folder = "{}tmp_{}/".format(dir_path, ind)
-    os.mkdir(tmp_folder)
-    # Count k-mers with KMC
-    cmd_count = "{}/kmc -k{} -fm -cs1000000000 -m10 -hp {} {}/{} {}".format(kmc_path, k, file, tmp_folder, ind, tmp_folder)
-    run(cmd_count, shell = True, capture_output=True)
-    # Transform k-mers db with KMC
-    cmd_transform = "{}/kmc_tools transform {}/{} dump {}/{}.txt".format(kmc_path, tmp_folder, ind, dir_path, ind)
-    run(cmd_transform, shell = True, capture_output=True)
-    # Parse k-mers file to dask dataframe
-    id = os.path.splitext(os.path.basename(file))[0]
-    df = pd.read_table('{}/{}.txt'.format(dir_path, ind), header = 0, names = [id], index_col = 0, dtype = object).T
-    df.to_csv('{}/{}.csv'.format(dir_path, ind))
-    #df_file = '{}/{}.txt'.format(dir_path, ind)
+    if not os.path.isfile('{}/{}.csv'.format(dir_path, ind)):
+        # Make tmp folder per sequence
+        tmp_folder = "{}tmp_{}/".format(dir_path, ind)
+        os.mkdir(tmp_folder)
+        # Count k-mers with KMC
+        cmd_count = "{}/kmc -k{} -fm -cs1000000000 -m10 -hp {} {}/{} {}".format(kmc_path, k, file, tmp_folder, ind, tmp_folder)
+        run(cmd_count, shell = True, capture_output=True)
+        # Transform k-mers db with KMC
+        cmd_transform = "{}/kmc_tools transform {}/{} dump {}/{}.txt".format(kmc_path, tmp_folder, ind, dir_path, ind)
+        run(cmd_transform, shell = True, capture_output=True)
+        # Parse k-mers file to dask dataframe
+        id = os.path.splitext(os.path.basename(file))[0]
+        df = pd.read_table('{}/{}.txt'.format(dir_path, ind), header = 0, names = [id], index_col = 0, dtype = object).T
+        df.to_csv('{}/{}.csv'.format(dir_path, ind))
+        #df_file = '{}/{}.txt'.format(dir_path, ind)
 
 def compute_given_kmers_of_sequence(kmers_list, kmc_path, k, dir_path, ind, file):
     # Make tmp folder per sequence
