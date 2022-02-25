@@ -181,7 +181,7 @@ def compute_given_kmers_of_sequence(kmers_list, kmc_path, k, dir_path, ind, file
     run(cmd_transform, shell = True, capture_output=True)
     # Parse k-mers file to dask dataframe
     id = os.path.splitext(os.path.basename(file))[0]
-    profile = pd.read_table('{}/{}.txt'.format(dir_path, ind), header = 0, names = [id], index_col = 0, dtype = object).T
+    profile = pd.read_table('{}/{}.txt'.format(dir_path, ind), header = 0, names = [id], dtype = object).T
 
     df = pd.DataFrame(np.zeros((1,len(kmers_list))), columns = kmers_list, index = [id])
 
