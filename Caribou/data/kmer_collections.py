@@ -16,6 +16,8 @@ import pandas as pd
 if len(list_physical_devices('GPU')) > 0:
     import cudf
     import dask_cudf
+    import dask.dataframe
+    import dask.multiprocessing
     from dask.distributed import Client, wait
     from dask_cuda import LocalCUDACluster
 else:
@@ -119,7 +121,7 @@ def construct_data_GPU(Xy_file, dir_path):
         for id in ids:
             print(id)
             if data is None:
-                data = handle.create_earray("/", "data", obj = np.delete(ddf[ddf[ids_columns_name] == id].compute().to_numpy(), 0))
+                data = handle.create_earray("/", "data", obj = np.delete(ddf[ddf[ids_columns_name] == id].compute().to_numpy(), 0).astype(np.int64))
             else:
                 data.append(arr)
 
