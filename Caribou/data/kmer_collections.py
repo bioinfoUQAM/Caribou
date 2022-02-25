@@ -108,16 +108,17 @@ def construct_data_GPU(Xy_file, dir_path):
     # Dask_cudf read all .csv in folder and concatenate
     ddf = dask_cudf.read_csv('{}/*.csv'.format(dir_path))
     # Extract ids and k-mers from dask dataframe
-    ids = list(ddf.index)
-    kmers_list = list(ddf.columns)
-    print(ddf.info)
-
+    ids = list(ddf.loc[0])
+    kmers_list = list(ddf.columns).pop(0)
+    print(ids)
+    print(len(kmers_list))
     # Convert dask df to numpy array and write directly to disk with pytables
     #arr = ddf.compute().as_matrix()
 
     with tb.open_file(Xy_file, "a") as handle:
         for i in range(len(ids)):
-            arr = ddf.loc[i,:].compute().as_matrix()
+            arr = ddf.loc[i,1:].compute().as_matrix()
+            print(arr)
             if not os.path.isfile(Xyfile):
                 data = handle.create_earray("/", "data", obj = arr)
             else:
