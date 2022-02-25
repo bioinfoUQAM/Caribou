@@ -104,6 +104,7 @@ def construct_data_CPU(Xy_file, results):
     return ids, kmers_list
 
 def construct_data_GPU(Xy_file, dir_path):
+    """
     # List files in directory
     file_list = os.listdir(dir_path)
     # Append each row to the dask_cuDF
@@ -114,8 +115,10 @@ def construct_data_GPU(Xy_file, dir_path):
             tmp_df = dask_cudf.read_csv(file_list[i])
             print(tmp_df)
             ddf = ddf.merge(tmp_df, on = 'index', how = 'left')
+    """
     # Dask_cudf read all .txt in folder and concatenate
-    #ddf = dask_cudf.read_csv('{}/*.csv'.format(dir_path), index = [id])
+    ddf = dask_cudf.read_csv('{}/*.csv'.format(dir_path), index = [id])
+    print(ddf)
     # Extract ids and k-mers from dask dataframe
     ids = list(ddf.index.compute())
     kmers_list = len(list(ddf.columns.compute()))
