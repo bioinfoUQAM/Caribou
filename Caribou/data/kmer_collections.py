@@ -104,7 +104,6 @@ def construct_data_CPU(Xy_file, results):
     return ids, kmers_list
 
 def construct_data_GPU(Xy_file, dir_path):
-    """
     # List files in directory
     file_list = os.listdir(dir_path)
     # Append each row to the dask_cuDF
@@ -113,13 +112,13 @@ def construct_data_GPU(Xy_file, dir_path):
         ddf = dask_cudf.read_csv(file_list[0])
     else:
         tmp_df = dask_cudf.read_csv(file_list[i])
+        print(tmp_df)
         ddf = ddf.merge(tmp_df, on = 'index', how = 'left')
-    """
     # Dask_cudf read all .txt in folder and concatenate
-    ddf = dask_cudf.read_csv('{}/*.csv'.format(dir_path))
+    #ddf = dask_cudf.read_csv('{}/*.csv'.format(dir_path), index = [id])
     # Extract ids and k-mers from dask dataframe
-    ids = list(ddf.index)
-    kmers_list = len(list(ddf.columns))
+    ids = list(ddf.index.compute())
+    kmers_list = len(list(ddf.columns.compute()))
 
     print('kmers_list :', kmers_list)
     print('ids : ', ids)
@@ -144,9 +143,7 @@ def compute_seen_kmers_of_sequence(kmc_path, k, dir_path, ind, file):
     run(cmd_transform, shell = True, capture_output=True)
     # Parse k-mers file to dask dataframe
     id = os.path.splitext(os.path.basename(file))[0]
-    print("id = ", id)
     df = pd.read_table('{}/{}.txt'.format(dir_path, ind), header = 0, names = [id], index_col = 0, dtype = object).T
-    print(df)
     df.to_csv('{}/{}.csv'.format(dir_path, ind))
     #df_file = '{}/{}.txt'.format(dir_path, ind)
 
