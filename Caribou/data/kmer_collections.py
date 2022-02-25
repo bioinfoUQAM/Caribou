@@ -117,10 +117,8 @@ def construct_data_GPU(Xy_file, dir_path):
     with tb.open_file(Xy_file, "a") as handle:
         for id in ids:
             print(id)
-            arr = ddf[ddf[ids_columns_name] == id].compute().to_numpy()
-            arr = np.delete(arr, 0)
-            if not os.path.isfile(Xyfile):
-                data = handle.create_earray("/", "data", obj = arr)
+            if not os.path.isfile(Xy_file):
+                data = handle.create_earray("/", "data", obj = np.delete(ddf[ddf[ids_columns_name] == id].compute().to_numpy(), 0))
             else:
                 data.append(arr)
 
