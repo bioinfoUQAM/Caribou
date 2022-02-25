@@ -106,16 +106,15 @@ def construct_data_CPU(Xy_file, results):
 
 def construct_data_GPU(Xy_file, dir_path):
     # List files in directory
-    file_list = glob.glob("{}/*.csv".format(dir_path))
-    print(file_list)
+    file_list = glob.glob("{}/*.txt".format(dir_path))
     # Append each row to the dask_cuDF
     for i in range(len(file_list)):
-        print("i = ", i)
-        print("file = ", file_list[i])
         if i == 0:
-            ddf = dask_cudf.read_csv(file_list[0], dtype = int )
+            ddf = dask_cudf.from_cudf(cudf.read_csv(file_list[0], sep = "\t", header = 0, names = [id], index_col = 0, dtype = object).T)
+            ddf.persist()
+            print(ddf)
         else:
-            tmp_df = dask_cudf.read_csv(file_list[i], dtype = int )
+            tmp_df = dask_cudf.from_cudf(cudf.read_csv(file_list[i], sep = "\t", header = 0, names = [id], index_col = 0, dtype = object).T)
             ddf = ddf.append(tmp_df)
             ddf.persist()
     """
@@ -149,8 +148,8 @@ def compute_seen_kmers_of_sequence(kmc_path, k, dir_path, ind, file):
     run(cmd_transform, shell = True, capture_output=True)
     # Parse k-mers file to dask dataframe
     id = os.path.splitext(os.path.basename(file))[0]
-    df = pd.read_table('{}/{}.txt'.format(dir_path, ind), header = 0, names = [id], index_col = 0, dtype = object).T
-    df.to_csv('{}/{}.csv'.format(dir_path, ind))
+    #df = pd.read_table('{}/{}.txt'.format(dir_path, ind), header = 0, names = [id], index_col = 0, dtype = object).T
+    #df.to_csv('{}/{}.csv'.format(dir_path, ind))
     #df_file = '{}/{}.txt'.format(dir_path, ind)
 
     #return df_file
