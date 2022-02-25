@@ -105,20 +105,21 @@ def construct_data_CPU(Xy_file, results):
 
 def construct_data_GPU(Xy_file, dir_path):
     """
-    ddf = None
     # List files in directory
-    os.listdir(dir_path)
+    file_list = os.listdir(dir_path)
     # Append each row to the dask_cuDF
-    if ddf is None:
-        ddf =
+    for i, file in enumerate(file_list):
+    if i == 0:
+        ddf = dask_cudf.read_csv(file_list[0])
     else:
-        ddf =
+        tmp_df = dask_cudf.read_csv(file_list[i])
+        ddf = ddf.merge(tmp_df, on = 'index', how = 'left')
     """
     # Dask_cudf read all .txt in folder and concatenate
     ddf = dask_cudf.read_csv('{}/*.csv'.format(dir_path))
     # Extract ids and k-mers from dask dataframe
-    ids = len(list(ddf.index))
-    kmers_list = list(ddf.columns)
+    ids = list(ddf.index)
+    kmers_list = len(list(ddf.columns))
 
     print('kmers_list :', kmers_list)
     print('ids : ', ids)
