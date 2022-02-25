@@ -138,7 +138,7 @@ def construct_data_GPU(Xy_file, dir_path):
             ddf = ddf.merge(tmp_df, left_index = True, right_index = True, how = 'left')
     """
     # Dask_cudf read all .txt in folder and concatenate
-    ddf = dask_cudf.read_csv('{}/*.csv'.format(dir_path), header = 0, index_col = 0, dtype = object)
+    ddf = dask_cudf.read_csv('{}/*.csv'.format(dir_path), header = 0, dtype = object)
     # Extract ids and k-mers from dask dataframe
     ids = list(ddf.index)
     kmers_list = list(ddf.columns)
@@ -181,7 +181,7 @@ def compute_given_kmers_of_sequence(kmers_list, kmc_path, k, dir_path, ind, file
     run(cmd_transform, shell = True, capture_output=True)
     # Parse k-mers file to dask dataframe
     id = os.path.splitext(os.path.basename(file))[0]
-    profile = pd.read_table('{}/{}.txt'.format(dir_path, ind), header = 0, names = [id], dtype = object).T
+    profile = pd.read_table('{}/{}.txt'.format(dir_path, ind), header = 0, names = [id], index_col = 0, dtype = object).T
 
     df = pd.DataFrame(np.zeros((1,len(kmers_list))), columns = kmers_list, index = [id])
 
