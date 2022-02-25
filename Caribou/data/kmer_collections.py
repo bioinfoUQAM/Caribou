@@ -210,9 +210,6 @@ def parallel_GPU(file_list, method, kmers_list, kmc_path, k, dir_path):
             delayed(compute_given_kmers_of_sequence)
             (kmers_list, kmc_path, k, dir_path, i, file) for i, file in enumerate(file_list))
 
-        for result in results:
-            result = dask_cudf.from_cudf(cudf.from_pandas(result), chunksize = 1)
-
         ddf = dask_cudf.concat(results).compute()
 
     return ddf
