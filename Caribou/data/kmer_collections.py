@@ -15,7 +15,7 @@ import pandas as pd
 if len(list_physical_devices('GPU')) > 0:
     import cudf
     import dask_cudf
-    from dask.distributed import Client
+    from dask.distributed import Client, wait
     from dask_cuda import LocalCUDACluster
 else:
     from collections import defaultdict
@@ -103,17 +103,31 @@ def construct_data_CPU(Xy_file, results):
 
     return ids, kmers_list
 
-def construct_data_GPU(Xy_file, ddf):
+def construct_data_GPU(Xy_file, dir_path):
+    """
+    ddf = None
+    # List files in directory
+    os.listdir(dir_path)
+    # Append each row to the dask_cuDF
+    if ddf is None:
+        ddf =
+    else:
+        ddf =
+    """
+    # Dask_cudf read all .txt in folder and concatenate
+    ddf = dask_cudf.read_csv('{}/*.csv'.format(dir_path))
     # Extract ids and k-mers from dask dataframe
-    ids = list(ddf.index)
+    ids = len(list(ddf.index))
     kmers_list = list(ddf.columns)
 
     print('kmers_list :', kmers_list)
     print('ids : ', ids)
 
     # Convert dask df to numpy array and write directly to disk with pytables
+    arr = ddf.compute().as_matrix()
+    wait(arr)
     with tb.open_file(Xy_file, "w") as handle:
-        data = handle.create_carray("/", "data", obj = ddf.compute().as_matrix())
+        data = handle.create_carray("/", "data", obj = arr)
 
     return ids, kmers_list
 
@@ -129,7 +143,9 @@ def compute_seen_kmers_of_sequence(kmc_path, k, dir_path, ind, file):
     run(cmd_transform, shell = True, capture_output=True)
     # Parse k-mers file to dask dataframe
     id = os.path.splitext(os.path.basename(file))[0]
+    print("id = ", id)
     df = pd.read_table('{}/{}.txt'.format(dir_path, ind), header = 0, names = [id], index_col = 0, dtype = object).T
+    print(df)
     df.to_csv('{}/{}.csv'.format(dir_path, ind))
     #df_file = '{}/{}.txt'.format(dir_path, ind)
 
@@ -175,9 +191,9 @@ def compute_kmers(seq_data, method, kmers_list, k, dir_path, faSplit, kmc_path, 
 
     # Detect if a GPU is available
     if len(list_physical_devices('GPU')) > 0:
+        parallel_GPU(file_list, method, kmers_list, kmc_path, k, dir_path)
         with LocalCUDACluster() as cluster, Client(cluster) as client:
-            ddf = parallel_GPU(file_list, method, kmers_list, kmc_path, k, dir_path)
-            ids, kmers_list = construct_data_GPU(Xy_file, ddf)
+            ids, kmers_list = construct_data_GPU(Xy_file, dir_path)
     else:
         results = parallel_CPU(file_list, method, kmers_list, kmc_path, k, dir_path)
         ids, kmers_list = construct_data_CPU(Xy_file, results)
@@ -208,8 +224,6 @@ def parallel_GPU(file_list, method, kmers_list, kmc_path, k, dir_path):
         delayed(compute_given_kmers_of_sequence)
         (kmers_list, kmc_path, k, dir_path, i, file) for i, file in enumerate(file_list))
 
-    # Dask_cudf read all .txt in folder and concatenate
-    ddf = dask_cudf.read_csv('{}/*.csv'.format(dir_path))
     """
             df = dask_cudf.from_cudf(cudf.read_csv(, sep = "\t", header = 0, names = [id], index_col = 0, dtype = object).T, chunksize = 1)
         else:
@@ -218,4 +232,3 @@ def parallel_GPU(file_list, method, kmers_list, kmc_path, k, dir_path):
 
     ddf = dask_cudf.concat(results).compute()
     """
-    return ddf
