@@ -131,7 +131,7 @@ def compute_seen_kmers_of_sequence(kmc_path, k, dir_path, ind, file):
     # Parse k-mers file to dask dataframe
     id = os.path.splitext(os.path.basename(file))[0]
     if len(list_physical_devices('GPU')) > 0:
-        df = dask_cudf.from_cudf(cudf.read_csv('{}/{}.txt'.format(dir_path, ind), header = 0, names = [id], index_col = 0, dtype = object).T, chunksize = 1)
+        df = cudf.read_csv('{}/{}.txt'.format(dir_path, ind), header = 0, names = [id], index_col = 0, dtype = object).T
     else:
         df = pd.read_table('{}/{}.txt'.format(dir_path, ind), header = 0, names = [id], index_col = 0, dtype = object).T
     print(df)
@@ -200,16 +200,16 @@ def parallel_CPU(file_list, method, kmers_list, kmc_path, k, dir_path):
     return results
 
 def parallel_GPU(file_list, method, kmers_list, kmc_path, k, dir_path):
-    with LocalCUDACluster() as cluster, Client(cluster) as client:
-        if method == 'seen':
-            results = Parallel(n_jobs = -1, prefer = 'processes', verbose = 100)(
-            delayed(compute_seen_kmers_of_sequence)
-            (kmc_path, k, dir_path, i, file) for i, file in enumerate(file_list))
-        elif method == 'given':
-            results = Parallel(n_jobs = -1, prefer = 'processes', verbose = 100)(
-            delayed(compute_given_kmers_of_sequence)
-            (kmers_list, kmc_path, k, dir_path, i, file) for i, file in enumerate(file_list))
+#    with LocalCUDACluster() as cluster, Client(cluster) as client:
+    if method == 'seen':
+        results = Parallel(n_jobs = -1, prefer = 'processes', verbose = 100)(
+        delayed(compute_seen_kmers_of_sequence)
+        (kmc_path, k, dir_path, i, file) for i, file in enumerate(file_list))
+    elif method == 'given':
+        results = Parallel(n_jobs = -1, prefer = 'processes', verbose = 100)(
+        delayed(compute_given_kmers_of_sequence)
+        (kmers_list, kmc_path, k, dir_path, i, file) for i, file in enumerate(file_list))
 
-        ddf = dask_cudf.concat(results).compute()
+        ddf = cudf.concat(results)
 
     return ddf
