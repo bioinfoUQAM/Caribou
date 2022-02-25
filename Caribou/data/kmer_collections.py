@@ -108,13 +108,13 @@ def construct_data_GPU(Xy_file, dir_path):
     # Dask_cudf read all .csv in folder and concatenate
     ddf = dask_cudf.read_csv('{}/*.csv'.format(dir_path))
     # Extract ids and k-mers from dask dataframe
-    ids = list(ddf.loc[0])
+    ids = list(ddf[0].compute())
     kmers_list = list(ddf.columns).pop(0)
     print(ids)
-    print(len(kmers_list))
+    print(kmers_list[0])
     # Convert dask df to numpy array and write directly to disk with pytables
     #arr = ddf.compute().as_matrix()
-
+    """
     with tb.open_file(Xy_file, "a") as handle:
         for i in range(len(ids)):
             arr = ddf.loc[i,1:].compute().as_matrix()
@@ -123,7 +123,7 @@ def construct_data_GPU(Xy_file, dir_path):
                 data = handle.create_earray("/", "data", obj = arr)
             else:
                 data.append(arr)
-
+    """
     return ids, kmers_list
 
 def compute_seen_kmers_of_sequence(kmc_path, k, dir_path, ind, file):
