@@ -1,4 +1,5 @@
 import os
+import glob
 import warnings
 
 from subprocess import run
@@ -105,13 +106,15 @@ def construct_data_CPU(Xy_file, results):
 
 def construct_data_GPU(Xy_file, dir_path):
     # List files in directory
-    file_list = os.listdir(dir_path)
+    file_list = glob.glob("{}/*.csv".format(dir_path))
     # Append each row to the dask_cuDF
     for i, file in enumerate(file_list):
+        print("i = ", i)
+        print("file = ", file)
         if i == 0:
-            ddf = dask_cudf.read_csv("{}/{}".format(dir_path, file_list[0]))
+            ddf = dask_cudf.read_csv("{}/{}".format(dir_path, file))
         else:
-            tmp_df = dask_cudf.read_csv("{}/{}".format(dir_path, file_list[i]))
+            tmp_df = dask_cudf.read_csv("{}/{}".format(dir_path, file))
             ddf = ddf.append(tmp_df)
             ddf.persist()
     """
