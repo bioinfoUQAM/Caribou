@@ -107,14 +107,15 @@ def construct_data_CPU(Xy_file, results):
 def construct_data_GPU(Xy_file, dir_path):
     # List files in directory
     file_list = glob.glob("{}/*.csv".format(dir_path))
+    print(file_list)
     # Append each row to the dask_cuDF
     for i in range(len(file_list)):
         print("i = ", i)
         print("file = ", file_list[i])
         if i == 0:
-            ddf = dask_cudf.read_csv(file_list[0], chunksize = 1)
+            ddf = dask_cudf.read_csv(file_list[0], dtype = int )
         else:
-            tmp_df = dask_cudf.read_csv(file_list[i], chunksize = 1)
+            tmp_df = dask_cudf.read_csv(file_list[i], dtype = int )
             ddf = ddf.append(tmp_df)
             ddf.persist()
     """
