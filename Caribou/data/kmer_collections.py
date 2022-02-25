@@ -112,9 +112,9 @@ def construct_data_GPU(Xy_file, dir_path):
         print("i = ", i)
         print("file = ", file_list[i])
         if i == 0:
-            ddf = dask_cudf.read_csv(file_list[0])
+            ddf = dask_cudf.read_csv(file_list[0], chunksize = 1)
         else:
-            tmp_df = dask_cudf.read_csv(file_list[i])
+            tmp_df = dask_cudf.read_csv(file_list[i], chunksize = 1)
             ddf = ddf.append(tmp_df)
             ddf.persist()
     """
