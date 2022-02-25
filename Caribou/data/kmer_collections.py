@@ -110,11 +110,11 @@ def construct_data_GPU(Xy_file, dir_path):
     # Append each row to the dask_cuDF
     for i, file in enumerate(file_list):
         if i == 0:
-            ddf = dask_cudf.read_csv(file_list[0])
+            ddf = dask_cudf.read_csv("{}/{}".format(dir_path, file_list[0]))
         else:
-            tmp_df = dask_cudf.read_csv(file_list[i])
+            tmp_df = dask_cudf.read_csv("{}/{}".format(dir_path, file_list[i]))
             print(tmp_df)
-            ddf = ddf.merge(tmp_df, on = 'index', how = 'left')
+            ddf = ddf.merge(tmp_df, on = ddf.index, how = 'left')
     """
     # Dask_cudf read all .txt in folder and concatenate
     ddf_csv = dask_cudf.read_csv('{}/*.csv'.format(dir_path))
