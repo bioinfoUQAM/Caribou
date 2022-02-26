@@ -109,10 +109,9 @@ def construct_data_CPU(Xy_file, results):
 def construct_data_GPU(Xy_file, dir_path):
     data = None
     # Dask_cudf read all .csv in folder and concatenate
-    dir_path="/mnt/SLURM_TMPDIR/output/data/tmp/"
-    Xy_file = "/mnt/SLURM_TMPDIR/output/data/test.h5f"
+    #dir_path="/mnt/SLURM_TMPDIR/output/data/tmp/"
+    #Xy_file = "/mnt/SLURM_TMPDIR/output/data/test.h5f"
     ddf = dask_cudf.read_csv('{}/*.csv'.format(dir_path))
-    ddf.fillna(0).compute()
     # Extract ids and k-mers from dask dataframe
     kmers_list = list(ddf.columns)
     ids_columns_name = kmers_list[0]
@@ -124,9 +123,9 @@ def construct_data_GPU(Xy_file, dir_path):
         for id in ids:
             print(id)
             if data is None:
-                data = handle.create_earray("/", "data", obj = np.delete(ddf[ddf[ids_columns_name] == id].fillna(0).compute().to_numpy(dtype = np.int64, na_value = 0), 0, 1))
+                data = handle.create_earray("/", "data", obj = np.delete(ddf[ddf[ids_columns_name] == id].fillna(0).compute().to_numpy(na_value = 0), 0, 1).astype(np.int64))
             else:
-                data.append(np.delete(ddf[ddf[ids_columns_name] == id].compute().to_numpy(dtype = np.int64, na_value = 0), 0, 1))
+                data.append(np.delete(ddf[ddf[ids_columns_name] == id].compute().to_numpy(na_value = 0), 0, 1).astype(np.int64))
 
     return ids, kmers_list
 
