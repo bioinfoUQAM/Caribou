@@ -119,19 +119,24 @@ def construct_data_GPU(Xy_file, dir_path, list_id_file):
     ddf = None
     # Iterate over ids / files
     for id, file in list_id_file:
-        print(id, file)
         if ddf is None:
-            # Read first file to ddf directly
-            ddf = dask_cudf.read_csv(file, sep = "\t", header = None, names = ['kmers', id])
-            # Sort kmers column for faster join
-            ddf = ddf.sort_values(by = 'kmers')
+            try:
+                # Read first file to ddf directly
+                ddf = dask_cudf.read_csv(file, sep = "\t", header = None, names = ['kmers', id])
+                # Sort kmers column for faster join
+                ddf = ddf.sort_values(by = 'kmers')
+            except IndexError:
+                print("Kmers extraction error for sequence {}".format(id))
         else:
-            # Read each file individually
-            tmp = dask_cudf.read_csv(file, sep = "\t", header = None, names = ['kmers', id])
-            # Sort kmers column for faster join
-            tmp = tmp.sort_values(by = 'kmers')
-            # Outer join each file to ddf (fast according to doc)
-            ddf = ddf.merge(tmp, on = 'kmers', how = 'outer')
+            try:
+                # Read each file individually
+                tmp = dask_cudf.read_csv(file, sep = "\t", header = None, names = ['kmers', id])
+                # Sort kmers column for faster join
+                tmp = tmp.sort_values(by = 'kmers')
+                # Outer join each file to ddf (fast according to doc)
+                ddf = ddf.merge(tmp, on = 'kmers', how = 'outer')
+            except IndexError:
+                print("Kmers extraction error for sequence {}".format(id))
 
     # Extract ids and k-mers from dask_cudf dataframe + remove kmers column
     kmers_list = ddf.loc[:,'kmers'].compute().to_numpy()
