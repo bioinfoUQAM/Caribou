@@ -20,8 +20,6 @@ if len(list_physical_devices('GPU')) > 0:
     import dask.multiprocessing
     from dask.distributed import Client, wait
     from dask_cuda import LocalCUDACluster
-else:
-    from collections import defaultdict
 
 
 # From mlr_kgenomvir
@@ -89,43 +87,59 @@ def kmers_collection(seq_data, Xy_file, length, k, method = 'seen', kmers_list =
 
     return collection
 
-def construct_data_CPU(Xy_file, results):
-    dict_data = defaultdict(lambda: [0]*len(results))
-    ids = []
-    for ind, result in enumerate(results):
-        kmers_list = list(result)
-        ids.append(result.index[0])
-        for kmer in kmers_list:
-            dict_data[kmer][ind] = result[kmer][0]
+def construct_data_CPU(Xy_file, dir_path, list_id_file):
+    df = None
+    # Iterate over ids / files
+    for id, file in list_id_file:
+        if df is None:
+            # Read first file to df directly
+            df = pd.read_csv(file, sep = "\t", header = None, names = ['kmers', id], index_col=False)
+            # Sort kmers column for faster join
+            df = df.sort_values(by = 'kmers')
+        else:
+            # Read each file individually
+            tmp = pd.read_csv(file, sep = "\t", header = None, names = ['kmers', id], index_col=False)
+            # Sort kmers column for faster join
+            tmp = tmp.sort_values(by = 'kmers')
+            # Outer join each file to df
+            df = df.merge(tmp, on = 'kmers', how = 'outer')
 
-    print('kmers_list :', kmers_list)
-    print('ids : ', ids)
+    # Extract ids and k-mers from df dataframe + remove kmers column
+    kmers_list = list(df.loc[:, 'kmers'])
+    df = df.drop(columns = 'kmers')
+    ids = list(df.columns)
 
+    # Convert pandas to numpy array and write directly to disk with pytables
     with tb.open_file(Xy_file, "w") as handle:
-        data = handle.create_carray("/", "data", obj = np.array([ dict_data[x] for x in dict_data ], dtype=np.int64).T)
+        data = handle.create_carray("/", "data", obj = np.array(df.T.fillna(0), dtype = np.int64))
 
     return ids, kmers_list
 
-def construct_data_GPU(Xy_file, dir_path):
-    data = None
-    # Dask_cudf read all .csv in folder and concatenate
-    #dir_path="/mnt/SLURM_TMPDIR/output/data/tmp/"
-    #Xy_file = "/mnt/SLURM_TMPDIR/output/data/test.h5f"
-    ddf = dask_cudf.read_csv('{}/*.csv'.format(dir_path))
-    # Extract ids and k-mers from dask dataframe
-    kmers_list = list(ddf.columns)
-    ids_columns_name = kmers_list[0]
-    kmers_list.pop(0)
-    ids = ddf[ids_columns_name].compute().to_numpy()
+def construct_data_GPU(Xy_file, dir_path, list_id_file):
+    ddf = None
+    # Iterate over ids / files
+    for id, file in list_id_file:
+        if ddf is None:
+            # Read first file to ddf directly
+            ddf = dask_cudf.read_csv(file, sep = "\t", header = None, names = ['kmers', id])
+            # Sort kmers column for faster join
+            ddf = ddf.sort_values(by = 'kmers')
+        else:
+            # Read each file individually
+            tmp = dask_cudf.read_csv(file, sep = "\t", header = None, names = ['kmers', id])
+            # Sort kmers column for faster join
+            tmp = tmp.sort_values(by = 'kmers')
+            # Outer join each file to ddf (fast according to doc)
+            ddf = ddf.merge(tmp, on = 'kmers', how = 'outer')
 
-    # Convert dask df to numpy array and write directly to disk with pytables
+    # Extract ids and k-mers from dask_cudf dataframe + remove kmers column
+    kmers_list = ddf.loc[:,'kmers'].compute().to_numpy()
+    ddf = ddf.drop(columns = 'kmers')
+    ids = list(ddf.columns)
+
+    # Convert dask_cudf to numpy array and write directly to disk with pytables
     with tb.open_file(Xy_file, "w") as handle:
-        for id in ids:
-            print(id)
-            if data is None:
-                data = handle.create_earray("/", "data", obj = np.delete(ddf[ddf[ids_columns_name] == id].fillna(0).compute().to_numpy(na_value = 0), 0, 1).astype(np.int64))
-            else:
-                data.append(np.delete(ddf[ddf[ids_columns_name] == id].compute().to_numpy(na_value = 0), 0, 1).astype(np.int64))
+        data = handle.create_carray("/", "data", obj = ddf.fillna(0).compute().to_numpy().astype(np.int64).T)
 
     return ids, kmers_list
 
@@ -142,9 +156,8 @@ def compute_seen_kmers_of_sequence(kmc_path, k, dir_path, ind, file):
         run(cmd_transform, shell = True, capture_output=True)
         # Parse k-mers file to dask dataframe
         id = os.path.splitext(os.path.basename(file))[0]
-        df = pd.read_table('{}/{}.txt'.format(dir_path, ind), header = 0, names = [id], index_col = 0, dtype = object).T
-        df.to_csv('{}/{}.csv'.format(dir_path, ind))
-        #df_file = '{}/{}.txt'.format(dir_path, ind)
+
+        return id, "{}/{}.txt".format(dir_path, ind)
 
 def compute_given_kmers_of_sequence(kmers_list, kmc_path, k, dir_path, ind, file):
     # Make tmp folder per sequence
@@ -159,7 +172,7 @@ def compute_given_kmers_of_sequence(kmers_list, kmc_path, k, dir_path, ind, file
     # Parse k-mers file to dask dataframe
     id = os.path.splitext(os.path.basename(file))[0]
     profile = pd.read_table('{}/{}.txt'.format(dir_path, ind), header = 0, names = [id], index_col = 0, dtype = object).T
-
+    # Temp pandas df to write given kmers to file
     df = pd.DataFrame(np.zeros((1,len(kmers_list))), columns = kmers_list, index = [id])
 
     for kmer in kmers_list:
@@ -168,7 +181,9 @@ def compute_given_kmers_of_sequence(kmers_list, kmc_path, k, dir_path, ind, file
         else:
             df.at[id,kmer] = 0
 
-    return df
+    df.T.to_csv('{}/{}.txt'.format(dir_path, ind), sep = "\t", header = False)
+
+    return id, '{}/{}.txt'.format(dir_path, ind)
 
 def compute_kmers(seq_data, method, kmers_list, k, dir_path, faSplit, kmc_path, Xy_file):
     file_list = []
@@ -186,12 +201,12 @@ def compute_kmers(seq_data, method, kmers_list, k, dir_path, faSplit, kmc_path, 
 
     # Detect if a GPU is available
     if len(list_physical_devices('GPU')) > 0:
-        parallel_GPU(file_list, method, kmers_list, kmc_path, k, dir_path)
+        list_id_file = parallel_GPU(file_list, method, kmers_list, kmc_path, k, dir_path)
         with LocalCUDACluster() as cluster, Client(cluster) as client:
-            ids, kmers_list = construct_data_GPU(Xy_file, dir_path)
+            ids, kmers_list = construct_data_GPU(Xy_file, dir_path, list_id_file)
     else:
-        results = parallel_CPU(file_list, method, kmers_list, kmc_path, k, dir_path)
-        ids, kmers_list = construct_data_CPU(Xy_file, results)
+        list_id_file = parallel_CPU(file_list, method, kmers_list, kmc_path, k, dir_path)
+        ids, kmers_list = construct_data_CPU(Xy_file, dir_path, list_id_file)
 
     return ids, kmers_list
 
@@ -211,19 +226,12 @@ def parallel_CPU(file_list, method, kmers_list, kmc_path, k, dir_path):
 
 def parallel_GPU(file_list, method, kmers_list, kmc_path, k, dir_path):
     if method == 'seen':
-        Parallel(n_jobs = -1, prefer = 'processes', verbose = 100)(
+        results = Parallel(n_jobs = -1, prefer = 'processes', verbose = 100)(
         delayed(compute_seen_kmers_of_sequence)
         (kmc_path, k, dir_path, i, file) for i, file in enumerate(file_list))
     elif method == 'given':
-        Parallel(n_jobs = -1, prefer = 'processes', verbose = 100)(
+        results = Parallel(n_jobs = -1, prefer = 'processes', verbose = 100)(
         delayed(compute_given_kmers_of_sequence)
         (kmers_list, kmc_path, k, dir_path, i, file) for i, file in enumerate(file_list))
 
-    """
-            df = dask_cudf.from_cudf(cudf.read_csv(, sep = "\t", header = 0, names = [id], index_col = 0, dtype = object).T, chunksize = 1)
-        else:
-            df = pd.read_table('{}/{}.txt'.format(dir_path, ind), header = 0, names = [id], index_col = 0, dtype = object).T
-
-
-    ddf = dask_cudf.concat(results).compute()
-    """
+    return results
