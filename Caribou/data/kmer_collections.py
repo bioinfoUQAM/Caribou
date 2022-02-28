@@ -119,6 +119,7 @@ def construct_data_GPU(Xy_file, dir_path, list_id_file):
     ddf = None
     # Iterate over ids / files
     for id, file in list_id_file:
+        print(id, file)
         if ddf is None:
             # Read first file to ddf directly
             ddf = dask_cudf.read_csv(file, sep = "\t", header = None, names = ['kmers', id])
