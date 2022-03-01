@@ -126,6 +126,7 @@ def construct_data_GPU(Xy_file, dir_path, list_id_file):
                 # Sort kmers column for faster join
                 ddf = ddf.sort_values(by = 'kmers')
             except IndexError:
+                # If no extracted kmers found
                 print("Kmers extraction error for sequence {}".format(id))
         else:
             try:
@@ -136,6 +137,7 @@ def construct_data_GPU(Xy_file, dir_path, list_id_file):
                 # Outer join each file to ddf (fast according to doc)
                 ddf = ddf.merge(tmp, on = 'kmers', how = 'outer')
             except IndexError:
+                # If no extracted kmers found
                 print("Kmers extraction error for sequence {}".format(id))
 
     # Extract ids and k-mers from dask_cudf dataframe + remove kmers column

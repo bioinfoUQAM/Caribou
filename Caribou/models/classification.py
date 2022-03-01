@@ -20,22 +20,22 @@ __author__ = "Nicolas de Montigny"
 __all__ = ['bacterial_classification','training','classify']
 
 def bacterial_classification(classified_data, database_k_mers, k, outdirs, dataset, classifier = "lstm_attention", batch_size = 32, threshold = 0.8, verbose = 1, cv = 1, n_jobs = 1):
-    metagenome_k_mers = classified_data["bacteria"]
-
-    previous_taxa_unclassified = None
-    train = False
+    if classified_data is not None:
+        metagenome_k_mers = classified_data["bacteria"]
+        previous_taxa_unclassified = None
 
     taxas = database_k_mers["taxas"].copy()
 
     for taxa in taxas:
-        classified_kmers_file = "{}Xy_classified_{}_K{}_{}_database_{}_data.hdf5".format(outdirs["data_dir"], taxa, k, classifier, dataset) # Pandas df en output?
+        train = False
+        classified_kmers_file = "{}Xy_classified_{}_K{}_{}_database_{}_data.hdf5".format(outdirs["data_dir"], taxa, k, classifier, dataset)
         unclassified_kmers_file = "{}Xy_unclassified_{}_K{}_{}_database_{}_data.hdf5".format(outdirs["data_dir"], taxa, k, classifier, dataset)
 
         if taxa == taxas[-1]:
             classified_data[taxa] = previous_taxa_unclassified
             classified_data["order"].append(taxa)
         else:
-            if classifier in ["ridge","svm","mlr","kmeans","mnb"]:
+            if classifier in ["ridge","svm","mlr","mnb"]:
                 clf_file = "{}bacteria_identification_classifier_{}_K{}_{}_{}_model.jb".format(outdirs["models_dir"], taxa, k, classifier, dataset)
                 if not os.path.isfile(clf_file):
                     train = True
@@ -66,22 +66,24 @@ def bacterial_classification(classified_data, database_k_mers, k, outdirs, datas
                 # If classifier exists load it or train if not
                 if train is True:
                     clf_file = training(X_train, y_train, database_k_mers["kmers_list"],k, database_k_mers["ids"], nb_classes, labels_list_int, outdirs["plots_dir"] if cv else None, classifier = classifier, batch_size = batch_size, threshold = threshold, verbose = verbose, cv = cv, clf_file = clf_file, n_jobs = n_jobs)
-                # Classify sequences into taxa and build k-mers profiles for classified and unclassified data
-                # Keep previous taxa to reclassify only unclassified reads at a higher taxonomic level
-                if previous_taxa_unclassified is None:
-                    if verbose:
-                        print("Classifying sequences at {} level".format(taxa))
-                    classified_data[taxa], previous_taxa_unclassified = classify(clf_file, metagenome_k_mers["X"], metagenome_k_mers["kmers_list"], metagenome_k_mers["ids"], classifier, nb_classes, labels_list_int, labels_list_str, classified_kmers_file, unclassified_kmers_file, threshold = threshold, verbose = verbose)
-                else:
-                    if verbose:
-                        print("Classifying sequences at {} level".format(taxa))
-                    classified_data[taxa], previous_taxa_unclassified = classify(clf_file, previous_taxa_unclassified["X"], previous_taxa_unclassified["kmers_list"], previous_taxa_unclassified["ids"], classifier, nb_classes, labels_list_int, labels_list_str, classified_kmers_file, unclassified_kmers_file, threshold = threshold, verbose = verbose)
+                if classified_data is not None:
+                    # Classify sequences into taxa and build k-mers profiles for classified and unclassified data
+                    # Keep previous taxa to reclassify only unclassified reads at a higher taxonomic level
+                    if previous_taxa_unclassified is None:
+                        if verbose:
+                            print("Classifying bacteria sequences at {} level".format(taxa))
+                        classified_data[taxa], previous_taxa_unclassified = classify(clf_file, metagenome_k_mers["X"], metagenome_k_mers["kmers_list"], metagenome_k_mers["ids"], classifier, nb_classes, labels_list_int, labels_list_str, classified_kmers_file, unclassified_kmers_file, threshold = threshold, verbose = verbose)
+                    else:
+                        if verbose:
+                            print("Classifying bacteria sequences at {} level".format(taxa))
+                        classified_data[taxa], previous_taxa_unclassified = classify(clf_file, previous_taxa_unclassified["X"], previous_taxa_unclassified["kmers_list"], previous_taxa_unclassified["ids"], classifier, nb_classes, labels_list_int, labels_list_str, classified_kmers_file, unclassified_kmers_file, threshold = threshold, verbose = verbose)
+            if classified_data is not None:
+                save_Xy_data(classified_data[taxa],classified_kmers_file)
+                save_Xy_data(previous_taxa_unclassified, unclassified_kmers_file)
+                classified_data["order"].append(taxa)
 
-            save_Xy_data(classified_data[taxa],classified_kmers_file)
-            save_Xy_data(previous_taxa_unclassified, unclassified_kmers_file)
-            classified_data["order"].append(taxa)
-
-    return classified_data
+    if classified_data is not None:
+        return classified_data
 
 def training(X_train, y_train, kmers, k, ids, nb_classes, labels_list, outdir_plots, classifier = "lstm_attention", batch_size = 32, threshold = 0.8, verbose = 1, cv = 1, clf_file = None, n_jobs = 1):
     # Model trained in MetaVW
@@ -114,7 +116,7 @@ def training(X_train, y_train, kmers, k, ids, nb_classes, labels_list, outdir_pl
             print("Training multiclass classifier based on Deep CNN Network")
         clf = build_deepCNN(k, batch_size, nb_classes)
     else:
-        print("Bacteria classifier type unknown !!!\n\tModels implemented at this moment are :\n\tLinear models :  Ridge regressor (ridge), Linear SVM (svm), Multiple Logistic Regression (mlr)\n\tClustering classifier : K Means (kmeans)\n\tProbability classifier : Multinomial Bayes (mnb)\n\tNeural networks : Hybrid between LSTM and Attention (lstm_attention), CNN (cnn) and Deep CNN (deepcnn)")
+        print("Bacteria classifier type unknown !!!\n\tModels implemented at this moment are :\n\tLinear models :  Ridge regressor (ridge), Linear SVM (svm), Multiple Logistic Regression (mlr)\n\tProbability classifier : Multinomial Bayes (mnb)\n\tNeural networks : Hybrid between LSTM and Attention (lstm_attention), CNN (cnn) and Deep CNN (deepcnn)")
         sys.exit()
 
     if cv:

@@ -11,12 +11,17 @@ from tensorflow.config import list_physical_devices
 import sys
 import os.path
 import argparse
+import pathlib
 
 from os import makedirs
 
 __author__ = "Nicolas de Montigny"
 
 __all__ = ['kmers_dataset']
+
+"""
+This script extracts K-mers of the given dataset using the available ressources on the computer before saving it to drive.
+"""
 
 # GPU & CPU setup
 ################################################################################
@@ -26,9 +31,29 @@ if gpus:
     sess = Session(config=config)
     set_session(sess);
 
-# Part 0 - Initialisation / extraction of parameters from command line
+# Initialisation / validation of parameters from CLI
 ################################################################################
 def kmers_dataset(opt):
+
+    # Verification of existence of files
+    for file in [opt['seq_file'],opt['cls_file']]:
+        if not os.path.isfile(file):
+            print("Cannot find file {} ! Exiting".format(file))
+            sys.exit()
+
+    # Verification of k length
+    if opt['k_length'] <= 0:
+        print("Invalid K-mers length ! Exiting")
+        sys.exit()
+
+    # Verify path for saving
+    outdir_path, outdir_folder = os.path.split(opt['outdir'])
+    if not os.path.isdir(outdir) and os.path.exists(outdir_path):
+        print("Created output folder")
+        os.makedirs(outdir)
+    elif not os.path.exists(outdir_path):
+        print("Cannot find where to create output folder ! Exiting")
+        sys.exit()
 
     # Folders creation for output
     outdirs = {}
@@ -37,7 +62,7 @@ def kmers_dataset(opt):
     makedirs(outdirs["main_outdir"], mode=0o700, exist_ok=True)
     makedirs(outdirs["data_dir"], mode=0o700, exist_ok=True)
 
-# Part 1 - K-mers profile extraction
+# K-mers profile extraction
 ################################################################################
 
     if opt['cls_file'] is not None and opt['kmers_list'] is None:
@@ -77,14 +102,16 @@ def kmers_dataset(opt):
         print("Caribou cannot extract k-mers because there is no class file or k-mers list given")
 
 
+# Argument parsing from CLI
+################################################################################
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Extract k-mers of one dataset and save it to drive')
-    parser.add_argument('-seq','--seq_file', required=True, help='PATH to a fasta file containing bacterial genomes to build k-mers from')
-    parser.add_argument('-cls','--cls_file', default=None, help='PATH to a csv file containing classes of the corresponding fasta')
+    parser = argparse.ArgumentParser(description='This script extracts K-mers of the given dataset using the available ressources on the computer before saving it to drive.')
+    parser.add_argument('-seq','--seq_file', required=True, type=pathlib.Path, help='PATH to a fasta file containing bacterial genomes to build k-mers from')
+    parser.add_argument('-cls','--cls_file', required=True, type=pathlib.Path, help='PATH to a csv file containing classes of the corresponding fasta')
     parser.add_argument('-dt','--dataset_name', required=True, help='Name of the dataset used to name files')
-    parser.add_argument('-k','--k_length', required=True, help='Length of k-mers to extract')
-    parser.add_argument('-l','--kmers_list', default=None, help='PATH to a file containing a list of k-mers to be extracted if the dataset is not a training database')
-    parser.add_argument('-o','--outdir', required=True, help='PATH to a directory on file where outputs will be saved')
+    parser.add_argument('-k','--k_length', required=True, type=int, help='Length of k-mers to extract')
+    parser.add_argument('-l','--kmers_list', default=None, type=pathlib.Path, help='PATH to a file containing a list of k-mers to be extracted if the dataset is not a training database')
+    parser.add_argument('-o','--outdir', required=True, type=pathlib.Path, help='PATH to a directory on file where outputs will be saved')
     args = parser.parse_args()
 
     opt = vars(args)

@@ -12,9 +12,12 @@ from tensorflow.compat.v1.keras.backend import set_session
 from tensorflow.config import list_physical_devices
 
 import sys
-import configparser
 import os.path
+import argparse
+import configparser
+
 from os import makedirs
+from pathlib import Path
 
 __author__ = "Nicolas de Montigny"
 
@@ -30,16 +33,10 @@ if gpus:
 
 # Part 0 - Initialisation / extraction of parameters from config file
 ################################################################################
-def caribou(argv):
-
-    if len(argv) != 2:
-        print("Config file is missing ! ! !")
-        sys.exit()
-
-    print("Running {}".format(argv[0]), flush=True)
+def caribou(opt):
 
     # Get argument values from ini file
-    config_file = argv[1]
+    config_file = opt['config']
     config = configparser.ConfigParser(
             interpolation=configparser.ExtendedInterpolation())
 
@@ -96,7 +93,7 @@ def caribou(argv):
         print("Created output folder")
         os.makedirs(outdir)
     elif not os.path.exists(outdir_path):
-        print("Cannot find output folder ! Exiting")
+        print("Cannot find where to create output folder ! Exiting")
         sys.exit()
 
     # settings
@@ -177,8 +174,6 @@ def caribou(argv):
     if cv:
         outdirs["plots_dir"] = os.path.join(outdirs["main_outdir"], "plots/")
         makedirs(outdirs["plots_dir"], mode=0o700, exist_ok=True)
-
-# ADAPT FOR MAIN SCRIPT TO VERIFY/ LOAD PRECOMPUTED DATA BEFORE CALLING OTHER SCRIPTS
 
 # Part 1 - K-mers profile extraction
 ################################################################################
@@ -277,4 +272,10 @@ def caribou(argv):
 
 
 if __name__ == "__main__":
-    caribou(sys.argv)
+    parser = argparse.ArgumentParser(description='This script runs the entire Caribou analysis Pipeline')
+    parser.add_argument('-c','--config', required=True, type=Path, help='PATH to a configuration file containing the choices made by the user. Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki ')
+    args = parser.parse_args()
+
+    opt = vars(args)
+
+    caribou(opt)

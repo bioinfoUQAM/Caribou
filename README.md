@@ -34,8 +34,6 @@ Should the user want to use this environment, this can be done easily through [S
 singularity shell --nv -B a/folder/containing/data/to/include/in/the/environment path/to/Caribou/Caribou/supplement/Caribou.sif
 ```
 
-Instructions on installing Singularity on your machine can be found [here](https://apptainer.org/user-docs/master/quick_start.html)
-
 ### [Optional] Python virtual environment
 It is recommended to use the analysis pipeline in a virtual environment to be sure that no other installed package can interfere. \
 Here is an example of Linux command shell to install Caribou in a new virtual environment by modifying the paths:
@@ -61,7 +59,7 @@ Caribou was developed having in mind that the models should be trained on the [G
 Theoritically, any database could be used to train and classify using Caribou but a certain structure should be used for feeding to the program. The specific structure of the database files necessary for training is explained in more details in the [database section of the wiki](https://github.com/bioinfoUQAM/Caribou/wiki/Building-database).
 
 ### GTDB pre-extracted K-mers
-Extracted K-mers profile files for the GTDB taxonomy representatives version 202 can be found in the folder `Caribou/data/kmers`.
+Extracted K-mers profile files for the GTDB taxonomy representatives version 202 with a k length of 35 can be found in the folder `Caribou/data/kmers`.
 
 ### Building GTDB from another release
 Should the user want to use a more recent release of the GTDB taxonomy, this can be done using the template script to build data in one large fasta file and extract classes into a csv file. This template must be modified by the user to insert filepaths and comment the host section if there is no host to be used.
@@ -101,5 +99,20 @@ There is a template config file which can be found here `Caribou/eval_configs/te
 
 Once the installation is done and the configuration file is ready, the following command can be used to launch the pipeline:
 ```
-Caribou.py path/to/your/config.ini
+Caribou.py -c path/to/your/config.ini
 ```
+
+## Partial analysis scripts
+There are also partial steps scripts that can be used should the user want to.
+
+* K-mers_extract_dataset
+> This script extracts K-mers of the given dataset using the available ressources on the computer before saving it to drive.
+> The usage is : K-mers_extract_dataset.py [-h] -seq SEQ_FILE -cls CLS_FILE -dt DATASET_NAME -k K_LENGTH [-l KMERS_LIST] -o OUTDIR
+
+* Bacteria_extraction_train_cv
+> This script trains and cross-validates a model for the bacteria extraction / host removal step.
+> The usage is : Bacteria_extraction_train_cv.py [-h] -db DATA_BACTERIA [-dh DATA_HOST] -dt DATABASE_NAME [-model {None,linearsvm,attention,lstm,deeplstm}] [-bs BATCH_SIZE] [-cv NB_CV_JOBS] [-v] -o OUTDIR
+
+* Bacteria_classification_train_cv
+> This script trains and cross-validates a model for the bacteria classification step.
+> The usage is : Bacteria_classification_train_cv.py [-h] -db DATA_BACTERIA -dt DATABASE_NAME [-model {ridge,svm,mlr,mnb,lstm_attention,cnn,deepcnn}] [-bs BATCH_SIZE] [-cv NB_CV_JOBS] [-v] -o OUTDIR

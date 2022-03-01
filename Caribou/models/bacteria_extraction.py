@@ -41,14 +41,16 @@ def bacteria_extraction(metagenome_k_mers, database_k_mers, k, outdirs, dataset,
         if not os.path.isdir(clf_file):
             train = True
 
-    if verbose:
-        print("Extracting bacteria sequences from data")
-
     # Load extracted data if already exists or train and extract bacteria depending on chosen method
     if os.path.isfile(bacteria_data_file):
         classified_data["bacteria"] = load_Xy_data(bacteria_data_file)
-        classified_data["host"] = load_Xy_data(host_data_file)
+        try:
+            classified_data["host"] = load_Xy_data(host_data_file)
+        except:
+            pass
         classified_data["unclassified"] = load_Xy_data(unclassified_data_file)
+        if verbose:
+            print("Bacteria sequences already extracted. Skipping this step")
     else:
         # Get training dataset and assign to variables
         if classifier == "onesvm" and isinstance(database_k_mers, tuple):
@@ -72,10 +74,11 @@ def bacteria_extraction(metagenome_k_mers, database_k_mers, k, outdirs, dataset,
         if train is True:
             clf_file = training(X_train, y_train, database_k_mers["kmers_list"], k, database_k_mers["ids"], [-1, 1], outdirs["plots_dir"] if cv else None, classifier = classifier, batch_size = batch_size, verbose = verbose, cv = cv, clf_file = clf_file, n_jobs = n_jobs)
         # Classify sequences into bacteria / unclassified / host and build k-mers profiles for bacteria
-        classified_data = extract_bacteria_sequences(clf_file, classified_data, metagenome_k_mers["X"], metagenome_k_mers["kmers_list"], metagenome_k_mers["ids"], classifier, [-1, 1], bacteria_kmers_file, host_kmers_file, unclassified_kmers_file, verbose = verbose, saving_host = saving_host, saving_unclassified = saving_unclassified)
-        save_Xy_data(classified_data["bacteria"], bacteria_data_file)
+        if metagenome_k_mers is not None:
+            classified_data = extract_bacteria_sequences(clf_file, classified_data, metagenome_k_mers["X"], metagenome_k_mers["kmers_list"], metagenome_k_mers["ids"], classifier, [-1, 1], bacteria_kmers_file, host_kmers_file, unclassified_kmers_file, verbose = verbose, saving_host = saving_host, saving_unclassified = saving_unclassified)
+            save_Xy_data(classified_data["bacteria"], bacteria_data_file)
+            return classified_data
 
-    return classified_data
 
 def training(X_train, y_train, kmers, k, ids, labels_list, outdir_plots, classifier = "deeplstm", batch_size = 32, verbose = 1, cv = 1, clf_file = None, n_jobs = 1):
     if classifier == "onesvm":
