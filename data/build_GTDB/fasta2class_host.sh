@@ -36,6 +36,8 @@ fi
 
 fasta_file=$OUTDIR/data.fa
 cls_file=$OUTDIR/class.csv
+echo $OUTDIR
+echo $cls_file
 echo "id","species","domain" >> $cls_file
 
 for i in $(seq $(wc -l $FASTA_LIST | awk '{print $1}')); do
