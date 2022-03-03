@@ -3,7 +3,6 @@
 __author__="Nicolas de Montigny"
 
 HELP=0
-echo ${OPTARG}
 while getopts d:i:s:o:h option; do
   case "${option}" in
     d) DIR=${OPTARG};;
