@@ -21,7 +21,7 @@ done
 if [ $HELP -eq 1 ];
 then
   """
-  usage : fasta2class_bact.sh -d [directory] -i [inputFile] -o [outputDirectory]
+  usage : fasta2class_host.sh -d [directory] -i [inputFile] -s [species] -o [outputDirectory]
 
   This script merges multiple fasta files into one and creates the file containing classes of those sequences for a host
   This method was tested on the Cucurbita genre from the NCBI genome datasets
@@ -34,14 +34,14 @@ then
   """
 fi
 
-fasta_file=$OUTDIR/data_host.fa.gz
-cls_file=$OUTDIR/class_host.csv
+fasta_file=$OUTDIR/data.fa
+cls_file=$OUTDIR/class.csv
 echo "id","species","domain" >> $cls_file
 
 for i in $(seq $(wc -l $FASTA_LIST | awk '{print $1}')); do
   file=$(sed -n "${i}p" $FASTA_LIST)
   cat $file >> $fasta_file
-  ids=$(zcat $file | grep ">" | awk '{print $1}') | sed 's/>//'
+  ids=$(cat $file | grep ">" | awk '{print $1}') | sed 's/>//'
   for j in $(seq $(zcat $file | grep -c ">")); do
     id=$(sed -n "${j}p" $ids)
     echo "$id,$SPECIES,host" >> $cls_file
