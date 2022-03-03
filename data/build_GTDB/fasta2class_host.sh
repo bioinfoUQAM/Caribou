@@ -37,9 +37,10 @@ echo "id","species","domain" >> $cls_file
 for i in $(seq $(wc -l $FASTA_LIST | awk '{print $1}')); do
   file=$(sed -n "${i}p" $FASTA_LIST)
   cat $file >> $fasta_file
-  ids=$(cat $file | grep ">" | awk '{print $1}') | sed 's/>//'
-  for j in $(seq $(cat $file | grep -c ">")); do
-    id=$(sed -n "${j}p" $ids)
-    echo "$id,$SPECIES,host" >> $cls_file
-  done
+done
+
+list_ids=$(grep -o -E "^>\w+" $fasta_file | tr -d ">")
+
+for id in $list_ids; do
+  echo "$id,$SPECIES,host" >> $cls_file
 done
