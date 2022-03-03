@@ -13,12 +13,6 @@ while getopts ':d:i:s:o:h' option; do
   esac
 done
 
-echo "DIR" $DIR
-echo "FASTA_LIST" $FASTA_LIST
-echo "SPECIES" $SPECIES
-echo "OUTDIR" $OUTDIR
-echo "HELP" $HELP
-
 if [ $HELP -eq 1 ];
 then
   """
