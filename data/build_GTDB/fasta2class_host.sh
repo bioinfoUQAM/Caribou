@@ -38,7 +38,7 @@ for i in $(seq $(wc -l $FASTA_LIST | awk '{print $1}')); do
   file=$(sed -n "${i}p" $FASTA_LIST)
   cat $file >> $fasta_file
   ids=$(cat $file | grep ">" | awk '{print $1}') | sed 's/>//'
-  for j in $(seq $(zcat $file | grep -c ">")); do
+  for j in $(seq $(cat $file | grep -c ">")); do
     id=$(sed -n "${j}p" $ids)
     echo "$id,$SPECIES,host" >> $cls_file
   done
