@@ -3,14 +3,14 @@
 __author__="Nicolas de Montigny"
 
 HELP=0
-while getopts d:i:g:o:h option; do
+while getopts d:i:o:h option; do
   case "${option}" in
     d) DIR=${OPTARG};;
     directory) DIR=${OPTARG};;
     i) FASTA_LIST=${OPTARG};;
     input) FASTA_LIST=${OPTARG};;
-    g) SPECIES=${OPTARG};;
-    genus) SPECIES=${OPTARG};;
+    #g) SPECIES=${OPTARG};;
+    #genus) SPECIES=${OPTARG};;
     o) OUTDIR=${OPTARG};;
     output) OUTDIR=${OPTARG};;
     h) HELP=1;;
