@@ -4,17 +4,12 @@ __author__="Nicolas de Montigny"
 
 HELP=0
 while getopts 'd:i:s:o:h' option; do
-  case $option in
+  case "$option" in
     d) DIR=$OPTARG;;
-    directory) DIR=$OPTARG;;
     i) FASTA_LIST=$OPTARG;;
-    input) FASTA_LIST=$OPTARG;;
     s) SPECIES=$OPTARG;;
-    species) SPECIES=$OPTARG;;
     o) OUTDIR=$OPTARG;;
-    output) OUTDIR=$OPTARG;;
     h) HELP=1;;
-    help) HELP=1;;
   esac
 done
 
