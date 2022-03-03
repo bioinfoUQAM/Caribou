@@ -3,7 +3,7 @@
 __author__="Nicolas de Montigny"
 
 HELP=0
-while getopts d:i:s:o:hdirectoryinputspeciesoutputhelp option; do
+while getopts d:i:s:o:h option; do
   case "${option}" in
     d) DIR=${OPTARG};;
     directory) DIR=${OPTARG};;
