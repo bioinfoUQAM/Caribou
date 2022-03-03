@@ -3,7 +3,7 @@
 __author__="Nicolas de Montigny"
 
 HELP=0
-while getopts d:o:h option; do
+while getopts "d:o:h" option; do
   case "${option}" in
     d) DIR=${OPTARG};;
     directory) DIR=${OPTARG};;
@@ -26,6 +26,7 @@ then
   -o --output Path to output file
   -h --help Show this help message
   """
+  exit 0
 fi
 
 for i in $(find $DIR -maxdepth 10 -type f); do
