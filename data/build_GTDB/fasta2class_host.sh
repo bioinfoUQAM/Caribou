@@ -3,8 +3,8 @@
 __author__="Nicolas de Montigny"
 
 HELP=0
-while getopts 'd:i:s:o:h' option; do
-  case "$option" in
+while getopts ':d:i:s:o:h' option; do
+  case ${option} in
     d) DIR=$OPTARG;;
     i) FASTA_LIST=$OPTARG;;
     s) SPECIES=$OPTARG;;
@@ -12,6 +12,7 @@ while getopts 'd:i:s:o:h' option; do
     h) HELP=1;;
   esac
 done
+shift $((OPTIND -1))
 
 if [ $HELP -eq 1 ];
 then
