@@ -12,7 +12,12 @@ while getopts ':d:i:s:o:h' option; do
     h) HELP=1;;
   esac
 done
-shift $((OPTIND -1))
+
+echo "DIR" $DIR
+echo "FASTA_LIST" $FASTA_LIST
+echo "SPECIES" $SPECIES
+echo "OUTDIR" $OUTDIR
+echo "HELP" $HELP
 
 if [ $HELP -eq 1 ];
 then
@@ -33,8 +38,6 @@ fi
 
 fasta_file=$OUTDIR/data.fa
 cls_file=$OUTDIR/class.csv
-echo $OUTDIR
-echo $cls_file
 echo "id","species","domain" >> $cls_file
 
 for i in $(seq $(wc -l $FASTA_LIST | awk '{print $1}')); do
