@@ -30,7 +30,7 @@ then
   exit 0
 fi
 
-fasta_file=$OUTDIR/data.fa
+fasta_file=$OUTDIR/data.fna
 cls_file=$OUTDIR/class.csv
 echo "id","species","domain" >> $cls_file
 
@@ -44,3 +44,5 @@ list_ids=$(grep -o -E "^>\w+" $fasta_file | tr -d ">")
 for id in $list_ids; do
   echo "$id,$SPECIES,host" >> $cls_file
 done
+
+gzip $fasta_file

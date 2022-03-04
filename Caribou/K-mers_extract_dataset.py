@@ -48,9 +48,9 @@ def kmers_dataset(opt):
 
     # Verify path for saving
     outdir_path, outdir_folder = os.path.split(opt['outdir'])
-    if not os.path.isdir(outdir) and os.path.exists(outdir_path):
+    if not os.path.isdir(outdir_folder) and os.path.exists(outdir_path):
         print("Created output folder")
-        os.makedirs(outdir)
+        os.makedirs(outdir_folder)
     elif not os.path.exists(outdir_path):
         print("Cannot find where to create output folder ! Exiting")
         sys.exit()
