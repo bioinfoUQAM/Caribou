@@ -97,7 +97,7 @@ def training(X_train, y_train, kmers, k, ids, nb_classes, labels_list, outdir_pl
         clf = SGDClassifier(loss = "hinge", n_jobs = -1, random_state = 42)
     elif classifier == "mlr":
         if verbose:
-            print("Training multiclass classifier with Multiple Logistic Regression")
+            print("Training multiclass classifier with Multinomial Logistic Regression")
         clf = SGDClassifier(loss = 'log', n_jobs = -1, random_state = 42)
     elif classifier == "mnb":
         if verbose:
