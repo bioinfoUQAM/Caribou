@@ -58,11 +58,16 @@ def build_deepLSTM(kmers_length, batch_size):
     Deeplasmid package [Andreopoulos et al. 2021]
     """
 
-    inputs = Input(shape=(batch_size, kmers_length))
+    inputA = Input(shape=(batch_size, kmers_length))
+    inputB = Input(shape=(batch_size, 1))
 
-    net = LSTM(40, activation='tanh',recurrent_dropout=0.05,dropout=0.1,name='A_%d'%40,return_sequences=True) (inputs)
-    net = LSTM(40, activation='tanh',recurrent_dropout=0.05,dropout=0.1,name='B_%d'%40) (net)
+    netA = LSTM(40, activation='tanh',recurrent_dropout=0.05,dropout=0.1,name='A_%d'%40,return_sequences=True) (inputA)
+    netA = LSTM(40, activation='tanh',recurrent_dropout=0.05,dropout=0.1,name='B_%d'%40) (netA)
 
+    netB = Dense(100, activation='tanh',recurrent_dropout=0.05,dropout=0.1,name='A_%d'%40,return_sequences=True) (inputB)
+    netB = Dense(100, activation='tanh',recurrent_dropout=0.05,dropout=0.1,name='B_%d'%40) (netB)
+
+    net = Concatenate(axis = 1)([netA,netB])
     net = Dense(10*2, activation='relu', name='C_%d'%(10*2))(net)
     net = Dropout(0.1,name='fr_%.1f'%0.1)(net)
     net = Dense(10, activation='relu', name='D_%d'%10)(net)
@@ -79,10 +84,11 @@ def build_LSTM_attention(kmers_length, nb_classes, batch_size):
     default values for layers in script DeepMicrobes/models/define_flags.py of
     DeepMicrobes package [Liang et al. 2020]
     """
-    inputs = Input(shape = (batch_size, kmers_length))
-    #net = Embedding(kmers_length, 100, embeddings_initializer = 'glorot_normal')(inputs)
+
+    inputs = Input(shape = (kmers_length,))
+    net = Embedding(kmers_length, 100, embeddings_initializer = 'glorot_normal')(inputs)
     #net = Reshape((batch_size, kmers_length * 100))(net)
-    net = LSTM(300, kernel_initializer = 'glorot_normal', return_sequences=True, return_state=True)(inputs)
+    net = LSTM(300, kernel_initializer = 'glorot_normal', return_sequences=True, return_state=True)(net)
     net = Attention()(net)
     net = Dense((batch_size * 300 * 2), activation = 'relu', kernel_initializer = 'glorot_normal')(net)
     net = Dropout(0.2)(net)
@@ -99,16 +105,21 @@ def build_CNN(kmers_length, batch_size, nb_classes):
     Function extracted from module MetagenomicDC/models/CNN.py of
     MetagenomicDC package [Fiannaca et al. 2018]
     """
+
     model = Sequential()
+
     model.add(Conv1D(5,5, input_shape = (batch_size, kmers_length))) #input_dim
     model.add(Activation('relu'))
     model.add(MaxPooling1D(pool_size = 2))
+
     model.add(Conv1D(10, 5))
     model.add(Activation('relu'))
     model.add(MaxPooling1D(pool_size = 2))
+
     model.add(Flatten())
     model.add(Dense(500))
     model.add(Activation('relu'))
+
     model.add(Dropout(0.5))
     model.add(Dense(nb_classes))
     model.add(Activation('softmax'))
@@ -121,6 +132,7 @@ def build_deepCNN(kmers_length, batch_size, nb_classes):
     Function adapted in keras from module CHEER/Classifier/model/Wcnn.py of
     CHEER package [Shang et al. 2021]
     """
+
     inputs = Input(shape = (batch_size, kmers_length))
     embed = Embedding(248, 100)(inputs)
     conv1 = Conv2D(256, (3, kmers_length), activation = 'relu')(embed)

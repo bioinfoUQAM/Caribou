@@ -95,14 +95,14 @@ def training(X_train, y_train, kmers, k, ids, labels_list, outdir_plots, classif
         clf = build_attention(len(kmers))
     elif classifier == "lstm":
         if verbose:
-            print("Training bacterial / host classifier based on LSTM Neural Network")
+            print("Training bacterial / host classifier based on Shallow LSTM Neural Network")
         clf = build_LSTM(len(kmers), batch_size)
     elif classifier == "deeplstm":
         if verbose:
             print("Training bacterial / host classifier based on Deep LSTM Neural Network")
         clf = build_deepLSTM(len(kmers), batch_size)
     else:
-        print("Bacteria extractor unknown !!!\n\tModels implemented at this moment are :\n\tBacteria isolator :  One Class SVM (onesvm)\n\tBacteria/host classifiers : Linear SVM (linearsvm)\n\tNeural networks : Attention (attention), LSTM (lstm) and Deep LSTM (deeplstm)")
+        print("Bacteria extractor unknown !!!\n\tModels implemented at this moment are :\n\tBacteria isolator :  One Class SVM (onesvm)\n\tBacteria/host classifiers : Linear SVM (linearsvm)\n\tNeural networks : Attention (attention), Shallow LSTM (lstm) and Deep LSTM (deeplstm)")
         sys.exit()
 
     if cv:
