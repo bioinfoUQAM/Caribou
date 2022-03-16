@@ -22,9 +22,11 @@ def build_attention(kmers_length):
 
     inputs = Input(shape = (kmers_length,))
     x = Embedding(kmers_length, 128)(inputs)
+
     x = LSTM(128, return_sequences = True, dropout = 0.1, recurrent_dropout = 0.1 )(x)
     x = LSTM(128, return_sequences = True, dropout = 0.1, recurrent_dropout = 0.1 )(x)
     x = AttentionWeightedAverage()(x)
+
     x = Dense(128, activation = "relu")(x)
     x = Dropout(0.1)(x)
     x = Dense(1, activation = "sigmoid")(x)
@@ -41,11 +43,8 @@ def build_LSTM(kmers_length, batch_size):
     Seeker package [Auslander et al. 2020]
     """
 
-    # Initialize a sequential model
     model = Sequential()
-    # Add LSTM layer
     model.add(LSTM(5, input_shape=(batch_size, kmers_length)))
-    # Add Dense NN layer
     model.add(Dense(1, activation='tanh'))
     model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
 
@@ -68,10 +67,13 @@ def build_deepLSTM(kmers_length, batch_size):
     netB = Dense(100, activation='tanh',recurrent_dropout=0.05,dropout=0.1,name='B_%d'%40) (netB)
 
     net = Concatenate(axis = 1)([netA,netB])
+
     net = Dense(10*2, activation='relu', name='C_%d'%(10*2))(net)
     net = Dropout(0.1,name='fr_%.1f'%0.1)(net)
+
     net = Dense(10, activation='relu', name='D_%d'%10)(net)
     net = Dropout(0.1,name='fr_same')(net)
+
     outputs = Dense(1, activation='tanh', name='score')(net)
     model = Model(inputs=inputs, outputs=outputs)
     model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
@@ -90,10 +92,13 @@ def build_LSTM_attention(kmers_length, nb_classes, batch_size):
     #net = Reshape((batch_size, kmers_length * 100))(net)
     net = LSTM(300, kernel_initializer = 'glorot_normal', return_sequences=True, return_state=True)(net)
     net = Attention()(net)
+
     net = Dense((batch_size * 300 * 2), activation = 'relu', kernel_initializer = 'glorot_normal')(net)
     net = Dropout(0.2)(net)
+
     net = Dense(nb_classes, activation = 'relu', kernel_initializer = 'glorot_normal')(net)
     net = Dropout(0.2)(net)
+
     outputs = Activation('softmax')(net)
     model = Model(inputs = inputs, outputs = outputs)
     model.compile(loss='sparse_categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
@@ -135,20 +140,27 @@ def build_wideCNN(kmers_length, batch_size, nb_classes):
 
     inputs = Input(shape = (batch_size, kmers_length))
     embed = Embedding(248, 100)(inputs)
+
     conv1 = Conv2D(256, (3, kmers_length), activation = 'relu')(embed)
     conv1 = MaxPooling2D(pool_size = (1,1), strides = kmers_length)(conv1)
+
     conv2 = Conv2D(256, (7, kmers_length), activation = 'relu')(embed)
     conv2 = MaxPooling2D(pool_size = (1,1), strides = kmers_length)(conv2)
+
     conv3 = Conv2D(256, (11, kmers_length), activation = 'relu')(embed)
     conv3 = MaxPooling2D(pool_size = (1,1), strides = kmers_length)(conv3)
+
     conv4 = Conv2D(256, (15, kmers_length), activation = 'relu')(embed)
     conv4 = MaxPooling2D(pool_size = (1,1), strides = kmers_length)(conv4)
+
     net = Concatenate(axis = 1)([conv1,conv2,conv3,conv4])
     net = Flatten()(net)
+
     net = Dense(1024)(net)
     net = Activation("relu")(net)
     net = Dropout(0.5)(net)
     net = Flatten()(net)
+
     net = Dense(nb_classes)(net)
     outputs = Activation('softmax')(net)
     model = Model(inputs = inputs, outputs = outputs)
