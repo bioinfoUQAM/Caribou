@@ -114,7 +114,7 @@ def choose_delete_models_sk(df_scores):
 def plot_figure(df_scores, n_jobs, outdir_plots, k, classifier):
     if classifier in ["onesvm","linearsvm","attention","lstm","deeplstm"]:
         clf_type = "extraction"
-    elif classifier in ["ridge","svm","mlr","mnb","lstm_attention","cnn","deepcnn"]:
+    elif classifier in ["ridge","svm","mlr","mnb","lstm_attention","cnn","widecnn"]:
         clf_type = "classification"
 
     plot_file = "{}_K{}_{}_{}_cv_{}.png".format(outdir_plots, k, clf_type, classifier, "metrics")
@@ -167,7 +167,7 @@ def cross_validation_training(X_train, y_train, batch_size, kmers, ids, classifi
                                     for clf_name, X_file in zip(clf_names,X_data))
         for file in X_data:
             os.remove(file)
-    elif classifier in ["attention","lstm","deeplstm","lstm_attention","cnn","deepcnn"]:
+    elif classifier in ["attention","lstm","deeplstm","lstm_attention","cnn","widecnn"]:
         clf_names = ["{}_iter_{}".format(clf_file, iter) for iter in range(n_jobs)]
         X_data = ["{}_iter_{}".format(X_train, iter) for iter in range(n_jobs)]
         for file in X_data:
@@ -201,7 +201,7 @@ def cross_validation_training(X_train, y_train, batch_size, kmers, ids, classifi
 
     if classifier in ["onesvm","linearsvm","ridge","svm","mlr","mnb"]:
         clf_file = choose_delete_models_sk(df_scores)
-    elif classifier in ["attention","lstm","deeplstm","lstm_attention","cnn","deepcnn"]:
+    elif classifier in ["attention","lstm","deeplstm","lstm_attention","cnn","widecnn"]:
         clf_file = choose_delete_models_keras(df_scores)
 
     return clf_file
@@ -242,7 +242,7 @@ def fit_predict_cv(X_train, y_train, batch_size, kmers, ids, classifier, labels_
         y_test = test_labels(test_generator)
         test_generator.handle.close()
 
-    elif classifier in ["lstm_attention","cnn","deepcnn"]:
+    elif classifier in ["lstm_attention","cnn","widecnn"]:
         train_generator, val_generator, test_generator = iter_generator_keras(X_train, y_train, batch_size, kmers, ids, cv, classifier, shuffle = shuffle, training = True)
         clf.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
         fit_model_keras(clf, train_generator, val_generator, clf_file)
@@ -269,7 +269,7 @@ def fit_model(X_train, y_train, batch_size, kmers, ids, classifier, labels_list,
         generator = iter_generator(X_train, y_train, batch_size, kmers, classifier, cv = cv, shuffle = shuffle, training = True)
         fit_model_multi_sk(clf, generator, clf_file, labels_list, cls = np.unique(y_train))
         generator.handle.close()
-    elif classifier in ["attention","lstm","deeplstm","lstm_attention","cnn","deepcnn"]:
+    elif classifier in ["attention","lstm","deeplstm","lstm_attention","cnn","widecnn"]:
         train_generator, val_generator = iter_generator_keras(X_train, y_train, batch_size, kmers, ids, cv, classifier, shuffle = shuffle, training = True)
         fit_model_keras(clf, train_generator, val_generator, clf_file)
         train_generator.handle.close()
@@ -290,7 +290,7 @@ def model_predict(clf_file, X, kmers_list, ids, classifier, nb_classes, labels_l
         generator = iter_generator(X, y, 1, kmers_list, ids, classifier, cv = 0, shuffle = False, training = False)
         predict = predict_multi_sk(clf_file, labels_list, generator, threshold = threshold)
         generator.handle.close()
-    elif classifier in ["lstm_attention","cnn","deepcnn"]:
+    elif classifier in ["lstm_attention","cnn","widecnn"]:
         generator = iter_generator_keras(X, y, 1, kmers_list, ids, 0, classifier, shuffle = False, training = False)
         predict = predict_multi_keras(clf_file, labels_list, generator, threshold = threshold)
         generator.handle.close()

@@ -40,7 +40,7 @@ def bacterial_classification(classified_data, database_k_mers, k, outdirs, datas
                 if not os.path.isfile(clf_file):
                     train = True
 
-            elif classifier in ["lstm_attention","cnn","deepcnn"]:
+            elif classifier in ["lstm_attention","cnn","widecnn"]:
                 clf_file = "{}bacteria_identification_classifier_{}_K{}_{}_{}_model".format(outdirs["models_dir"], taxa, k, classifier, dataset)
                 if not os.path.isdir(clf_file):
                     train = True
@@ -111,12 +111,12 @@ def training(X_train, y_train, kmers, k, ids, nb_classes, labels_list, outdir_pl
         if verbose:
             print("Training multiclass classifier based on CNN Neural Network")
         clf = build_CNN(k, batch_size, nb_classes)
-    elif classifier == "deepcnn":
+    elif classifier == "widecnn":
         if verbose:
             print("Training multiclass classifier based on Wide CNN Network")
         clf = build_deepCNN(k, batch_size, nb_classes)
     else:
-        print("Bacteria classifier type unknown !!!\n\tModels implemented at this moment are :\n\tLinear models :  Ridge regressor (ridge), Linear SVM (svm), Multiple Logistic Regression (mlr)\n\tProbability classifier : Multinomial Bayes (mnb)\n\tNeural networks : Deep hybrid between LSTM and Attention (lstm_attention), CNN (cnn) and Wide CNN (deepcnn)")
+        print("Bacteria classifier type unknown !!!\n\tModels implemented at this moment are :\n\tLinear models :  Ridge regressor (ridge), Linear SVM (svm), Multiple Logistic Regression (mlr)\n\tProbability classifier : Multinomial Bayes (mnb)\n\tNeural networks : Deep hybrid between LSTM and Attention (lstm_attention), CNN (cnn) and Wide CNN (widecnn)")
         sys.exit()
 
     if cv:

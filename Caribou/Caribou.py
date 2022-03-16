@@ -105,7 +105,7 @@ def caribou(opt):
         print("Invalid host extraction classifier ! Exiting")
         print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
         sys.exit()
-    if multi_classifier not in ["ridge","svm","mlr","mnb","lstm_attention","cnn","deepcnn"]:
+    if multi_classifier not in ["ridge","svm","mlr","mnb","lstm_attention","cnn","widecnn"]:
         print("Invalid multiclass bacterial classifier ! Exiting")
         print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
         sys.exit()
@@ -157,7 +157,7 @@ def caribou(opt):
         binary_classifier = "onesvm"
 
     # Check batch_size
-    if multi_classifier in ["cnn","deepcnn"] and training_batch_size < 20:
+    if multi_classifier in ["cnn","widecnn"] and training_batch_size < 20:
         training_batch_size = 20
 
     # Folders creation for output

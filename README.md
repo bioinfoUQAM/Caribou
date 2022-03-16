@@ -115,4 +115,4 @@ There are also partial steps scripts that can be used should the user want to.
 
 * Bacteria_classification_train_cv
 > This script trains and cross-validates a model for the bacteria classification step.
-> The usage is : Bacteria_classification_train_cv.py [-h] -db DATA_BACTERIA -dt DATABASE_NAME [-model {ridge,svm,mlr,mnb,lstm_attention,cnn,deepcnn}] [-bs BATCH_SIZE] [-cv NB_CV_JOBS] [-v] -o OUTDIR
+> The usage is : Bacteria_classification_train_cv.py [-h] -db DATA_BACTERIA -dt DATABASE_NAME [-model {ridge,svm,mlr,mnb,lstm_attention,cnn,widecnn}] [-bs BATCH_SIZE] [-cv NB_CV_JOBS] [-v] -o OUTDIR

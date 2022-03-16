@@ -127,7 +127,7 @@ def build_CNN(kmers_length, batch_size, nb_classes):
 
     return model
 
-def build_deepCNN(kmers_length, batch_size, nb_classes):
+def build_wideCNN(kmers_length, batch_size, nb_classes):
     """
     Function adapted in keras from module CHEER/Classifier/model/Wcnn.py of
     CHEER package [Shang et al. 2021]
