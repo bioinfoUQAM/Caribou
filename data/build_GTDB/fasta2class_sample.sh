@@ -16,8 +16,7 @@ while getopts "d:i:c:o:h" option; do
   esac
 done
 
-if [ $HELP -eq 1 ];
-then
+if [ $HELP -eq 1 ]; then
   """
   usage : fasta2class_mini.sh -i [inputFile] -c [classesFile] -o [outputDirectory]
 
@@ -34,9 +33,12 @@ fi
 
 cls_file=$OUTDIR/class_subset.csv
 echo "id","species","genus","family","order","class","phylum","domain" >> $cls_file
-length=$(wc -l $FASTA | awk '{print $1}')
 
-list_ids=$(grep -o -E "^>\w+" $FASTA | tr -d ">")
+if [[ $FASTA == *.gz ]]; then
+  list_ids=$(zcat $FASTA | grep -o -E "^>\w+" | tr -d ">")
+else
+  list_ids=$(grep -o -E "^>\w+" $FASTA | tr -d ">")
+fi
 
 for id in $list_ids; do
   cat $CLASSES_IN | grep $id >> $cls_file
