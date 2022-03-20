@@ -81,7 +81,7 @@ def kmers_dataset(opt):
 
         print("Caribou finished extracting k-mers of {}".format(opt['dataset_name']))
 
-    elif opt['cls_file'] is None and opt['kmers_list'] is not None:
+    elif opt['cls_file'] is not None and opt['kmers_list'] is not None:
         # Read kmers file to put in list
         kmers_list = []
         with open(opt['kmers_list'], 'r') as handle:
