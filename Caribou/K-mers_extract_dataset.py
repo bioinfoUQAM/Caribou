@@ -88,6 +88,23 @@ def kmers_dataset(opt):
             kmers_list = [kmer.rstrip() for kmer in handle.readlines()]
 
         # Metagenome to analyse
+        k_profile_metagenome = build_load_save_data((opt['seq_file'],opt['cls_file']),
+            "none",
+            outdirs["data_dir"],
+            opt['dataset_name'],
+            None,
+            k = opt['k_length'],
+            kmers_list = kmers_list
+        )
+        print("Caribou finished extracting k-mers of {}".format(opt['dataset_name']))
+
+    elif opt['cls_file'] is None and opt['kmers_list'] is not None:
+        # Read kmers file to put in list
+        kmers_list = []
+        with open(opt['kmers_list'], 'r') as handle:
+            kmers_list = [kmer.rstrip() for kmer in handle.readlines()]
+
+        # Metagenome to analyse
         k_profile_metagenome = build_load_save_data(opt['seq_file'],
             "none",
             outdirs["data_dir"],
@@ -104,10 +121,17 @@ def kmers_dataset(opt):
 
 # Argument parsing from CLI
 ################################################################################
+
+# FINISH ADAPTING FOR HOST KMERS EXTRACTION
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='This script extracts K-mers of the given dataset using the available ressources on the computer before saving it to drive.')
     parser.add_argument('-seq','--seq_file', required=True, type=pathlib.Path, help='PATH to a fasta file containing bacterial genomes to build k-mers from')
     parser.add_argument('-cls','--cls_file', required=True, type=pathlib.Path, help='PATH to a csv file containing classes of the corresponding fasta')
+
+    parser.add_argument('-seq_host','--seq_file_host', default=None, type=pathlib.Path, help='PATH to a fasta file containing host genomes to build k-mers from')
+    parser.add_argument('-cls_host','--cls_file_host', default=None, type=pathlib.Path, help='PATH to a csv file containing classes of the corresponding host fasta')
+
     parser.add_argument('-dt','--dataset_name', required=True, help='Name of the dataset used to name files')
     parser.add_argument('-k','--k_length', required=True, type=int, help='Length of k-mers to extract')
     parser.add_argument('-l','--kmers_list', default=None, type=pathlib.Path, help='PATH to a file containing a list of k-mers to be extracted if the dataset is not a training database')
