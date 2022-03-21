@@ -14,6 +14,9 @@ __author__ = "Nicolas de Montigny"
 __all__ = ['build_load_save_data', 'build_Xy_data', 'build_X_data']
 
 def build_load_save_data(file, hostfile, prefix, dataset, host, kmers_list=None, k=4):
+    # Declare data variables as none
+    data = None
+    data_host = None
 
     # Generate the names of files
     Xy_file = "{}/Xy_genome_{}_data_K{}.h5f".format(prefix,dataset,k)
@@ -27,50 +30,59 @@ def build_load_save_data(file, hostfile, prefix, dataset, host, kmers_list=None,
     if os.path.isfile(data_file) and os.path.isfile(data_file_host) and isinstance(hostfile, tuple):
         data = load_Xy_data(data_file)
         data_host = load_Xy_data(data_file_host)
-        return data, data_host
     elif os.path.isfile(data_file):
         data = load_Xy_data(data_file)
-        return data
     else:
-        # Build Xy_data of database and host
+        # Build Xy_data of database
         if isinstance(file, tuple):
             if not os.path.isfile(seqfile):
-                print("seq_data")
+                print("Database seq_data")
                 seq_data = SeqCollection((list(file)[0], list(file)[1]))
                 with open(seqfile, "wb") as handle:
                     pickle.dump(seq_data, handle)
-                if isinstance(hostfile, tuple):
-                    seq_data_host = SeqCollection((list(hostfile)[0], list(hostfile)[1]))
-                    with open(seqfile_host, "wb") as handle:
-                        pickle.dump(seq_data_host, handle)
             else:
                 with open(seqfile, "rb") as handle:
                     seq_data = pickle.load(handle)
-                if isinstance(hostfile, tuple):
-                    with open(seqfile_host, "rb") as handle:
-                        seq_data_host = pickle.load(handle)
 
             # Build Xy_data to drive
-            if isinstance(hostfile, tuple):
-                print("Xy_data with host, k = {}".format(k))
-                data = build_Xy_data(seq_data, k, Xy_file, seq_data.length, kmers_list = None)
-                save_Xy_data(data, data_file)
-                data_host = build_Xy_data(seq_data_host, k, Xy_file_host, seq_data_host.length, kmers_list = data["kmers_list"])
-                save_Xy_data(data_host, data_file_host)
-                return data, data_host
-            else:
-                print("Xy_data without host, k = {}".format(k))
-                data = build_Xy_data(seq_data, k, Xy_file, seq_data.length, None)
-                save_Xy_data(data, data_file)
-                return data
+            print("Database Xy_data, k = {}".format(k))
+            data = build_Xy_data(seq_data, k, Xy_file, seq_data.length, kmers_list = None)
+            save_Xy_data(data, data_file)
 
-        else:
-            # Build X_data of dataset
-            print("X_data, k = {}".format(k))
+        # Assing kmers_list to variable ater extracting database data
+        if kmers_list is None and isinstance(data['kmers_list'], list):
+            kmers_list = data['kmers_list']
+
+        # Build Xy_data of host
+        if isinstance(hostfile, tuple) and kmers_list is not None:
+            if not os.path.isfile(seqfile_host):
+                print("Host seq_data")
+                seq_data_host = SeqCollection((list(hostfile)[0], list(hostfile)[1]))
+                with open(seqfile_host, "wb") as handle:
+                    pickle.dump(seq_data_host, handle)
+            else:
+                with open(seqfile_host, "rb") as handle:
+                    seq_data_host = pickle.load(handle)
+
+            # Build Xy_data to drive
+            print("Host Xy_data, k = {}".format(k))
+            data_host = build_Xy_data(seq_data_host, k, Xy_file_host, seq_data_host.length, kmers_list)
+            save_Xy_data(data_host, data_file_host)
+
+        # Build X_data of dataset to analyse
+        if not isinstance(file, tuple) and not isinstance(hostfile, tuple) and kmers_list is not None:
+            print("Dataset seq_data")
             seq_data = SeqCollection(file)
+            print("Dataset X_data, k = {}".format(k))
             data = build_X_data(seq_data, k, Xy_file, kmers_list, seq_data.length)
             save_Xy_data(data, data_file)
-            return data
+
+    if data is not None and data_host is None:
+        return data
+    elif data is None and data_host is not None:
+        return data_host
+    else:
+        return data, data_host
 
 # Build kmers collections with known classes
 def build_Xy_data(seq_data, k, Xy_file, length = 0, kmers_list = None):
