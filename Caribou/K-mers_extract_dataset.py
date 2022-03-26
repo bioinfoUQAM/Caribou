@@ -46,7 +46,7 @@ def kmers_dataset(opt):
     if opt['host_name'] is None:
         opt['dataset_name'] = "host"
     # Verification of existence of files
-    for file in [opt['seq_file'],opt['cls_file'],opt['seq_file_host'],opt['cls_file_host']],opt['kmers_list']:
+    for file in [opt['seq_file'],opt['cls_file'],opt['seq_file_host'],opt['cls_file_host'],opt['kmers_list']]:
         if not os.path.isfile(file) and file is not None:
             print("Cannot find file {} ! Exiting".format(file))
             sys.exit()
