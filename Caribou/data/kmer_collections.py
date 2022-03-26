@@ -33,8 +33,7 @@ __all__ = ['kmers_collection','construct_data_GPU','construct_data_CPU','save_km
 Module adapted from module kmer_collections.py of
 mlr_kgenomvir package [Remita et al. 2022]
 
-Save kmers directly to drive instead of memory and
-adapted / added functions to do so.
+Save kmers directly to drive instead of memory and adapted / added functions to do so.
 Converted to be only functions instead of object for parallelization.
 """
 

@@ -35,7 +35,7 @@ def bacterial_classification(classified_data, database_k_mers, k, outdirs, datas
             classified_data[taxa] = previous_taxa_unclassified
             classified_data["order"].append(taxa)
         else:
-            if classifier in ["ridge","svm","mlr","mnb"]:
+            if classifier in ["sgd","svm","mlr","mnb"]:
                 clf_file = "{}bacteria_identification_classifier_{}_K{}_{}_{}_model.jb".format(outdirs["models_dir"], taxa, k, classifier, dataset)
                 if not os.path.isfile(clf_file):
                     train = True
@@ -87,9 +87,9 @@ def bacterial_classification(classified_data, database_k_mers, k, outdirs, datas
 
 def training(X_train, y_train, kmers, k, ids, nb_classes, labels_list, outdir_plots, classifier = "lstm_attention", batch_size = 32, threshold = 0.8, verbose = 1, cv = 1, clf_file = None, n_jobs = 1):
     # Model trained in MetaVW
-    if classifier == "ridge":
+    if classifier == "sgd":
         if verbose:
-            print("Training multiclass classifier with Ridge regression and SGD squared loss")
+            print("Training multiclass classifier with SGD and squared loss function")
         clf = SGDClassifier(loss = "squared_error", n_jobs = -1, random_state = 42)
     elif classifier == "svm":
         if verbose:
@@ -116,7 +116,7 @@ def training(X_train, y_train, kmers, k, ids, nb_classes, labels_list, outdir_pl
             print("Training multiclass classifier based on Wide CNN Network")
         clf = build_deepCNN(k, batch_size, nb_classes)
     else:
-        print("Bacteria classifier type unknown !!!\n\tModels implemented at this moment are :\n\tLinear models :  Ridge regressor (ridge), Linear SVM (svm), Multiple Logistic Regression (mlr)\n\tProbability classifier : Multinomial Bayes (mnb)\n\tNeural networks : Deep hybrid between LSTM and Attention (lstm_attention), CNN (cnn) and Wide CNN (widecnn)")
+        print("Bacteria classifier type unknown !!!\n\tModels implemented at this moment are :\n\tLinear models :  Ridge regressor (sgd), Linear SVM (svm), Multiple Logistic Regression (mlr)\n\tProbability classifier : Multinomial Bayes (mnb)\n\tNeural networks : Deep hybrid between LSTM and Attention (lstm_attention), CNN (cnn) and Wide CNN (widecnn)")
         sys.exit()
 
     if cv:

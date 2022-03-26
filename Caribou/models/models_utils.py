@@ -114,7 +114,7 @@ def choose_delete_models_sk(df_scores):
 def plot_figure(df_scores, n_jobs, outdir_plots, k, classifier):
     if classifier in ["onesvm","linearsvm","attention","lstm","deeplstm"]:
         clf_type = "extraction"
-    elif classifier in ["ridge","svm","mlr","mnb","lstm_attention","cnn","widecnn"]:
+    elif classifier in ["sgd","svm","mlr","mnb","lstm_attention","cnn","widecnn"]:
         clf_type = "classification"
 
     plot_file = "{}_K{}_{}_{}_cv_{}.png".format(outdir_plots, k, clf_type, classifier, "metrics")
@@ -142,7 +142,7 @@ def cross_validation_training(X_train, y_train, batch_size, kmers, ids, classifi
     cv_scores = []
     clf_scores = {}
 
-    if classifier in ["onesvm","linearsvm","ridge","svm","mlr","mnb"]:
+    if classifier in ["onesvm","linearsvm","sgd","svm","mlr","mnb"]:
         clf_file, ext = os.path.splitext(clf_file)
         clf_names = ["{}_iter_{}.{}".format(clf_file, iter, ext) for iter in range(n_jobs)]
         X_data = ["{}_iter_{}".format(X_train, iter) for iter in range(n_jobs)]
@@ -199,7 +199,7 @@ def cross_validation_training(X_train, y_train, batch_size, kmers, ids, classifi
 
     plot_figure(df_scores, n_jobs, outdir_plots, len(kmers[1]), classifier)
 
-    if classifier in ["onesvm","linearsvm","ridge","svm","mlr","mnb"]:
+    if classifier in ["onesvm","linearsvm","sgd","svm","mlr","mnb"]:
         clf_file = choose_delete_models_sk(df_scores)
     elif classifier in ["attention","lstm","deeplstm","lstm_attention","cnn","widecnn"]:
         clf_file = choose_delete_models_keras(df_scores)
@@ -224,7 +224,7 @@ def fit_predict_cv(X_train, y_train, batch_size, kmers, ids, classifier, labels_
         y_test = test_labels(test_generator)
         test_generator.handle.close()
 
-    elif classifier in ["ridge","svm","mlr","mnb"]:
+    elif classifier in ["sgd","svm","mlr","mnb"]:
         train_generator, test_generator = iter_generator(X_train, y_train, batch_size, kmers, ids, classifier, cv = cv, shuffle = shuffle, training = True)
         fit_model_multi_sk(clf, train_generator, clf_file, cls = np.unique(y_train))
         train_generator.handle.close()
@@ -265,7 +265,7 @@ def fit_model(X_train, y_train, batch_size, kmers, ids, classifier, labels_list,
         generator = iter_generator(X_train, y_train, batch_size, kmers, classifier, cv = cv, shuffle = shuffle, training = True)
         fit_model_linear_sk(clf, generator, clf_file)
         generator.handle.close()
-    elif classifier in ["ridge","svm","mlr","mnb"]:
+    elif classifier in ["sgd","svm","mlr","mnb"]:
         generator = iter_generator(X_train, y_train, batch_size, kmers, classifier, cv = cv, shuffle = shuffle, training = True)
         fit_model_multi_sk(clf, generator, clf_file, labels_list, cls = np.unique(y_train))
         generator.handle.close()
@@ -286,7 +286,7 @@ def model_predict(clf_file, X, kmers_list, ids, classifier, nb_classes, labels_l
         generator = iter_generator_keras(X, y, 1, kmers_list, ids, 0, classifier, shuffle = False, training = False)
         predict = predict_binary_keras(clf_file, generator)
         generator.handle.close()
-    elif classifier in ["ridge","svm","mlr","mnb"]:
+    elif classifier in ["sgd","svm","mlr","mnb"]:
         generator = iter_generator(X, y, 1, kmers_list, ids, classifier, cv = 0, shuffle = False, training = False)
         predict = predict_multi_sk(clf_file, labels_list, generator, threshold = threshold)
         generator.handle.close()

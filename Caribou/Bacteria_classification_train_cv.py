@@ -98,7 +98,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='This script trains and cross-validates a model for the bacteria classification step.')
     parser.add_argument('-db','--data_bacteria', required=True, type=Path, help='PATH to a npz file containing the data corresponding to the k-mers profile for the bacteria database')
     parser.add_argument('-dt','--database_name', required=True, help='Name of the bacteria database used to name files')
-    parser.add_argument('-model','--model_type', default='lstm_attention', choices=['ridge','svm','mlr','mnb','lstm_attention','cnn','widecnn'], help='The type of model to train')
+    parser.add_argument('-model','--model_type', default='lstm_attention', choices=['sgd','svm','mlr','mnb','lstm_attention','cnn','widecnn'], help='The type of model to train')
     parser.add_argument('-bs','--batch_size', default=32, type=int, help='Size of the batch size to use, defaults to 32')
     parser.add_argument('-cv','--nb_cv_jobs', default=10, type=int, help='The number of cross validation jobs to run, defaults to 10')
     parser.add_argument('-v','--verbose', action='store_true', help='Should the program be verbose')
