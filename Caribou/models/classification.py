@@ -114,7 +114,7 @@ def training(X_train, y_train, kmers, k, ids, nb_classes, labels_list, outdir_pl
     elif classifier == "widecnn":
         if verbose:
             print("Training multiclass classifier based on Wide CNN Network")
-        clf = build_deepCNN(k, batch_size, nb_classes)
+        clf = build_wideCNN(k, batch_size, nb_classes)
     else:
         print("Bacteria classifier type unknown !!!\n\tModels implemented at this moment are :\n\tLinear models :  Ridge regressor (sgd), Linear SVM (svm), Multiple Logistic Regression (mlr)\n\tProbability classifier : Multinomial Bayes (mnb)\n\tNeural networks : Deep hybrid between LSTM and Attention (lstm_attention), CNN (cnn) and Wide CNN (widecnn)")
         sys.exit()

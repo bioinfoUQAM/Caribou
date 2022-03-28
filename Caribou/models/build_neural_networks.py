@@ -11,7 +11,7 @@ from Caribou.models.attentionLayer import AttentionWeightedAverage
 
 __author__ = "Nicolas de Montigny"
 
-__all__ = ['build_attention','build_LSTM','build_deepLSTM','build_LSTM_attention','build_CNN','build_deepCNN']
+__all__ = ['build_attention','build_LSTM','build_deepLSTM','build_LSTM_attention','build_CNN','build_wideCNN']
 
 # Host extraction
 def build_attention(kmers_length):
