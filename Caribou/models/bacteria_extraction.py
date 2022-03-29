@@ -18,7 +18,7 @@ __author__ = "Nicolas de Montigny"
 
 __all__ = ['bacteria_extraction','training','extract_bacteria_sequences']
 
-def bacteria_extraction(metagenome_k_mers, database_k_mers, k, outdirs, dataset, classifier = "deeplstm", batch_size = 32, verbose = 1, cv = 1, saving_host = 1, saving_unclassified = 1, n_jobs = 1):
+def bacteria_extraction(metagenome_k_mers, database_k_mers, k, outdirs, dataset, training_epochs, classifier = "deeplstm", batch_size = 32, verbose = 1, cv = 1, saving_host = 1, saving_unclassified = 1, n_jobs = 1):
     # classified_data is a dictionnary containing data dictionnaries at each classified level:
     # {taxa:{"X":string to Xy_data file.hdf5,"kmers_list":list of kmers,"ids":list of ids which where classified at that taxa}}
     classified_data = {"order":["bacteria","host","unclassified"]}
@@ -72,7 +72,7 @@ def bacteria_extraction(metagenome_k_mers, database_k_mers, k, outdirs, dataset,
 
         # If classifier exists load it or train if not
         if train is True:
-            clf_file = training(X_train, y_train, database_k_mers["kmers_list"], k, database_k_mers["ids"], [-1, 1], outdirs["plots_dir"] if cv else None, classifier = classifier, batch_size = batch_size, verbose = verbose, cv = cv, clf_file = clf_file, n_jobs = n_jobs)
+            clf_file = training(X_train, y_train, database_k_mers["kmers_list"], k, database_k_mers["ids"], [-1, 1], outdirs["plots_dir"] if cv else None, training_epochs, classifier = classifier, batch_size = batch_size, verbose = verbose, cv = cv, clf_file = clf_file, n_jobs = n_jobs)
         # Classify sequences into bacteria / unclassified / host and build k-mers profiles for bacteria
         if metagenome_k_mers is not None:
             classified_data = extract_bacteria_sequences(clf_file, classified_data, metagenome_k_mers["X"], metagenome_k_mers["kmers_list"], metagenome_k_mers["ids"], classifier, [-1, 1], bacteria_kmers_file, host_kmers_file, unclassified_kmers_file, verbose = verbose, saving_host = saving_host, saving_unclassified = saving_unclassified)
@@ -80,7 +80,7 @@ def bacteria_extraction(metagenome_k_mers, database_k_mers, k, outdirs, dataset,
             return classified_data
 
 
-def training(X_train, y_train, kmers, k, ids, labels_list, outdir_plots, classifier = "deeplstm", batch_size = 32, verbose = 1, cv = 1, clf_file = None, n_jobs = 1):
+def training(X_train, y_train, kmers, k, ids, labels_list, outdir_plots, training_epochs, classifier = "deeplstm", batch_size = 32, verbose = 1, cv = 1, clf_file = None, n_jobs = 1):
     if classifier == "onesvm":
         if verbose:
             print("Training bacterial extractor with One Class SVM")
@@ -106,9 +106,9 @@ def training(X_train, y_train, kmers, k, ids, labels_list, outdir_plots, classif
         sys.exit()
 
     if cv:
-        clf_file = cross_validation_training(X_train, y_train, batch_size, kmers, ids, classifier, labels_list, outdir_plots, clf, cv = cv, verbose = verbose, clf_file = clf_file, n_jobs = n_jobs)
+        clf_file = cross_validation_training(X_train, y_train, batch_size, kmers, ids, classifier, labels_list, outdir_plots, clf, training_epochs, cv = cv, verbose = verbose, clf_file = clf_file, n_jobs = n_jobs)
     else:
-        fit_model(X_train, y_train, batch_size, kmers, ids, classifier, labels_list, clf, cv = cv, shuffle = True, verbose = verbose, clf_file = clf_file)
+        fit_model(X_train, y_train, batch_size, kmers, ids, classifier, labels_list, clf, training_epochs, cv = cv, shuffle = True, verbose = verbose, clf_file = clf_file)
 
     return clf_file
 

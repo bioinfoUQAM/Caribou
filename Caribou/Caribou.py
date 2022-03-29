@@ -66,6 +66,7 @@ def caribou(opt):
     training_batch_size = config.getint("settings", "training_batch_size", fallback = 32)
     binary_saving_host = config.getboolean("settings", "binary_save_host", fallback = True)
     binary_saving_unclassified = config.getboolean("settings", "binary_save_unclassified", fallback = True)
+    training_epochs = config.getint("settings","neural_network_training_iterations", fallback = 100)
     classifThreshold = config.getfloat("settings", "classification_threshold", fallback = 0.8)
 
     # outputs
@@ -131,6 +132,10 @@ def caribou(opt):
         sys.exit()
     if binary_saving_unclassified not in [True, False, None]:
         print("Invalid value for unclassifiable sequences ! Please use boolean values ! Exiting")
+        print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
+        sys.exit()
+    if training_epochs <= 0:
+        print("Invalid number of iterations for training neural networks ! Please enter a value bigger than 0 ! Exiting")
         print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
         sys.exit()
     if not 0 < classifThreshold <= 1 or type(classifThreshold) != float:
@@ -215,6 +220,7 @@ def caribou(opt):
             k_length,
             outdirs,
             database,
+            training_epochs,
             classifier = binary_classifier,
             batch_size = training_batch_size,
             verbose = verbose,
@@ -229,6 +235,7 @@ def caribou(opt):
             k_length,
             outdirs,
             database,
+            training_epochs,
             classifier = binary_classifier,
             batch_size = training_batch_size,
             verbose = verbose,
@@ -246,6 +253,7 @@ def caribou(opt):
         k_length,
         outdirs,
         database,
+        training_epochs,
         classifier = multi_classifier,
         batch_size = training_batch_size,
         threshold = classifThreshold,

@@ -153,7 +153,7 @@ def cross_validation_training(X_train, y_train, batch_size, kmers, ids, classifi
                                 delayed(fit_predict_cv)
                                 (X_file, y_train, batch_size, kmers,
                                 ids, classifier, labels_list, outdir_plots,
-                                clone(clf), cv = 1, shuffle = True,
+                                clone(clf), training_epochs, cv = 1, shuffle = True,
                                 threshold = threshold, verbose = True, clf_file = clf_name)
                                 for clf_name, X_file in zip(clf_names,X_data))
         else:
@@ -162,7 +162,7 @@ def cross_validation_training(X_train, y_train, batch_size, kmers, ids, classifi
                                     delayed(fit_predict_cv)
                                     (X_file, y_train, batch_size, kmers,
                                     ids, classifier, labels_list, outdir_plots,
-                                    clone(clf), cv = 1, shuffle = True,
+                                    clone(clf), training_epochs, cv = 1, shuffle = True,
                                     threshold = threshold, verbose = True, clf_file = clf_name)
                                     for clf_name, X_file in zip(clf_names,X_data))
         for file in X_data:
@@ -177,7 +177,7 @@ def cross_validation_training(X_train, y_train, batch_size, kmers, ids, classifi
                                 delayed(fit_predict_cv)
                                 (X_file, y_train, batch_size, kmers,
                                 ids, classifier, labels_list, outdir_plots,
-                                clone(clf), cv = 1, shuffle = True,
+                                clone(clf), training_epochs, cv = 1, shuffle = True,
                                 threshold = threshold, verbose = True, clf_file = clf_name)
                                 for clf_name, X_file in zip(clf_names,X_data))
         else:
@@ -186,7 +186,7 @@ def cross_validation_training(X_train, y_train, batch_size, kmers, ids, classifi
                                     delayed(fit_predict_cv)
                                     (X_file, y_train, batch_size, kmers,
                                     ids, classifier, labels_list, outdir_plots,
-                                    clone_model(clf), cv = 1, shuffle = True,
+                                    clone_model(clf), training_epochs, cv = 1, shuffle = True,
                                     threshold = threshold, verbose = True, clf_file = clf_name)
                                     for clf_name, X_file in zip(clf_names,X_data))
         for file in X_data:
@@ -206,7 +206,7 @@ def cross_validation_training(X_train, y_train, batch_size, kmers, ids, classifi
 
     return clf_file
 
-def fit_predict_cv(X_train, y_train, batch_size, kmers, ids, classifier, labels_list, outdir_plots, clf, cv = 1, shuffle = True, threshold = 0.8, verbose = True, clf_file = None):
+def fit_predict_cv(X_train, y_train, batch_size, kmers, ids, classifier, labels_list, outdir_plots, clf, training_epochs, cv = 1, shuffle = True, threshold = 0.8, verbose = True, clf_file = None):
     batch_size = 4
 
     scaleX(X_train, y_train, batch_size, kmers, ids, verbose)
@@ -218,7 +218,7 @@ def fit_predict_cv(X_train, y_train, batch_size, kmers, ids, classifier, labels_
             train_generator.handle.close()
         elif classifier == "linearsvm":
             train_generator, test_generator = iter_generator(X_train, y_train, batch_size, kmers, ids, classifier, cv = cv, shuffle = shuffle, training = True)
-            fit_model_linear_sk(clf, train_generator, clf_file)
+            fit_model_linear_sk(clf, train_generator, clf_file, cls = np.unique(y_train))
             train_generator.handle.close()
         y_pred_test = predict_binary_sk(clf_file, ids, test_generator)
         y_test = test_labels(test_generator)
@@ -235,7 +235,7 @@ def fit_predict_cv(X_train, y_train, batch_size, kmers, ids, classifier, labels_
     elif classifier in ["attention","lstm","deeplstm"]:
         train_generator, val_generator, test_generator = iter_generator_keras(X_train, y_train, batch_size, kmers, ids, cv, classifier, shuffle = shuffle, training = True)
         clf.compile(loss = 'binary_crossentropy', optimizer = 'adam', metrics = ['accuracy'])
-        fit_model_keras(clf, train_generator, val_generator, clf_file)
+        fit_model_keras(clf, train_generator, val_generator, training_epochs, clf_file)
         train_generator.handle.close()
         val_generator.handle.close()
         y_pred_test = predict_binary_keras(clf_file, test_generator)
@@ -245,7 +245,7 @@ def fit_predict_cv(X_train, y_train, batch_size, kmers, ids, classifier, labels_
     elif classifier in ["lstm_attention","cnn","widecnn"]:
         train_generator, val_generator, test_generator = iter_generator_keras(X_train, y_train, batch_size, kmers, ids, cv, classifier, shuffle = shuffle, training = True)
         clf.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
-        fit_model_keras(clf, train_generator, val_generator, clf_file)
+        fit_model_keras(clf, train_generator, val_generator, training_epochs, clf_file)
         train_generator.handle.close()
         val_generator.handle.close()
         y_pred_test = predict_multi_keras(clf_file, labels_list, test_generator, threshold = threshold)
@@ -254,7 +254,7 @@ def fit_predict_cv(X_train, y_train, batch_size, kmers, ids, classifier, labels_
 
     return cv_score(y_pred_test, y_test, clf_file, labels_list)
 
-def fit_model(X_train, y_train, batch_size, kmers, ids, classifier, labels_list, clf, cv = 0, shuffle = True, verbose = True, clf_file = None):
+def fit_model(X_train, y_train, batch_size, kmers, ids, classifier, labels_list, clf, training_epochs, cv = 0, shuffle = True, verbose = True, clf_file = None):
     scaleX(X_train, y_train, batch_size, kmers, ids, verbose)
 
     if classifier == "onesvm":
@@ -263,7 +263,7 @@ def fit_model(X_train, y_train, batch_size, kmers, ids, classifier, labels_list,
         generator.handle.close()
     elif classifier == "linearsvm":
         generator = iter_generator(X_train, y_train, batch_size, kmers, classifier, cv = cv, shuffle = shuffle, training = True)
-        fit_model_linear_sk(clf, generator, clf_file)
+        fit_model_linear_sk(clf, generator, clf_file, cls = np.unique(y_train))
         generator.handle.close()
     elif classifier in ["sgd","svm","mlr","mnb"]:
         generator = iter_generator(X_train, y_train, batch_size, kmers, classifier, cv = cv, shuffle = shuffle, training = True)
@@ -271,7 +271,7 @@ def fit_model(X_train, y_train, batch_size, kmers, ids, classifier, labels_list,
         generator.handle.close()
     elif classifier in ["attention","lstm","deeplstm","lstm_attention","cnn","widecnn"]:
         train_generator, val_generator = iter_generator_keras(X_train, y_train, batch_size, kmers, ids, cv, classifier, shuffle = shuffle, training = True)
-        fit_model_keras(clf, train_generator, val_generator, clf_file)
+        fit_model_keras(clf, train_generator, val_generator, training_epochs, clf_file)
         train_generator.handle.close()
         val_generator.handle.close()
 
@@ -304,9 +304,9 @@ def fit_model_oneSVM_sk(clf, generator, clf_file):
         clf.partial_fit(X, y)
     dump(clf, clf_file)
 
-def fit_model_linear_sk(clf, generator, clf_file):
+def fit_model_linear_sk(clf, generator, clf_file, cls):
     for i, (X, y) in enumerate(generator.iterator):
-        clf.partial_fit(X, y, classes = np.array([-1,0,1], dtype = float))
+        clf.partial_fit(X, y, classes = cls, dtype = float))
     dump(clf, clf_file)
 
 def fit_model_multi_sk(clf, generator, clf_file, cls):
@@ -339,12 +339,12 @@ def predict_multi_sk(clf_file, labels_list, generator, threshold = 0.8):
 
 # Keras versions
 ################################################################################
-def fit_model_keras(clf, train_generator, val_generator, clf_file):
+def fit_model_keras(clf, train_generator, val_generator, training_epochs, clf_file):
     modelcheckpoint = ModelCheckpoint(filepath=clf_file,monitor='val_accuracy', verbose=1, save_best_only=True, mode='auto')
     early = EarlyStopping(monitor='val_accuracy', mode='min', verbose=1, patience=10)
     clf.fit(x = train_generator,
             validation_data = val_generator,
-            epochs = 100,
+            epochs = training_epochs,
             callbacks = [modelcheckpoint,early],
             use_multiprocessing = True,
             workers = os.cpu_count())

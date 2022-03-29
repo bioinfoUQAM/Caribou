@@ -81,6 +81,11 @@ def bacteria_extraction_train_cv(opt):
         print("Invalid number of cross-validation jobs")
         sys.exit()
 
+    # Validate number of epochs
+    if opt['training_epochs'] <= 0:
+        print("Invalid number of training iterations for neural networks")
+        sys.exit()
+
     # Validate path for saving
     outdir_path, outdir_folder = os.path.split(opt['outdir'])
     if not os.path.isdir(outdir) and os.path.exists(outdir_path):
@@ -107,6 +112,7 @@ def bacteria_extraction_train_cv(opt):
             k_length,
             outdirs,
             opt['database_name'],
+            opt['training_epochs'],
             classifier = opt['model_type'],
             batch_size = opt['batch_size'],
             verbose = opt['verbose'],
@@ -121,6 +127,7 @@ def bacteria_extraction_train_cv(opt):
             k_length,
             outdirs,
             opt['database_name'],
+            opt['training_epochs'],
             classifier = opt['model_type'],
             batch_size = opt['batch_size'],
             verbose = opt['verbose'],
@@ -143,6 +150,7 @@ if __name__ == "__main__":
     parser.add_argument('-model','--model_type', default=None, choices=[None,'linearsvm','attention','lstm','deeplstm'], help='The type of model to train')
     parser.add_argument('-bs','--batch_size', default=32, type=int, help='Size of the batch size to use, defaults to 32')
     parser.add_argument('-cv','--nb_cv_jobs', default=10, type=int, help='The number of cross validation jobs to run, defaults to 10')
+    parser.add_argument('-e','--training_epochs', default=100, type=int, help='The number of training iterations for the neural networks models if one ise chosen, defaults to 100')
     parser.add_argument('-v','--verbose', action='store_true', help='Should the program be verbose')
     parser.add_argument('-o','--outdir', required=True, type=Path, help='PATH to a directory on file where outputs will be saved')
     args = parser.parse_args()

@@ -44,14 +44,14 @@ warnings.filterwarnings("ignore")
 # Data build functions
 # ####################
 
-def build_kmers_Xy_data(seq_data, k, Xy_file, length = 0, kmers_list = None):
+def build_kmers_Xy_data(seq_data, k, Xy_file, dataset, length = 0, kmers_list = None):
 
     if kmers_list is not None:
         method = 'given'
     else:
         method = 'seen'
 
-    collection = kmers_collection(seq_data, Xy_file, length, k, method = method, kmers_list = kmers_list)
+    collection = kmers_collection(seq_data, Xy_file, length, k, dataset, method = method, kmers_list = kmers_list)
 
     kmers_list = collection['kmers_list']
     X_data = collection['data']
@@ -60,9 +60,9 @@ def build_kmers_Xy_data(seq_data, k, Xy_file, length = 0, kmers_list = None):
 
     return X_data, y_data, kmers_list
 
-def build_kmers_X_data(seq_data, X_file, kmers_list, k, length = 0):
+def build_kmers_X_data(seq_data, X_file, kmers_list, k, dataset, length = 0):
 
-    collection = kmers_collection(seq_data, X_file, length, k, method = 'given', kmers_list = kmers_list)
+    collection = kmers_collection(seq_data, X_file, length, k, dataset, method = 'given', kmers_list = kmers_list)
     kmers_list = collection['kmers_list']
     X_data = collection['data']
     ids = seq_data.ids
@@ -73,7 +73,7 @@ def build_kmers_X_data(seq_data, X_file, kmers_list, k, length = 0):
 # Kmers computing
 # ##################
 
-def kmers_collection(seq_data, Xy_file, length, k, method = 'seen', kmers_list = None):
+def kmers_collection(seq_data, Xy_file, length, k, dataset, method = 'seen', kmers_list = None):
     collection = {}
     #
     collection['data'] = Xy_file
@@ -81,7 +81,7 @@ def kmers_collection(seq_data, Xy_file, length, k, method = 'seen', kmers_list =
     kmc_path = "{}/KMC/bin".format(os.path.dirname(os.path.realpath(__file__)))
     faSplit = "{}/faSplit".format(os.path.dirname(os.path.realpath(__file__)))
     #
-    collection['ids'], collection['kmers_list'] = compute_kmers(seq_data, method, kmers_list, k, dir_path, faSplit, kmc_path, Xy_file)
+    collection['ids'], collection['kmers_list'] = compute_kmers(seq_data, method, kmers_list, k, dir_path, faSplit, kmc_path, Xy_file, dataset)
     #
     rmtree(dir_path)
 
@@ -106,7 +106,6 @@ def construct_data_CPU(Xy_file, dir_path, list_id_file):
     iter = 0
     for id, file in list_id_file:
         iter += 1
-        print(iter)
         if df is None:
             try :
                 # Read first file to df directly
@@ -124,7 +123,7 @@ def construct_data_CPU(Xy_file, dir_path, list_id_file):
                 tmp = tmp.sort_values(by = 'kmers')
                 # Outer join each file to df
                 df = df.merge(tmp, on = 'kmers', how = 'outer')
-                if iter == 5:
+                if iter == 1000:
                     save_kmers_profile_CPU(df, tmp_file)
                     iter = 0
             except IndexError:
@@ -271,8 +270,8 @@ def compute_given_kmers_of_sequence(kmers_list, kmc_path, k, dir_path, ind, file
 
     return id, '{}/{}.txt'.format(dir_path, ind)
 
-def compute_kmers(seq_data, method, kmers_list, k, dir_path, faSplit, kmc_path, Xy_file):
-    file_list_ids_file = os.path.join(os.path.dirname(Xy_file),'list_id_file.txt')
+def compute_kmers(seq_data, method, kmers_list, k, dir_path, faSplit, kmc_path, Xy_file, dataset):
+    file_list_ids_file = os.path.join(os.path.dirname(Xy_file),'list_id_file_{}.txt'.format(dataset))
     if not os.path.isfile(file_list_ids_file):
         file_list = []
 

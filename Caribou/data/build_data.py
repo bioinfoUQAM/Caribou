@@ -46,7 +46,7 @@ def build_load_save_data(file, hostfile, prefix, dataset, host, kmers_list=None,
 
             # Build Xy_data to drive
             print("Database Xy_data, k = {}".format(k))
-            data = build_Xy_data(seq_data, k, Xy_file, seq_data.length, kmers_list = None)
+            data = build_Xy_data(seq_data, k, Xy_file, dataset, seq_data.length, kmers_list = None)
             save_Xy_data(data, data_file)
 
         # Assing kmers_list to variable ater extracting database data
@@ -66,7 +66,7 @@ def build_load_save_data(file, hostfile, prefix, dataset, host, kmers_list=None,
 
             # Build Xy_data to drive
             print("Host Xy_data, k = {}".format(k))
-            data_host = build_Xy_data(seq_data_host, k, Xy_file_host, seq_data_host.length, kmers_list)
+            data_host = build_Xy_data(seq_data_host, k, Xy_file_host, dataset, seq_data_host.length, kmers_list)
             save_Xy_data(data_host, data_file_host)
 
         # Build X_data of dataset to analyse
@@ -74,7 +74,7 @@ def build_load_save_data(file, hostfile, prefix, dataset, host, kmers_list=None,
             print("Dataset seq_data")
             seq_data = SeqCollection(file)
             print("Dataset X_data, k = {}".format(k))
-            data = build_X_data(seq_data, k, Xy_file, kmers_list, seq_data.length)
+            data = build_X_data(seq_data, k, Xy_file, kmers_list, dataset, seq_data.length)
             save_Xy_data(data, data_file)
 
     if data is not None and data_host is None:
@@ -85,10 +85,11 @@ def build_load_save_data(file, hostfile, prefix, dataset, host, kmers_list=None,
         return data, data_host
 
 # Build kmers collections with known classes
-def build_Xy_data(seq_data, k, Xy_file, length = 0, kmers_list = None):
+def build_Xy_data(seq_data, k, Xy_file, dataset, length = 0, kmers_list = None):
     data = dict()
 
     X, y, kmers = build_kmers_Xy_data(seq_data, k, Xy_file,
+                                      dataset,
                                       length = length,
                                       kmers_list = kmers_list)
 
@@ -102,11 +103,12 @@ def build_Xy_data(seq_data, k, Xy_file, length = 0, kmers_list = None):
     return data
 
 # Build kmers collection without known classes
-def build_X_data(seq_data, k, X_file, kmers_list, length = 0):
+def build_X_data(seq_data, k, X_file, kmers_list, dataset, length = 0):
     data = dict()
 
     X, kmers, ids = build_kmers_X_data(seq_data, X_file,
-                                       k = k,
+                                       k,
+                                       dataset,
                                        kmers_list = kmers_list,
                                        length = length)
 

@@ -19,7 +19,7 @@ __author__ = "Nicolas de Montigny"
 
 __all__ = ['bacterial_classification','training','classify']
 
-def bacterial_classification(classified_data, database_k_mers, k, outdirs, dataset, classifier = "lstm_attention", batch_size = 32, threshold = 0.8, verbose = 1, cv = 1, n_jobs = 1):
+def bacterial_classification(classified_data, database_k_mers, k, outdirs, dataset, training_epochs, classifier = "lstm_attention", batch_size = 32, threshold = 0.8, verbose = 1, cv = 1, n_jobs = 1):
     if classified_data is not None:
         metagenome_k_mers = classified_data["bacteria"]
         previous_taxa_unclassified = None
@@ -65,7 +65,7 @@ def bacterial_classification(classified_data, database_k_mers, k, outdirs, datas
 
                 # If classifier exists load it or train if not
                 if train is True:
-                    clf_file = training(X_train, y_train, database_k_mers["kmers_list"],k, database_k_mers["ids"], nb_classes, labels_list_int, outdirs["plots_dir"] if cv else None, classifier = classifier, batch_size = batch_size, threshold = threshold, verbose = verbose, cv = cv, clf_file = clf_file, n_jobs = n_jobs)
+                    clf_file = training(X_train, y_train, database_k_mers["kmers_list"],k, database_k_mers["ids"], nb_classes, labels_list_int, outdirs["plots_dir"] if cv else None, training_epochs, classifier = classifier, batch_size = batch_size, threshold = threshold, verbose = verbose, cv = cv, clf_file = clf_file, n_jobs = n_jobs)
                 if classified_data is not None:
                     # Classify sequences into taxa and build k-mers profiles for classified and unclassified data
                     # Keep previous taxa to reclassify only unclassified reads at a higher taxonomic level
@@ -85,7 +85,7 @@ def bacterial_classification(classified_data, database_k_mers, k, outdirs, datas
     if classified_data is not None:
         return classified_data
 
-def training(X_train, y_train, kmers, k, ids, nb_classes, labels_list, outdir_plots, classifier = "lstm_attention", batch_size = 32, threshold = 0.8, verbose = 1, cv = 1, clf_file = None, n_jobs = 1):
+def training(X_train, y_train, kmers, k, ids, nb_classes, labels_list, outdir_plots, training_epochs, classifier = "lstm_attention", batch_size = 32, threshold = 0.8, verbose = 1, cv = 1, clf_file = None, n_jobs = 1):
     # Model trained in MetaVW
     if classifier == "sgd":
         if verbose:
@@ -120,9 +120,9 @@ def training(X_train, y_train, kmers, k, ids, nb_classes, labels_list, outdir_pl
         sys.exit()
 
     if cv:
-        clf_file = cross_validation_training(X_train, y_train, batch_size, kmers, ids, classifier, labels_list, outdir_plots, clf, threshold = threshold, verbose = verbose, clf_file = clf_file, n_jobs = n_jobs)
+        clf_file = cross_validation_training(X_train, y_train, batch_size, kmers, ids, classifier, labels_list, outdir_plots, clf, training_epochs, threshold = threshold, verbose = verbose, clf_file = clf_file, n_jobs = n_jobs)
     else:
-        fit_model(X_train, y_train, batch_size, kmers, ids, classifier, labels_list, clf, verbose = verbose, clf_file = clf_file)
+        fit_model(X_train, y_train, batch_size, kmers, ids, classifier, labels_list, clf, training_epochs, verbose = verbose, clf_file = clf_file)
 
     return clf_file
 
