@@ -5,7 +5,7 @@ import tensorflow as tf
 from tensorflow import cast
 from tensorflow.keras.initializers import GlorotNormal
 from keras.models import Model, Sequential
-from keras.layers import Dense, Input, LSTM, Embedding, Dropout, Conv1D, Conv2D, MaxPooling1D, MaxPooling2D, ReLU, Concatenate, Flatten, Attention, Activation, Reshape
+from keras.layers import Dense, Input, LSTM, Embedding, Dropout, Conv1D, Conv2D, MaxPooling1D, MaxPooling2D, ReLU, Concatenate, Flatten, Attention, Activation, Bidirectional
 
 from Caribou.models.attentionLayer import AttentionWeightedAverage
 
@@ -88,15 +88,15 @@ def build_LSTM_attention(kmers_length, nb_classes, batch_size):
     """
 
     inputs = Input(shape = (kmers_length,))
-    net = Embedding(kmers_length, 100, embeddings_initializer = 'glorot_normal')(inputs)
-    #net = Reshape((batch_size, kmers_length * 100))(net)
-    net = LSTM(300, kernel_initializer = 'glorot_normal', return_sequences=True, return_state=True)(net)
-    net = Attention()(net)
+    net = Embedding(kmers_length, 100)(inputs)
 
-    net = Dense((batch_size * 300 * 2), activation = 'relu', kernel_initializer = 'glorot_normal')(net)
+    net = Bidirectional(LSTM(300, return_sequences=True))(net)
+    net = Attention()([net,net])
+
+    net = Dense((batch_size * 300 * 2), activation = 'relu')(net)
     net = Dropout(0.2)(net)
 
-    net = Dense(nb_classes, activation = 'relu', kernel_initializer = 'glorot_normal')(net)
+    net = Dense(nb_classes, activation = 'relu')(net)
     net = Dropout(0.2)(net)
 
     outputs = Activation('softmax')(net)

@@ -49,7 +49,7 @@ def build_load_save_data(file, hostfile, prefix, dataset, host, kmers_list=None,
             data = build_Xy_data(seq_data, k, Xy_file, dataset, seq_data.length, kmers_list = None)
             save_Xy_data(data, data_file)
 
-        # Assing kmers_list to variable ater extracting database data
+        # Assign kmers_list to variable ater extracting database data
         if kmers_list is None and isinstance(data['kmers_list'], list):
             kmers_list = data['kmers_list']
 
@@ -106,10 +106,11 @@ def build_Xy_data(seq_data, k, Xy_file, dataset, length = 0, kmers_list = None):
 def build_X_data(seq_data, k, X_file, kmers_list, dataset, length = 0):
     data = dict()
 
-    X, kmers, ids = build_kmers_X_data(seq_data, X_file,
+    X, kmers, ids = build_kmers_X_data(seq_data,
+                                       X_file,
+                                       kmers_list,
                                        k,
                                        dataset,
-                                       kmers_list = kmers_list,
                                        length = length)
 
     # Data in a dictionnary

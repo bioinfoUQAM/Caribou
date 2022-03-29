@@ -117,8 +117,6 @@ def bacteria_extraction_train_cv(opt):
             batch_size = opt['batch_size'],
             verbose = opt['verbose'],
             cv = True,
-            saving_host = False,
-            saving_unclassified = False,
             n_jobs = opt['nb_cv_jobs']
             )
     else:
@@ -132,8 +130,6 @@ def bacteria_extraction_train_cv(opt):
             batch_size = opt['batch_size'],
             verbose = opt['verbose'],
             cv = True,
-            saving_host = False,
-            saving_unclassified = False,
             n_jobs = opt['nb_cv_jobs']
             )
 

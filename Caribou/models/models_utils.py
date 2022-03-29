@@ -136,7 +136,7 @@ def plot_figure(df_scores, n_jobs, outdir_plots, k, classifier):
 ################################################################################
 
 # Model training with cross-validation
-def cross_validation_training(X_train, y_train, batch_size, kmers, ids, classifier, labels_list, outdir_plots, clf, cv = 1, shuffle = True, threshold = 0.8, verbose = True, clf_file = None, n_jobs = 1):
+def cross_validation_training(X_train, y_train, batch_size, kmers, ids, classifier, labels_list, outdir_plots, clf, training_epochs, cv = 1, shuffle = True, threshold = 0.8, verbose = True, clf_file = None, n_jobs = 1):
     # cv_scores is a list of n fold dicts
     # each dict contains the results of the iteration
     cv_scores = []
@@ -144,12 +144,13 @@ def cross_validation_training(X_train, y_train, batch_size, kmers, ids, classifi
 
     if classifier in ["onesvm","linearsvm","sgd","svm","mlr","mnb"]:
         clf_file, ext = os.path.splitext(clf_file)
-        clf_names = ["{}_iter_{}.{}".format(clf_file, iter, ext) for iter in range(n_jobs)]
-        X_data = ["{}_iter_{}".format(X_train, iter) for iter in range(n_jobs)]
+        clf_names = ["{}_iter_{}{}".format(clf_file, iter, ext) for iter in range(n_jobs)]
+        X_data_file, ext = os.path.splitext(X_train)
+        X_data = ["{}_iter_{}{}".format(X_data_file, iter, ext) for iter in range(n_jobs)]
         for file in X_data:
             shutil.copy(X_train,file)
         if list_physical_devices('GPU'):
-            cv_scores = Parallel(n_jobs = n_jobs if n_jobs <= os.cpu_count() else -1, prefer = "processes", verbose = 100 if verbose else 0)(
+            cv_scores = Parallel(n_jobs = -1, prefer = "processes", verbose = 100 if verbose else 0)(
                                 delayed(fit_predict_cv)
                                 (X_file, y_train, batch_size, kmers,
                                 ids, classifier, labels_list, outdir_plots,
@@ -158,7 +159,7 @@ def cross_validation_training(X_train, y_train, batch_size, kmers, ids, classifi
                                 for clf_name, X_file in zip(clf_names,X_data))
         else:
             with parallel_backend('threading'):
-                cv_scores = Parallel(n_jobs = n_jobs if n_jobs <= os.cpu_count() else -1, prefer = "threads", verbose = 100 if verbose else 0)(
+                cv_scores = Parallel(n_jobs = -1, prefer = "threads", verbose = 100 if verbose else 0)(
                                     delayed(fit_predict_cv)
                                     (X_file, y_train, batch_size, kmers,
                                     ids, classifier, labels_list, outdir_plots,
@@ -173,7 +174,7 @@ def cross_validation_training(X_train, y_train, batch_size, kmers, ids, classifi
         for file in X_data:
             shutil.copy(X_train,file)
         if list_physical_devices('GPU'):
-            cv_scores = Parallel(n_jobs = n_jobs if n_jobs <= os.cpu_count() else -1, prefer = "processes", verbose = 100 if verbose else 0)(
+            cv_scores = Parallel(n_jobs = -1, prefer = "processes", verbose = 100 if verbose else 0)(
                                 delayed(fit_predict_cv)
                                 (X_file, y_train, batch_size, kmers,
                                 ids, classifier, labels_list, outdir_plots,
@@ -182,7 +183,7 @@ def cross_validation_training(X_train, y_train, batch_size, kmers, ids, classifi
                                 for clf_name, X_file in zip(clf_names,X_data))
         else:
             with parallel_backend('threading'):
-                cv_scores = Parallel(n_jobs = n_jobs if n_jobs <= os.cpu_count() else -1, prefer = "threads", verbose = 100 if verbose else 0)(
+                cv_scores = Parallel(n_jobs = -1, prefer = "threads", verbose = 100 if verbose else 0)(
                                     delayed(fit_predict_cv)
                                     (X_file, y_train, batch_size, kmers,
                                     ids, classifier, labels_list, outdir_plots,
@@ -220,8 +221,8 @@ def fit_predict_cv(X_train, y_train, batch_size, kmers, ids, classifier, labels_
             train_generator, test_generator = iter_generator(X_train, y_train, batch_size, kmers, ids, classifier, cv = cv, shuffle = shuffle, training = True)
             fit_model_linear_sk(clf, train_generator, clf_file, cls = np.unique(y_train))
             train_generator.handle.close()
-        y_pred_test = predict_binary_sk(clf_file, ids, test_generator)
         y_test = test_labels(test_generator)
+        y_pred_test = predict_binary_sk(clf_file, len(y_test), test_generator)
         test_generator.handle.close()
 
     elif classifier in ["sgd","svm","mlr","mnb"]:
@@ -276,11 +277,12 @@ def fit_model(X_train, y_train, batch_size, kmers, ids, classifier, labels_list,
         val_generator.handle.close()
 
 def model_predict(clf_file, X, kmers_list, ids, classifier, nb_classes, labels_list, threshold = 0.8, verbose = True):
+    predict = []
     y = pd.Series(range(len(ids)))
 
     if classifier in ["onesvm","linearsvm"]:
         generator = iter_generator(X, y, 1, kmers_list, ids, classifier, cv = 0, shuffle = False, training = False)
-        predict = predict_binary_sk(clf_file, ids, generator)
+        predict = predict_binary_sk(clf_file, len(ids), generator)
         generator.handle.close()
     elif classifier in ["attention","lstm","deeplstm"]:
         generator = iter_generator_keras(X, y, 1, kmers_list, ids, 0, classifier, shuffle = False, training = False)
@@ -306,7 +308,7 @@ def fit_model_oneSVM_sk(clf, generator, clf_file):
 
 def fit_model_linear_sk(clf, generator, clf_file, cls):
     for i, (X, y) in enumerate(generator.iterator):
-        clf.partial_fit(X, y, classes = cls, dtype = float))
+        clf.partial_fit(X, y, classes = cls, dtype = float)
     dump(clf, clf_file)
 
 def fit_model_multi_sk(clf, generator, clf_file, cls):
@@ -315,8 +317,8 @@ def fit_model_multi_sk(clf, generator, clf_file, cls):
     clf = CalibratedClassifierCV(base_estimator = clf, cv = "prefit").fit(X,y)
     dump(clf, clf_file)
 
-def predict_binary_sk(clf_file, ids, generator):
-    y_pred = np.empty(len(ids), dtype=np.int32)
+def predict_binary_sk(clf_file, nb_ids, generator):
+    y_pred = np.empty(nb_ids, dtype=np.int32)
 
     clf = load(clf_file)
     for i, (X, y) in enumerate(generator.iterator):

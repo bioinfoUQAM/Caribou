@@ -64,8 +64,6 @@ def caribou(opt):
     n_cvJobs = config.getint("settings", "nb_cv_jobs", fallback = 1)
     verbose = config.getboolean("settings", "verbose", fallback = True)
     training_batch_size = config.getint("settings", "training_batch_size", fallback = 32)
-    binary_saving_host = config.getboolean("settings", "binary_save_host", fallback = True)
-    binary_saving_unclassified = config.getboolean("settings", "binary_save_unclassified", fallback = True)
     training_epochs = config.getint("settings","neural_network_training_iterations", fallback = 100)
     classifThreshold = config.getfloat("settings", "classification_threshold", fallback = 0.8)
 
@@ -124,14 +122,6 @@ def caribou(opt):
         sys.exit()
     if type(training_batch_size) != int or training_batch_size <= 0:
         print("Invalid number of training batch size ! Please enter a positive integer ! Exiting")
-        print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
-        sys.exit()
-    if binary_saving_host not in [True, False, None]:
-        print("Invalid value for host data saving ! Please use boolean values ! Exiting")
-        print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
-        sys.exit()
-    if binary_saving_unclassified not in [True, False, None]:
-        print("Invalid value for unclassifiable sequences ! Please use boolean values ! Exiting")
         print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
         sys.exit()
     if training_epochs <= 0:
@@ -225,8 +215,6 @@ def caribou(opt):
             batch_size = training_batch_size,
             verbose = verbose,
             cv = cv,
-            saving_host = binary_saving_host,
-            saving_unclassified = binary_saving_unclassified,
             n_jobs = n_cvJobs
             )
     else:
@@ -240,8 +228,6 @@ def caribou(opt):
             batch_size = training_batch_size,
             verbose = verbose,
             cv = cv,
-            saving_host = binary_saving_host,
-            saving_unclassified = binary_saving_unclassified,
             n_jobs = n_cvJobs
             )
 

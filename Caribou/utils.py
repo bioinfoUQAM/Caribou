@@ -58,7 +58,7 @@ def merge_database_host(database_data, host_data):
     merged_file = "{}_host_merged{}".format(path, ext)
 
     merged_data["X"] = merged_file
-    merged_data["y"] = np.array(pd.merge(pd.DataFrame(database_data["y"], columns = database_data["taxas"]), pd.DataFrame(host_data["y"], columns = host_data["taxas"]), how = "outer"))
+    merged_data["y"] = np.array(pd.DataFrame(database_data["y"], columns = database_data["taxas"]).append(pd.DataFrame(host_data["y"], columns = host_data["taxas"]), ignore_index = True))
     merged_data["ids"] = database_data["ids"] + host_data["ids"]
     merged_data["kmers_list"] = database_data["kmers_list"]
     merged_data["taxas"] = list(set(database_data["taxas"]).union(host_data["taxas"]))
@@ -75,8 +75,8 @@ def merge_database_host(database_data, host_data):
                     data.append(np.array(X_d, dtype = np.uint64))
             for X_h, y_h in generator_host.iterator:
                 data.append(np.array(X_h, dtype = np.uint64))
-        generator_database.handle.close()
-        generator_host.handle.close()
+    generator_database.handle.close()
+    generator_host.handle.close()
 
     return merged_data
 

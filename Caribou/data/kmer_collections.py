@@ -305,7 +305,9 @@ def compute_kmers(seq_data, method, kmers_list, k, dir_path, faSplit, kmc_path, 
                 ids, kmers_list = construct_data_GPU(Xy_file, list_id_file)
         else:
             ids, kmers_list = construct_data_CPU(Xy_file, dir_path, list_id_file)
-        os.remove(file_list_ids_file)
+
+    os.remove(file_list_ids_file)
+
     return ids, kmers_list
 
 def save_id_file_list(list_id_file, file):

@@ -7,4 +7,4 @@ Caribou/outputs/KronaTools/** linguist-vendored
 Caribou/data/KMC/** linguist-vendored
 
 # faSplit
-Caribou/data/faSplit linguist-vendored
+Caribou/data/faSplit -linguist-vendored
