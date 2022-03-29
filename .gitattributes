@@ -1,10 +1,10 @@
 ## Github language integration
 
 # Kronatools
-Caribou/Caribou/outputs/KronaTools/** linguist-vendored
+Caribou/outputs/KronaTools/** linguist-vendored
 
 # KMC
-Caribou/Caribou/data/KMC/* linguist-vendored
+Caribou/data/KMC/** linguist-vendored
 
 # faSplit
-Caribou/Caribou/data/faSplit linguist-vendored
+Caribou/data/faSplit linguist-vendored
