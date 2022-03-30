@@ -173,8 +173,6 @@ def construct_data_GPU(Xy_file, list_id_file):
                 tmp = tmp.sort_values(by = 'kmers')
                 # Outer join each file to ddf (fast according to doc)
                 ddf = ddf.merge(tmp, on = 'kmers', how = 'outer')
-                # Repartition to optimize memory usage
-                ddf = ddf.repartition(npartitions = ddf.npartitions // 100)
                 # Make it compute by dask and liberate task graph memory for computing on distributed architecture
                 ddf = ddf.persist()
                 if iter == 1000:
