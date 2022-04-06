@@ -234,7 +234,10 @@ def construct_data_GPU(Xy_file, list_id_file):
                     # If no extracted kmers found
                     print("Kmers extraction error for sequence {}".format(id))
 
-    os.remove(tmp_file)
+    try:
+        os.remove(tmp_file)
+    except:
+        pass
 
     return save_kmers_profile_GPU(ddf, Xy_file, tmp = False)
 
