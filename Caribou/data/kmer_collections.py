@@ -302,8 +302,6 @@ def compute_seen_kmers_of_sequence(kmc_path, k, dir_path, ind, file):
             # Transform k-mers db with KMC
             cmd_transform = "{}/kmc_tools transform {}/{} dump {}/{}.txt".format(kmc_path, tmp_folder, ind, dir_path, ind)
             run(cmd_transform, shell = True, capture_output=True)
-            df = pd.read_table("{}/{}.txt".format(dir_path, ind), names = [id])
-            df.to_csv('{}/{}.txt'.format(dir_path, ind), sep = "\t", header = ['kmers',id])
         except:
             pass
 
@@ -321,6 +319,10 @@ def compute_given_kmers_of_sequence(kmers_list, kmc_path, k, dir_path, ind, file
         # Transform k-mers db with KMC
         cmd_transform = "{}/kmc_tools transform {}/{} dump {}/{}.txt".format(kmc_path, tmp_folder, ind, dir_path, ind)
         run(cmd_transform, shell = True, capture_output=True)
+    except:
+        pass
+
+    try:
         profile = pd.read_table('{}/{}.txt'.format(dir_path, ind), names = [id], index_col = 0, dtype = object).T
         # Temp pandas df to write given kmers to file
         df = pd.DataFrame(np.zeros((1,len(kmers_list))), columns = kmers_list, index = [id])
@@ -331,9 +333,9 @@ def compute_given_kmers_of_sequence(kmers_list, kmc_path, k, dir_path, ind, file
             else:
                 df.at[id,kmer] = 0
 
-        df.T.to_csv('{}/{}.txt'.format(dir_path, ind), sep = "\t", header = ['kmers',id])
+                df.T.to_csv('{}/{}.txt'.format(dir_path, ind), sep = "\t", header = ['kmers',id])
     except:
-        pass
+        print("Kmers extraction error for sequence {}".format(id))
 
     return id, '{}/{}.txt'.format(dir_path, ind)
 
