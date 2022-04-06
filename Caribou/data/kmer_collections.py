@@ -238,7 +238,7 @@ def construct_data_GPU(Xy_file, list_id_file):
     except:
         pass
 
-    wait(df)
+    wait(ddf)
     return save_kmers_profile_GPU(ddf, Xy_file, tmp = False)
 
 def save_kmers_profile_CPU(df, Xy_file, tmp = True):
