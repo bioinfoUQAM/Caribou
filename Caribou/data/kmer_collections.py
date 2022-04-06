@@ -225,7 +225,6 @@ def construct_data_GPU(Xy_file, list_id_file):
                     ddf = ddf.merge(tmp, on = ['kmers'], how = 'outer')
                     # Make it compute by dask and liberate task graph memory for computing on distributed architecture
                     ddf = ddf.persist()
-                    print(ddf)
                     if iter == 1000:
                         wait(ddf)
                         save_kmers_profile_GPU(ddf, tmp_file)
@@ -239,6 +238,7 @@ def construct_data_GPU(Xy_file, list_id_file):
     except:
         pass
 
+    wait(df)
     return save_kmers_profile_GPU(ddf, Xy_file, tmp = False)
 
 def save_kmers_profile_CPU(df, Xy_file, tmp = True):
@@ -279,14 +279,13 @@ def save_kmers_profile_GPU(ddf, Xy_file, tmp = True):
         ddf.compute().to_csv(Xy_file, index = False)
 
     else:
-        ddf = ddf.fillna(0).compute()
         # Extract ids and k-mers from dask_cudf dataframe + remove kmers column
         kmers_list = ddf['kmers'].to_numpy()
         ddf = ddf.drop(columns = 'kmers')
         ids = list(ddf.columns)
         # Convert dask_cudf to numpy array and write directly to disk with pytables
         with tb.open_file(Xy_file, "w") as handle:
-            data = handle.create_carray("/", "data", obj = ddf.to_numpy().astype(np.int64).T)
+            data = handle.create_carray("/", "data", obj = ddf.fillna(0).compute().to_numpy().astype(np.int64).T)
         return ids, kmers_list
 
 
