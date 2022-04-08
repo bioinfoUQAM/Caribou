@@ -135,37 +135,38 @@ def construct_data_CPU(Xy_file, dir_path, list_id_file):
     return save_kmers_profile_CPU(df, Xy_file, tmp = False)
 
 def construct_data_GPU(Xy_file, list_id_file, k):
-    tmp_file = os.path.join(os.path.dirname(Xy_file),'tmp_result.csv')
-    kmers = ["".join(t) for t in product("ACGT", repeat=k)]
-    ids = [id for id, file in list_id_file]
-    #df = pd.DataFrame(columns = kmers, index = ids, dtype = object)
-    #df.to_csv(tmp_file)
-    #ddf = dask_cudf.read_csv(tmp_file)
-    ddf = dask_cudf.from_cudf(cudf.from_pandas(pd.DataFrame(columns = kmers, index = ids, dtype = object)))
+    with LocalCUDACluster() as cluster, Client(cluster) as client:
+        tmp_file = os.path.join(os.path.dirname(Xy_file),'tmp_result.csv')
+        kmers = ["".join(t) for t in product("ACGT", repeat=k)]
+        ids = [id for id, file in list_id_file]
+        #df = pd.DataFrame(columns = kmers, index = ids, dtype = object)
+        #df.to_csv(tmp_file)
+        #ddf = dask_cudf.read_csv(tmp_file)
+        ddf = dask_cudf.from_cudf(cudf.from_pandas(pd.DataFrame(columns = kmers, index = ids, dtype = object)))
 
-    for id, file in list_id_file:
-        iter = 0
-        tmp = pd.read_csv(file, sep = "\t", header = None, names = ['kmers', id], index_col=False)
-        for row in tmp.index:
-            iter += 1
-            ddf.at[id,tmp.loc[row,'kmers']] = tmp.loc[row,id]
-            ddf.persist()
-            if iter == 1000:
-                wait(ddf)
-                save_kmers_profile_GPU(ddf, tmp_file)
-                iter = 0
+        for id, file in list_id_file:
+            iter = 0
+            tmp = pd.read_csv(file, sep = "\t", header = None, names = ['kmers', id], index_col=False)
+            for row in tmp.index:
+                iter += 1
+                ddf.at[id,tmp.loc[row,'kmers']] = tmp.loc[row,id]
+                ddf.persist()
+                if iter == 1000:
+                    wait(ddf)
+                    save_kmers_profile_GPU(ddf, tmp_file)
+                    iter = 0
 
-    for column in ddf.columns:
-        if ddf[column].sum().compute() == 0:
-            del ddf[column]
+        for column in ddf.columns:
+            if ddf[column].sum().compute() == 0:
+                del ddf[column]
 
-    try:
-        os.remove(tmp_file)
-    except:
-        pass
+        try:
+            os.remove(tmp_file)
+        except:
+            pass
 
-    wait(ddf)
-    return save_kmers_profile_GPU(ddf, Xy_file, tmp = False)
+        wait(ddf)
+        return save_kmers_profile_GPU(ddf, Xy_file, tmp = False)
 
 """
 def construct_data_GPU(Xy_file, list_id_file):
