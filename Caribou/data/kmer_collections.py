@@ -330,7 +330,7 @@ def compute_kmers(seq_data, method, kmers_list, k, dir_path, faSplit, kmc_path, 
         if len(list_physical_devices('GPU')) > 0:
             list_id_file = parallel_GPU(file_list, method, kmers_list, kmc_path, k, dir_path)
             save_id_file_list(list_id_file,file_list_ids_file)
-            ids, kmers_list = construct_data_GPU(Xy_file, list_id_file)
+            ids, kmers_list = construct_data_GPU(Xy_file, list_id_file, k)
         else:
             list_id_file = parallel_CPU(file_list, method, kmers_list, kmc_path, k, dir_path)
             save_id_file_list(list_id_file,file_list_ids_file)
@@ -340,7 +340,7 @@ def compute_kmers(seq_data, method, kmers_list, k, dir_path, faSplit, kmc_path, 
             list_id_file = [tuple(line.strip('\n').split(',')) for line in handle]
         # Detect if a GPU is available
         if len(list_physical_devices('GPU')) > 0:
-            ids, kmers_list = construct_data_GPU(Xy_file, list_id_file)
+            ids, kmers_list = construct_data_GPU(Xy_file, list_id_file, k)
         else:
             ids, kmers_list = construct_data_CPU(Xy_file, dir_path, list_id_file)
 
