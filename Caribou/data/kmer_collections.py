@@ -136,9 +136,12 @@ def construct_data_CPU(Xy_file, dir_path, list_id_file):
 
 def construct_data_GPU(Xy_file, list_id_file, k):
     tmp_file = os.path.join(os.path.dirname(Xy_file),'tmp_result.csv')
-    columns = ["".join(t) for t in product("ACGT", repeat=k)]
+    kmers = ["".join(t) for t in product("ACGT", repeat=k)]
     ids = [id for id, file in list_id_file]
-    ddf = dask_cudf.from_pandas(np.zeros((len(columns),len(ids))), columns = columns, index = ids, dtype = object)
+    #df = pd.DataFrame(columns = kmers, index = ids, dtype = object)
+    #df.to_csv(tmp_file)
+    #ddf = dask_cudf.read_csv(tmp_file)
+    ddf = dask_cudf.from_cudf(cudf.from_pandas(pd.DataFrame(columns = kmers, index = ids, dtype = object)))
 
     for id, file in list_id_file:
         iter = 0
