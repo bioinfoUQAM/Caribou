@@ -195,7 +195,7 @@ def construct_data_GPU(Xy_file, list_id_file):
                         iter = 0
                 except IndexError:
                     # If no extracted kmers found
-                    print("Kmers extraction error for sequence {}".format(id))
+                    print("Kmers extraction error for sequence {}, {}".format(id, file))
 
         try:
             os.remove(tmp_file)
