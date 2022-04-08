@@ -4,6 +4,7 @@ import warnings
 
 from subprocess import run
 from shutil import rmtree
+from itertools import product
 
 from joblib import Parallel, delayed, parallel_backend
 from tensorflow.config import list_physical_devices
@@ -83,7 +84,7 @@ def kmers_collection(seq_data, Xy_file, length, k, dataset, method = 'seen', kme
     #
     collection['ids'], collection['kmers_list'] = compute_kmers(seq_data, method, kmers_list, k, dir_path, faSplit, kmc_path, Xy_file, dataset)
     #
-    rmtree(dir_path)
+    #rmtree(dir_path)
 
     return collection
 
@@ -132,6 +133,16 @@ def construct_data_CPU(Xy_file, dir_path, list_id_file):
 
 
     return save_kmers_profile_CPU(df, Xy_file, tmp = False)
+
+"""
+def construct_data_GPU(Xy_file, list_id_file, k):
+    columns = ["".join(t) for t in product("ACGT", repeat=k)]
+    ids = [id for id, file in list_id_file]
+    ddf = dask_cudf.from_cudf(cudf.Dataframe(np.zeros(len(columns),len(ids)), columns = columns, index = ids), dtype = object)
+
+    for id, file in list_id_file:
+        tmp = pd.read_csv()
+"""
 
 def construct_data_GPU(Xy_file, list_id_file):
     ddf = None
@@ -289,7 +300,7 @@ def compute_kmers(seq_data, method, kmers_list, k, dir_path, faSplit, kmc_path, 
             list_id_file = parallel_GPU(file_list, method, kmers_list, kmc_path, k, dir_path)
             save_id_file_list(list_id_file,file_list_ids_file)
             with LocalCUDACluster() as cluster, Client(cluster) as client:
-                ids, kmers_list = construct_data_GPU(Xy_file, list_id_file)
+                ids, kmers_list = construct_data_GPU(Xy_file, list_id_file, k)
         else:
             list_id_file = parallel_CPU(file_list, method, kmers_list, kmc_path, k, dir_path)
             save_id_file_list(list_id_file,file_list_ids_file)
@@ -300,7 +311,7 @@ def compute_kmers(seq_data, method, kmers_list, k, dir_path, faSplit, kmc_path, 
         # Detect if a GPU is available
         if len(list_physical_devices('GPU')) > 0:
             with LocalCUDACluster() as cluster, Client(cluster) as client:
-                ids, kmers_list = construct_data_GPU(Xy_file, list_id_file)
+                ids, kmers_list = construct_data_GPU(Xy_file, list_id_file, k)
         else:
             ids, kmers_list = construct_data_CPU(Xy_file, dir_path, list_id_file)
 
