@@ -138,7 +138,7 @@ def construct_data_GPU(Xy_file, list_id_file, k):
     tmp_file = os.path.join(os.path.dirname(Xy_file),'tmp_result.csv')
     columns = ["".join(t) for t in product("ACGT", repeat=k)]
     ids = [id for id, file in list_id_file]
-    ddf = dask_cudf.from_cudf(cudf.Dataframe(np.zeros(len(columns),len(ids)), columns = columns, index = ids), dtype = object)
+    ddf = dask_cudf.from_cudf(cudf.DataFrame(np.zeros(len(columns),len(ids)), columns = columns, index = ids), dtype = object)
 
     for id, file in list_id_file:
         iter = 0
