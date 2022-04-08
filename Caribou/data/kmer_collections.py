@@ -141,7 +141,9 @@ def construct_data_GPU(Xy_file, list_id_file, k):
     ddf = dask_cudf.from_cudf(cudf.Dataframe(np.zeros(len(columns),len(ids)), columns = columns, index = ids), dtype = object)
 
     for id, file in list_id_file:
-        tmp = pd.read_csv()
+        tmp = pd.read_csv(file, sep = "\t", header = None, names = ['kmers', id], index_col=False)
+        for kmer, row in tmp.iterrows():
+            ddf.at[id,kmer] = row[id]
 """
 
 def construct_data_GPU(Xy_file, list_id_file):
@@ -246,7 +248,7 @@ def compute_seen_kmers_of_sequence(kmc_path, k, dir_path, ind, file):
         try:
             os.mkdir(tmp_folder)
             # Count k-mers with KMC
-            cmd_count = "{}/kmc -k{} -fm -cs1000000000 -m10 -hp {} {}/{} {}".format(kmc_path, k, file, tmp_folder, ind, tmp_folder)
+            cmd_count = "{}/kmc -k{} -fm -ci1 -cs1000000000 -m10 -hp {} {}/{} {}".format(kmc_path, k, file, tmp_folder, ind, tmp_folder)
             run(cmd_count, shell = True, capture_output=True)
             # Transform k-mers db with KMC
             cmd_transform = "{}/kmc_tools transform {}/{} dump {}/{}.txt".format(kmc_path, tmp_folder, ind, dir_path, ind)
