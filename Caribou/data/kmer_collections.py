@@ -162,6 +162,7 @@ def construct_data_GPU(Xy_file, list_id_file, kmers_list):
                 tmp = tmp.set_index("kmers")
                 # Outer join each file to ddf (fast according to doc)
                 ddf = ddf.merge(tmp, how = 'left', left_index = True, right_index = True)
+                print("iter : ",iter)
                 if iter == 100:
                     ddf = ddf.repartition(npartitions = 10)
                     save_kmers_profile_GPU(ddf, tmp_file)
