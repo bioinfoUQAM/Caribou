@@ -144,8 +144,6 @@ def construct_data_GPU(Xy_file, list_id_file, kmers_list):
             ddf = dask_cudf.from_cudf(cudf.read_parquet(tmp_file))
             # Sort kmers column for faster join
             ddf = ddf.set_index('kmers')
-            # Make it compute by dask and liberate task graph memory for computing on distributed architecture
-            ddf = ddf.persist()
             processed_ids = list(ddf.columns)
             for id, file in list_id_file:
                 if id in processed_ids:
@@ -164,11 +162,11 @@ def construct_data_GPU(Xy_file, list_id_file, kmers_list):
                 tmp = tmp.set_index("kmers")
                 # Outer join each file to ddf (fast according to doc)
                 ddf = ddf.merge(tmp, how = 'left', left_index = True, right_index = True)
-                # Make it compute by dask and liberate task graph memory for computing on distributed architecture
-                ddf = ddf.persist()
                 if iter == 100:
-                    wait(ddf)
+                    ddf = ddf.repartition(npartitions = 10)
                     save_kmers_profile_GPU(ddf, tmp_file)
+                    # Make it compute by dask and liberate task graph memory for computing on distributed architecture
+                    ddf = ddf.persist()
                     iter = 0
             except IndexError:
                 # If no extracted kmers found
@@ -181,7 +179,6 @@ def construct_data_GPU(Xy_file, list_id_file, kmers_list):
 
         # Drop rows filled with NAs
         ddf = ddf.dropna(how = 'all')
-        wait(ddf)
         return save_kmers_profile_GPU(ddf, Xy_file, tmp = False)
 
 def save_kmers_profile_CPU(df, Xy_file, tmp = True):
@@ -206,6 +203,7 @@ def save_kmers_profile_GPU(ddf, Xy_file, tmp = True):
         ddf.to_parquet(Xy_file)
 
     else:
+        wait(ddf)
         # Extract ids and k-mers from dask_cudf dataframe + remove kmers column
         kmers_list = ddf.index.compute().to_numpy()
         ids = ddf.columns.to_numpy()
