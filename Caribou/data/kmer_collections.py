@@ -115,7 +115,7 @@ def construct_data_CPU(Xy_file, dir_path, list_id_file, kmers_list):
             tmp = tmp.set_index('kmers')
             # Outer join each file to df
             df = df.merge(tmp, how = 'left', left_index = True, right_index = True)
-            if iter == 1000:
+            if iter == 100:
                 save_kmers_profile_CPU(df, tmp_file)
                 iter = 0
         except IndexError:
@@ -129,7 +129,7 @@ def construct_data_CPU(Xy_file, dir_path, list_id_file, kmers_list):
 
     # Drop rows filled with NAs
     df = df.dropna(how = 'all')
-    
+
     return save_kmers_profile_CPU(df, Xy_file, tmp = False)
 
 def construct_data_GPU(Xy_file, list_id_file, kmers_list):
@@ -166,7 +166,7 @@ def construct_data_GPU(Xy_file, list_id_file, kmers_list):
                 ddf = ddf.merge(tmp, how = 'left', left_index = True, right_index = True)
                 # Make it compute by dask and liberate task graph memory for computing on distributed architecture
                 ddf = ddf.persist()
-                if iter == 1000:
+                if iter == 100:
                     wait(ddf)
                     save_kmers_profile_GPU(ddf, tmp_file)
                     iter = 0
