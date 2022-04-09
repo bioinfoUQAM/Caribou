@@ -163,6 +163,7 @@ def construct_data_GPU(Xy_file, list_id_file, kmers_list):
                 # Outer join each file to ddf (fast according to doc)
                 ddf = ddf.merge(tmp, how = 'left', left_index = True, right_index = True)
                 print("iter : ",iter)
+                print(ddf)
                 if iter == 100:
                     ddf = ddf.repartition(npartitions = 10)
                     save_kmers_profile_GPU(ddf, tmp_file)
@@ -201,7 +202,7 @@ def save_kmers_profile_CPU(df, Xy_file, tmp = True):
 def save_kmers_profile_GPU(ddf, Xy_file, tmp = True):
 
     if tmp:
-        ddf.to_parquet(Xy_file)
+        ddf.compute().to_parquet(Xy_file)
 
     else:
         wait(ddf)
