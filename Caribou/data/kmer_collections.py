@@ -170,6 +170,7 @@ def construct_data_GPU(Xy_file, list_id_file, kmers_list):
 
         # Drop rows filled with NAs
         ddf = ddf.dropna(how = 'all')
+        print("NAs dropped")
         ddf = ddf.persist()
         return save_kmers_profile_GPU(ddf, Xy_file, tmp = False)
 
@@ -197,6 +198,7 @@ def save_kmers_profile_GPU(ddf, Xy_file, tmp = True):
         ddf.compute().to_parquet(Xy_file)
 
     else:
+        print("Saving")
         # Extract ids and k-mers from dask_cudf dataframe + remove kmers column
         kmers_list = ddf.index.compute().to_numpy()
         ids = ddf.columns.to_numpy()
