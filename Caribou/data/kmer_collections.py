@@ -145,7 +145,7 @@ def construct_data_GPU(Xy_file, list_id_file, kmers_list):
             ddf = dask_cudf.from_cudf(cudf.from_pandas(pd.DataFrame(index = kmers_list)), npartitions = 1)
 
         # Iterate over ids / files
-        for iter, id, file in enumerate(list_id_file):
+        for iter, (id, file) in enumerate(list_id_file):
             try:
                 # Read each file individually
                 tmp = dask_cudf.read_csv(file, sep = "\t", header = None, names = ['kmers', id], npartitions = 1)
