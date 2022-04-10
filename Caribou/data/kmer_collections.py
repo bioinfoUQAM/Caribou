@@ -140,7 +140,7 @@ def construct_data_GPU(Xy_file, list_id_file, kmers_list):
         for iter, (id, file) in enumerate(list_id_file):
             if ddf is None:
                 try:
-                    ddf = ddf.read_table(file, header = None, names = ['kmers', id])
+                    ddf = dd.read_table(file, header = None, names = ['kmers', id])
                     ddf = ddf.set_index("kmers")
                     ddf = ddf.persist()
                     print("iter : ",iter)
