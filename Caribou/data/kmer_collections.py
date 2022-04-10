@@ -14,13 +14,12 @@ import tables as tb
 import pandas as pd
 
 # Use cudf/dask_cudf only if GPU is available
-if len(list_physical_devices('GPU')) > 0:
-    import cudf
-    import dask_cudf
-    import dask.dataframe as dd
-    import dask.multiprocessing
-    from dask.distributed import Client, wait, LocalCluster
-    from dask_cuda import LocalCUDACluster
+import cudf
+import dask_cudf
+import dask.dataframe as dd
+import dask.multiprocessing
+from dask.distributed import Client, wait, LocalCluster
+from dask_cuda import LocalCUDACluster
 
 
 # From mlr_kgenomvir
