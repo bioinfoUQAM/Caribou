@@ -142,8 +142,6 @@ def construct_data_GPU(Xy_file, list_id_file, kmers_list):
         if os.path.isfile(tmp_file):
             # Read tmp file of already processed files
             ddf = dask_cudf.from_cudf(cudf.read_parquet(tmp_file), npartitions = 1)
-            # Sort kmers column for faster join
-            ddf = ddf.set_index('kmers')
             processed_ids = list(ddf.columns)
             for id, file in list_id_file:
                 if id in processed_ids:
