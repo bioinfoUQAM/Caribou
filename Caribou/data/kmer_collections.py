@@ -128,7 +128,7 @@ def construct_data_CPU(Xy_file, dir_path, list_id_file, kmers_list):
     return save_kmers_profile_CPU(df, Xy_file, tmp = False)
 
 def construct_data_GPU(Xy_file, list_id_file, kmers_list):
-    with LocalCluster() as cluster, Client(cluster) as client:
+    with LocalCluster(n_workerd = os.cpu_count(), processes = True, threads_per_worker = 1) as cluster, Client(cluster) as client:
         print("Cluster : ", cluster)
         print("Client : ", client)
         ddf = None
@@ -143,8 +143,6 @@ def construct_data_GPU(Xy_file, list_id_file, kmers_list):
                     ddf = dd.read_table(file, header = None, names = ['kmers', id])
                     ddf = ddf.set_index("kmers")
                     ddf = ddf.persist()
-                    print("iter : ",iter)
-                    print(ddf)
                 except IndexError:
                     # If no extracted kmers found
                     print("Kmers extraction error for sequence {}, {}".format(id, file))
@@ -158,8 +156,6 @@ def construct_data_GPU(Xy_file, list_id_file, kmers_list):
                     ddf = ddf.merge(tmp, how = 'outer', left_index = True, right_index = True)
                     # Make it compute by dask and liberate task graph memory for computing on distributed architecture
                     ddf = ddf.persist()
-                    print("iter : ",iter)
-                    print(ddf)
                     if iter >= 1000 and iter % 1000 == 0:
                         ddf.repartition(npartitions = int(iter / 1000))
                 except IndexError:
