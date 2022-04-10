@@ -105,9 +105,7 @@ def construct_data_CPU(Xy_file, dir_path, list_id_file, kmers_list):
         df = pd.DataFrame(index = kmers_list)
 
     # Iterate over ids / files
-    iter = 0
     for id, file in list_id_file:
-        iter += 1
         try:
             # Read each file individually
             tmp = pd.read_csv(file, sep = "\t", header = None, names = ['kmers', id], index_col=False)
@@ -115,9 +113,6 @@ def construct_data_CPU(Xy_file, dir_path, list_id_file, kmers_list):
             tmp = tmp.set_index('kmers')
             # Outer join each file to df
             df = df.merge(tmp, how = 'left', left_index = True, right_index = True)
-            if iter == 100:
-                save_kmers_profile_CPU(df, tmp_file)
-                iter = 0
         except IndexError:
             # If no extracted kmers found
             print("Kmers extraction error for sequence {}".format(id))
@@ -150,9 +145,7 @@ def construct_data_GPU(Xy_file, list_id_file, kmers_list):
             ddf = dask_cudf.from_cudf(cudf.from_pandas(pd.DataFrame(index = kmers_list)), npartitions = 1)
 
         # Iterate over ids / files
-        iter = 0
-        for id, file in list_id_file:
-            iter += 1
+        for iter, id, file in enumerate(list_id_file):
             try:
                 # Read each file individually
                 tmp = dask_cudf.read_csv(file, sep = "\t", header = None, names = ['kmers', id], npartitions = 1)
@@ -164,9 +157,8 @@ def construct_data_GPU(Xy_file, list_id_file, kmers_list):
                 ddf = ddf.persist()
                 print("iter : ",iter)
                 print(ddf)
-                if iter == 100:
-                    save_kmers_profile_GPU(ddf, tmp_file)
-                    iter = 0
+                if iter >= 1000 and iter % 1000 == 0:
+                    ddf.repartition(npartitions = int(iter / 1000))
             except IndexError:
                 # If no extracted kmers found
                 print("Kmers extraction error for sequence {}, {}".format(id, file))
@@ -178,11 +170,14 @@ def construct_data_GPU(Xy_file, list_id_file, kmers_list):
 
         # Drop rows filled with NAs
         ddf = ddf.dropna(how = 'all')
+        ddf = ddf.persist()
+        wait(ddf)
         return save_kmers_profile_GPU(ddf, Xy_file, tmp = False)
 
 def save_kmers_profile_CPU(df, Xy_file, tmp = True):
 
     if tmp:
+        os.remove(Xy_file)
         df.to_parquet(Xy_file)
 
     else:
@@ -203,7 +198,6 @@ def save_kmers_profile_GPU(ddf, Xy_file, tmp = True):
         ddf.compute().to_parquet(Xy_file)
 
     else:
-        wait(ddf)
         # Extract ids and k-mers from dask_cudf dataframe + remove kmers column
         kmers_list = ddf.index.compute().to_numpy()
         ids = ddf.columns.to_numpy()
