@@ -141,7 +141,7 @@ def construct_data_GPU(Xy_file, list_id_file, kmers_list):
         # If temporary file exists, load it to continue from this checkpoint
         if os.path.isfile(tmp_file):
             # Read tmp file of already processed files
-            ddf = dask_cudf.from_cudf(cudf.read_parquet(tmp_file))
+            ddf = dask_cudf.from_cudf(cudf.read_parquet(tmp_file), npartitions = 1)
             # Sort kmers column for faster join
             ddf = ddf.set_index('kmers')
             processed_ids = list(ddf.columns)
@@ -167,7 +167,6 @@ def construct_data_GPU(Xy_file, list_id_file, kmers_list):
                 print("iter : ",iter)
                 print(ddf)
                 if iter == 100:
-                    ddf = ddf.repartition(npartitions = 10)
                     save_kmers_profile_GPU(ddf, tmp_file)
                     iter = 0
             except IndexError:
