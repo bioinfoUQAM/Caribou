@@ -128,7 +128,7 @@ def construct_data_CPU(Xy_file, dir_path, list_id_file, kmers_list):
     return save_kmers_profile_CPU(df, Xy_file, tmp = False)
 
 def construct_data_GPU(Xy_file, list_id_file, kmers_list):
-    with LocalCluster(n_workerd = os.cpu_count(), processes = True, threads_per_worker = 1) as cluster, Client(cluster) as client:
+    with LocalCluster(n_workers = os.cpu_count(), processes = True, threads_per_worker = 1) as cluster, Client(cluster) as client:
         print("Cluster : ", cluster)
         print("Client : ", client)
         ddf = None
