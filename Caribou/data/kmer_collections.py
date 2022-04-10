@@ -89,6 +89,9 @@ def kmers_collection(seq_data, Xy_file, length, k, dataset, method = 'seen', kme
     return collection
 
 def construct_data_CPU(Xy_file, dir_path, list_id_file, kmers_list):
+    #with LocalCluster(processes = False) as cluster, Client(cluster) as client:
+        # ADAPT FOR SINGLE CPU /MULTI CPU INSTEAD OF CPU / GPU
+
     tmp_file = os.path.join(os.path.dirname(Xy_file),'tmp_result')
 
     # If temporary file exists, load it to continue from this checkpoint
@@ -128,7 +131,7 @@ def construct_data_CPU(Xy_file, dir_path, list_id_file, kmers_list):
     return save_kmers_profile_CPU(df, Xy_file, tmp = False)
 
 def construct_data_GPU(Xy_file, list_id_file, kmers_list):
-    with LocalCluster(n_workers = os.cpu_count(), processes = True, threads_per_worker = 1) as cluster, Client(cluster) as client:
+    with LocalCluster(processes = True) as cluster, Client(cluster) as client:
         print("Cluster : ", cluster)
         print("Client : ", client)
         ddf = None
