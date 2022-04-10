@@ -199,7 +199,7 @@ def save_kmers_profile_CPU(df, Xy_file, tmp = True):
 def save_kmers_profile_GPU(ddf, Xy_file, tmp = True):
 
     if tmp:
-        ddf.compute().to_parquet(Xy_file)
+        ddf.to_parquet(Xy_file)
 
     else:
         wait(ddf)
