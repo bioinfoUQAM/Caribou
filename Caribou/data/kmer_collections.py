@@ -128,35 +128,47 @@ def construct_data_CPU(Xy_file, dir_path, list_id_file, kmers_list):
     return save_kmers_profile_CPU(df, Xy_file, tmp = False)
 
 def construct_data_GPU(Xy_file, list_id_file, kmers_list):
-    with LocalCluster() as cluster, Client(cluster, processes=True) as client:
+    with LocalCluster() as cluster, Client(cluster) as client:
         print("Cluster : ", cluster)
         print("Client : ", client)
+        ddf = None
         tmp_file = os.path.join(os.path.dirname(Xy_file),'tmp_result')
 
-        ddf = dd.from_pandas(pd.DataFrame(index = kmers_list), npartitions = 1)
+    #    ddf = dd.from_pandas(pd.DataFrame(index = kmers_list), npartitions = 1)
 
         # Iterate over ids / files
         for iter, (id, file) in enumerate(list_id_file):
-            try:
-                # Read each file individually
-                tmp = dd.read_table(file, header = None, names = ['kmers', id])
-                # Set index and sort kmers column for faster join
-                tmp = tmp.set_index("kmers")
-                # Outer join each file to ddf
-                ddf = ddf.merge(tmp, how = 'left', left_index = True, right_index = True)
-                # Make it compute by dask and liberate task graph memory for computing on distributed architecture
-                ddf = ddf.persist()
-                print("iter : ",iter)
-                print(ddf)
-                if iter >= 1000 and iter % 1000 == 0:
-                    ddf.repartition(npartitions = int(iter / 1000))
-            except IndexError:
-                # If no extracted kmers found
-                print("Kmers extraction error for sequence {}, {}".format(id, file))
+            if ddf is None:
+                try:
+                    ddf = ddf.read_table(file, header = None, names = ['kmers', id])
+                    ddf = ddf.set_index("kmers")
+                    ddf = ddf.persist()
+                    print("iter : ",iter)
+                    print(ddf)
+                except IndexError:
+                    # If no extracted kmers found
+                    print("Kmers extraction error for sequence {}, {}".format(id, file))
+            else:
+                try:
+                    # Read each file individually
+                    tmp = dd.read_table(file, header = None, names = ['kmers', id])
+                    # Set index and sort kmers column for faster join
+                    tmp = tmp.set_index("kmers")
+                    # Outer join each file to ddf
+                    ddf = ddf.merge(tmp, how = 'outer', left_index = True, right_index = True)
+                    # Make it compute by dask and liberate task graph memory for computing on distributed architecture
+                    ddf = ddf.persist()
+                    print("iter : ",iter)
+                    print(ddf)
+                    if iter >= 1000 and iter % 1000 == 0:
+                        ddf.repartition(npartitions = int(iter / 1000))
+                except IndexError:
+                    # If no extracted kmers found
+                    print("Kmers extraction error for sequence {}, {}".format(id, file))
 
-        ddf = ddf.dropna(how = 'all')
-        print("NAs dropped")
-        ddf = ddf.persist()
+        #ddf = ddf.dropna(how = 'all')
+        #print("NAs dropped")
+        #ddf = ddf.persist()
         return save_kmers_profile_GPU(ddf, Xy_file, tmp = False)
 
 """
