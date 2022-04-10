@@ -17,9 +17,9 @@ import pandas as pd
 if len(list_physical_devices('GPU')) > 0:
     import cudf
     import dask_cudf
-    import dask.dataframe
+    import dask.dataframe as dd
     import dask.multiprocessing
-    from dask.distributed import Client, wait
+    from dask.distributed import Client, wait, LocalCluster
     from dask_cuda import LocalCUDACluster
 
 
@@ -128,6 +128,39 @@ def construct_data_CPU(Xy_file, dir_path, list_id_file, kmers_list):
     return save_kmers_profile_CPU(df, Xy_file, tmp = False)
 
 def construct_data_GPU(Xy_file, list_id_file, kmers_list):
+    with LocalCluster() as cluster, Client(cluster) as client:
+        print("Cluster : ", cluster)
+        print("Client : ", client)
+        tmp_file = os.path.join(os.path.dirname(Xy_file),'tmp_result')
+
+        ddf = dd.from_pandas(pd.DataFrame(index = kmers_list), npartitions = 1)
+
+        # Iterate over ids / files
+        for iter, (id, file) in enumerate(list_id_file):
+            try:
+                # Read each file individually
+                tmp = dd.read_table(file, header = None, names = ['kmers', id], npartitions = 1)
+                # Set index and sort kmers column for faster join
+                tmp = tmp.set_index("kmers")
+                # Outer join each file to ddf (fast according to doc)
+                ddf = ddf.merge(tmp, how = 'left', left_index = True, right_index = True)
+                # Make it compute by dask and liberate task graph memory for computing on distributed architecture
+                ddf = ddf.persist()
+                print("iter : ",iter)
+                print(ddf)
+                if iter >= 1000 and iter % 1000 == 0:
+                    ddf.repartition(npartitions = int(iter / 1000))
+            except IndexError:
+                # If no extracted kmers found
+                print("Kmers extraction error for sequence {}, {}".format(id, file))
+
+        ddf = ddf.dropna(how = 'all')
+        print("NAs dropped")
+        ddf = ddf.persist()
+        return save_kmers_profile_GPU(ddf, Xy_file, tmp = False)
+
+"""
+def construct_data_GPU(Xy_file, list_id_file, kmers_list):
     with LocalCUDACluster() as cluster, Client(cluster) as client:
         print("Cluster : ", cluster)
         print("Client : ", client)
@@ -173,7 +206,7 @@ def construct_data_GPU(Xy_file, list_id_file, kmers_list):
         print("NAs dropped")
         ddf = ddf.persist()
         return save_kmers_profile_GPU(ddf, Xy_file, tmp = False)
-
+"""
 def save_kmers_profile_CPU(df, Xy_file, tmp = True):
 
     if tmp:
@@ -198,10 +231,10 @@ def save_kmers_profile_GPU(ddf, Xy_file, tmp = True):
         ddf.compute().to_parquet(Xy_file)
 
     else:
-        print("Saving")
         # Extract ids and k-mers from dask_cudf dataframe + remove kmers column
         kmers_list = ddf.index.compute().to_numpy()
         ids = ddf.columns.to_numpy()
+        print("Saving")
         # Convert dask_cudf to numpy array and write directly to disk with pytables
         with tb.open_file(Xy_file, "w") as handle:
             data = handle.create_carray("/", "data", obj = ddf.fillna(0).compute().to_numpy().astype(np.int64).T)
