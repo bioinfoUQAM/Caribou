@@ -171,7 +171,6 @@ def construct_data_GPU(Xy_file, list_id_file, kmers_list):
         # Drop rows filled with NAs
         ddf = ddf.dropna(how = 'all')
         ddf = ddf.persist()
-        wait(ddf)
         return save_kmers_profile_GPU(ddf, Xy_file, tmp = False)
 
 def save_kmers_profile_CPU(df, Xy_file, tmp = True):
