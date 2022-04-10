@@ -128,7 +128,7 @@ def construct_data_CPU(Xy_file, dir_path, list_id_file, kmers_list):
     return save_kmers_profile_CPU(df, Xy_file, tmp = False)
 
 def construct_data_GPU(Xy_file, list_id_file, kmers_list):
-    with LocalCluster() as cluster, Client(cluster) as client:
+    with LocalCluster() as cluster, Client(cluster, processes=True) as client:
         print("Cluster : ", cluster)
         print("Client : ", client)
         tmp_file = os.path.join(os.path.dirname(Xy_file),'tmp_result')
@@ -139,10 +139,10 @@ def construct_data_GPU(Xy_file, list_id_file, kmers_list):
         for iter, (id, file) in enumerate(list_id_file):
             try:
                 # Read each file individually
-                tmp = dd.read_table(file, header = None, names = ['kmers', id], npartitions = 1)
+                tmp = dd.read_table(file, header = None, names = ['kmers', id])
                 # Set index and sort kmers column for faster join
                 tmp = tmp.set_index("kmers")
-                # Outer join each file to ddf (fast according to doc)
+                # Outer join each file to ddf
                 ddf = ddf.merge(tmp, how = 'left', left_index = True, right_index = True)
                 # Make it compute by dask and liberate task graph memory for computing on distributed architecture
                 ddf = ddf.persist()
