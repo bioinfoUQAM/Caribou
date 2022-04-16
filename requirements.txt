@@ -10,4 +10,4 @@ scipy
 tables
 tensorflow
 keras
-dask[complete]
+vaex-core

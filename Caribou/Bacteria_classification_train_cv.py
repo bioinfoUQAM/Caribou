@@ -1,5 +1,3 @@
-#!/usr/bin/python3
-
 from Caribou.models.classification import bacterial_classification
 from Caribou.utils import load_Xy_data
 

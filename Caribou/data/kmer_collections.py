@@ -5,6 +5,7 @@ import warnings
 from subprocess import run
 from shutil import rmtree
 from itertools import product
+from collections import defaultdict
 
 from joblib import Parallel, delayed, parallel_backend
 from tensorflow.config import list_physical_devices
@@ -12,22 +13,21 @@ from tensorflow.config import list_physical_devices
 import numpy as np
 import tables as tb
 import pandas as pd
+import vaex
 
-# Use cudf/dask_cudf only if GPU is available
-import cudf
-import dask_cudf
-import dask.dataframe as dd
-import dask.multiprocessing
-from dask.distributed import Client, wait, LocalCluster
-from dask_cuda import LocalCUDACluster
-
+# Sparse matrix pour -> numpy (comment gérer memoire)
+# Possibilité d'enlever des k-mers peu représentés dans sequences (k-mers pertinents != nécessairement discriminant/minimum) (bags of k-mers)
+    # Stratégie pour déterminer quels à enlever
+    # K-mers composite -> batch (+) représentants (kmers dégénérés)
+# Étape initiale de sampling de k-mers (représentatif pas trop grand) -> Kevolve-like pr choisir les kmers importants (seed), pls en // -> puis extrait seulement les kmers selected par la suite
+    # Voir avec Dylan algo ~ Kevolve
 
 # From mlr_kgenomvir
 __author__ = ['Amine Remita', 'Nicolas de Montigny']
 
-__all__ = ['kmers_collection','construct_data_GPU','construct_data_CPU','save_kmers_profile','save_id_file_list',
+__all__ = ['kmers_collection','construct_data','save_kmers_profile','save_id_file_list',
             'compute_seen_kmers_of_sequence','compute_given_kmers_of_sequence','compute_kmers',
-            'parallel_CPU','parallel_GPU','build_kmers_Xy_data','build_kmers_X_data']
+            'parallel_extraction','build_kmers_Xy_data','build_kmers_X_data']
 
 """
 Module adapted from module kmer_collections.py of
@@ -83,173 +83,43 @@ def kmers_collection(seq_data, Xy_file, length, k, dataset, method = 'seen', kme
     #
     collection['ids'], collection['kmers_list'] = compute_kmers(seq_data, method, kmers_list, k, dir_path, faSplit, kmc_path, Xy_file, dataset)
     #
-    #rmtree(dir_path)
+    rmtree(dir_path)
 
     return collection
 
-def construct_data_CPU(Xy_file, dir_path, list_id_file, kmers_list):
-    #with LocalCluster(processes = False) as cluster, Client(cluster) as client:
-        # ADAPT FOR SINGLE CPU /MULTI CPU INSTEAD OF CPU / GPU
-
-    tmp_file = os.path.join(os.path.dirname(Xy_file),'tmp_result')
-
-    # If temporary file exists, load it to continue from this checkpoint
-    if os.path.isfile(tmp_file):
-        # Read tmp file of already processed files
-        df = pd.read_parquet(tmp_file)
-        # Sort kmers column for faster join
-        df = df.sort_values(by = 'kmers')
-        processed_ids = list(df.columns)
-        for id, file in list_id_file:
-            if id in processed_ids:
-                list_id_file.remove((id,file))
-    else:
-        df = pd.DataFrame(index = kmers_list)
-
+def construct_data(Xy_file, dir_path, list_id_file):
+    ids = [id for id,file in list_id_file]
+    df = None
+    ids = []
     # Iterate over ids / files
     for id, file in list_id_file:
-        try:
-            # Read each file individually
-            tmp = pd.read_csv(file, sep = "\t", header = None, names = ['kmers', id], index_col=False)
-            # Sort kmers column for faster join
-            tmp = tmp.set_index('kmers')
-            # Outer join each file to df
-            df = df.merge(tmp, how = 'left', left_index = True, right_index = True)
-        except IndexError:
-            # If no extracted kmers found
-            print("Kmers extraction error for sequence {}".format(id))
-
-    try:
-        os.remove(tmp_file)
-    except:
-        pass
-
-    # Drop rows filled with NAs
-    df = df.dropna(how = 'all')
-
-    return save_kmers_profile_CPU(df, Xy_file, tmp = False)
-
-def construct_data_GPU(Xy_file, list_id_file, kmers_list):
-    with LocalCluster(processes = True) as cluster, Client(cluster) as client:
-        print("Cluster : ", cluster)
-        print("Client : ", client)
-        ddf = None
-        tmp_file = os.path.join(os.path.dirname(Xy_file),'tmp_result')
-
-    #    ddf = dd.from_pandas(pd.DataFrame(index = kmers_list), npartitions = 1)
-
-        # Iterate over ids / files
-        for iter, (id, file) in enumerate(list_id_file):
-            if ddf is None:
-                try:
-                    ddf = dd.read_table(file, header = None, names = ['kmers', id])
-                    ddf = ddf.set_index("kmers")
-                    ddf = ddf.persist()
-                except IndexError:
-                    # If no extracted kmers found
-                    print("Kmers extraction error for sequence {}, {}".format(id, file))
-            else:
-                try:
-                    # Read each file individually
-                    tmp = dd.read_table(file, header = None, names = ['kmers', id])
-                    # Set index and sort kmers column for faster join
-                    tmp = tmp.set_index("kmers")
-                    # Outer join each file to ddf
-                    ddf = ddf.merge(tmp, how = 'outer', left_index = True, right_index = True)
-                    # Make it compute by dask and liberate task graph memory for computing on distributed architecture
-                    ddf = ddf.persist()
-                    if iter >= 1000 and iter % 1000 == 0:
-                        ddf.repartition(npartitions = int(iter / 1000))
-                except IndexError:
-                    # If no extracted kmers found
-                    print("Kmers extraction error for sequence {}, {}".format(id, file))
-
-        #ddf = ddf.dropna(how = 'all')
-        #print("NAs dropped")
-        #ddf = ddf.persist()
-        return save_kmers_profile_GPU(ddf, Xy_file, tmp = False)
-
-"""
-def construct_data_GPU(Xy_file, list_id_file, kmers_list):
-    with LocalCUDACluster() as cluster, Client(cluster) as client:
-        print("Cluster : ", cluster)
-        print("Client : ", client)
-        tmp_file = os.path.join(os.path.dirname(Xy_file),'tmp_result')
-
-        # If temporary file exists, load it to continue from this checkpoint
-        if os.path.isfile(tmp_file):
-            # Read tmp file of already processed files
-            ddf = dask_cudf.from_cudf(cudf.read_parquet(tmp_file), npartitions = 1)
-            processed_ids = list(ddf.columns)
-            for id, file in list_id_file:
-                if id in processed_ids:
-                    list_id_file.remove((id,file))
+        if df is None:
+            df = vaex.read_csv(file, sep = '\t', header = None, names = ['kmers', id])
         else:
-            ddf = dask_cudf.from_cudf(cudf.from_pandas(pd.DataFrame(index = kmers_list)), npartitions = 1)
-
-        # Iterate over ids / files
-        for iter, (id, file) in enumerate(list_id_file):
             try:
                 # Read each file individually
-                tmp = dask_cudf.read_csv(file, sep = "\t", header = None, names = ['kmers', id], npartitions = 1)
-                # Set index and sort kmers column for faster join
-                tmp = tmp.set_index("kmers")
-                # Outer join each file to ddf (fast according to doc)
-                ddf = ddf.merge(tmp, how = 'left', left_index = True, right_index = True)
-                # Make it compute by dask and liberate task graph memory for computing on distributed architecture
-                ddf = ddf.persist()
-                print("iter : ",iter)
-                print(ddf)
-                if iter >= 1000 and iter % 1000 == 0:
-                    ddf.repartition(npartitions = int(iter / 1000))
-            except IndexError:
-                # If no extracted kmers found
-                print("Kmers extraction error for sequence {}, {}".format(id, file))
+                tmp = vaex.read_csv(file, sep = '\t', header = None, names = ['kmers', id])
+                # Join each files to the previously computed dataframe
+                df = df.join(tmp, on='kmers', how = 'left')
+                ids.append(id)
+            except ValueError:
+                print("Identical sequence IDs not supported, every sequence should have a unique ID")
 
-        try:
-            os.remove(tmp_file)
-        except:
-            pass
+    # Extract k-mers list
+    kmers_list = list(df.kmers.values)
+    # Fill NAs with 0
+    df = df.fillna(0)
+    # Convert to numpy array to transpose and reconvert to vaex df
+    df = np.array(df.to_arrays(column_names = ids, array_type = 'numpy'))
 
-        # Drop rows filled with NAs
-        ddf = ddf.dropna(how = 'all')
-        print("NAs dropped")
-        ddf = ddf.persist()
-        return save_kmers_profile_GPU(ddf, Xy_file, tmp = False)
-"""
-def save_kmers_profile_CPU(df, Xy_file, tmp = True):
+    save_kmers_profile(df, Xy_file, tmp = False)
 
-    if tmp:
-        os.remove(Xy_file)
-        df.to_parquet(Xy_file)
+    return ids, kmers_list
 
-    else:
-        # Extract ids and k-mers from df dataframe + remove kmers column
-        kmers_list = np.array(df.index)
-        ids = np.array(df.columns)
-
-        # Convert pandas to numpy array and write directly to disk with pytables
-        with tb.open_file(Xy_file, "w") as handle:
-            data = handle.create_carray("/", "data", obj = np.array(df.T.fillna(0), dtype = np.int64))
-
-        return ids, kmers_list
-
-def save_kmers_profile_GPU(ddf, Xy_file, tmp = True):
-
-    if tmp:
-        os.remove(Xy_file)
-        ddf.compute().to_parquet(Xy_file)
-
-    else:
-        # Extract ids and k-mers from dask_cudf dataframe + remove kmers column
-        kmers_list = ddf.index.compute().to_numpy()
-        ids = ddf.columns.to_numpy()
-        print("Saving")
-        # Convert dask_cudf to numpy array and write directly to disk with pytables
-        with tb.open_file(Xy_file, "w") as handle:
-            data = handle.create_carray("/", "data", obj = ddf.fillna(0).compute().to_numpy().astype(np.int64).T)
-        return ids, kmers_list
-
+def save_kmers_profile(df, Xy_file, tmp = True):
+    # Convert vaez dataframe to numpy array and write directly to disk with pytables
+    with tb.open_file(Xy_file, "w") as handle:
+        data = handle.create_carray("/", "data", obj = df)
 
 def compute_seen_kmers_of_sequence(kmc_path, k, dir_path, ind, file):
     if not os.path.isfile('{}/{}.csv'.format(dir_path, ind)):
@@ -317,15 +187,10 @@ def compute_kmers(seq_data, method, kmers_list, k, dir_path, faSplit, kmc_path, 
             file = dir_path + id + '.fa'
             file_list.append(file)
 
-        # Detect if a GPU is available
-        if len(list_physical_devices('GPU')) > 0:
-            list_id_file, kmers_list = parallel_GPU(file_list, method, kmers_list, kmc_path, k, dir_path)
-            save_id_file_list(list_id_file,file_list_ids_file)
-            ids, kmers_list = construct_data_GPU(Xy_file, list_id_file, kmers_list)
-        else:
-            list_id_file, kmers_list = parallel_CPU(file_list, method, kmers_list, kmc_path, k, dir_path)
-            save_id_file_list(list_id_file,file_list_ids_file)
-            ids, kmers_list = construct_data_CPU(Xy_file, dir_path, list_id_file, kmers_list)
+        list_id_file= parallel_extraction(file_list, method, kmers_list, kmc_path, k, dir_path)
+        save_id_file_list(list_id_file,file_list_ids_file)
+        ids, kmers_list = construct_data(Xy_file, dir_path, list_id_file)
+
     else:
         with open(file_list_ids_file, 'r') as handle:
             list_id_file = [tuple(line.strip('\n').split(',')) for line in handle]
@@ -333,7 +198,7 @@ def compute_kmers(seq_data, method, kmers_list, k, dir_path, faSplit, kmc_path, 
         if len(list_physical_devices('GPU')) > 0:
             ids, kmers_list = construct_data_GPU(Xy_file, list_id_file, kmers_list)
         else:
-            ids, kmers_list = construct_data_CPU(Xy_file, dir_path, list_id_file, kmers_list)
+            ids, kmers_list = construct_data(Xy_file, dir_path, list_id_file)
 
     os.remove(file_list_ids_file)
 
@@ -344,30 +209,16 @@ def save_id_file_list(list_id_file, file):
         for id, file in list_id_file:
             handle.write("{},{}\n".format(id,file))
 
-def parallel_CPU(file_list, method, kmers_list, kmc_path, k, dir_path):
+def parallel_extraction(file_list, method, kmers_list, kmc_path, k, dir_path):
     if method == 'seen':
         with parallel_backend('threading'):
             results = Parallel(n_jobs = -1, prefer = 'threads', verbose = 100)(
             delayed(compute_seen_kmers_of_sequence)
             (kmc_path, k, dir_path, i, file) for i, file in enumerate(file_list))
-        kmers_list = ["".join(t) for t in product("ACTG", repeat=k)]
     elif method == 'given':
         with parallel_backend('threading'):
             results = Parallel(n_jobs = -1, prefer = 'threads', verbose = 100)(
             delayed(compute_given_kmers_of_sequence)
             (kmers_list, kmc_path, k, dir_path, i, file) for i, file in enumerate(file_list))
 
-    return results, kmers_list
-
-def parallel_GPU(file_list, method, kmers_list, kmc_path, k, dir_path):
-    if method == 'seen':
-        results = Parallel(n_jobs = -1, prefer = 'processes', verbose = 100)(
-        delayed(compute_seen_kmers_of_sequence)
-        (kmc_path, k, dir_path, i, file) for i, file in enumerate(file_list))
-        kmers_list = ["".join(t) for t in product("ACTG", repeat=k)]
-    elif method == 'given':
-        results = Parallel(n_jobs = -1, prefer = 'processes', verbose = 100)(
-        delayed(compute_given_kmers_of_sequence)
-        (kmers_list, kmc_path, k, dir_path, i, file) for i, file in enumerate(file_list))
-
-    return results, kmers_list
+    return results
