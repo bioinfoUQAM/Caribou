@@ -1,4 +1,3 @@
-#!/usr/bin/R
 library(reticulate)
 
 .onLoad <- function(libname, pkgname) {
