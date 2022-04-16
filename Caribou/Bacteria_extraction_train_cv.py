@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 from Caribou.models.bacteria_extraction import bacteria_extraction
 from Caribou.utils import load_Xy_data
 
