@@ -1,4 +1,4 @@
-#!/usr/bin/env R
+#!/usr/bin R
 library(reticulate)
 
 .onLoad <- function(libname, pkgname) {

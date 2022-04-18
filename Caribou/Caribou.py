@@ -1,4 +1,5 @@
-#!/usr/bin/env python3
+#!/usr/bin python3
+
 from Caribou.data.build_data import build_load_save_data
 from Caribou.models.bacteria_extraction import bacteria_extraction
 from Caribou.models.classification import bacterial_classification
