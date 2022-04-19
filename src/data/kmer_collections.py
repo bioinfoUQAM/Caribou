@@ -8,7 +8,6 @@ from itertools import product
 from collections import defaultdict
 
 from joblib import Parallel, delayed, parallel_backend
-from tensorflow.config import list_physical_devices
 
 import numpy as np
 import tables as tb
@@ -125,14 +124,17 @@ def compute_seen_kmers_of_sequence(kmc_path, k, dir_path, ind, file):
     if not os.path.isfile(os.path.join(dir_path,'{}.csv'.format(ind))):
         # Make tmp folder per sequence
         tmp_folder = os.path.join(dir_path,"tmp_{}".format(ind))
+        print(tmp_folder)
         id = os.path.splitext(os.path.basename(file))[0]
         try:
             os.mkdir(tmp_folder)
             # Count k-mers with KMC
             cmd_count = os.path.join(kmc_path,"kmc -k{} -fm -ci1 -cs1000000000 -m10 -hp {} {} {}".format(k, file, os.path.join(tmp_folder, ind), tmp_folder))
+            print(cmd_count)
             run(cmd_count, shell = True, capture_output=True)
             # Transform k-mers db with KMC
             cmd_transform = os.path.join(kmc_path,"kmc_tools transform {} dump {}".format(kmc_path, os.path,join(tmp_folder, ind), os.path.join(dir_path, "{}.txt".format(ind))))
+            print(cmd_transform)
             run(cmd_transform, shell = True, capture_output=True)
         except:
             pass
@@ -141,7 +143,7 @@ def compute_seen_kmers_of_sequence(kmc_path, k, dir_path, ind, file):
 
 def compute_given_kmers_of_sequence(kmers_list, kmc_path, k, dir_path, ind, file):
     # Make tmp folder per sequence
-    tmp_folder = "{}tmp_{}".format(dir_path, ind)
+    tmp_folder = os.path.join(dir_path,"tmp_{}".format(ind))
     id = os.path.splitext(os.path.basename(file))[0]
     try:
         os.mkdir(tmp_folder)
@@ -180,25 +182,22 @@ def compute_kmers(seq_data, method, kmers_list, k, dir_path, faSplit, kmc_path, 
             os.mkdir(dir_path)
 
         cmd_split = '{} byname {} {}'.format(faSplit, seq_data.data, dir_path)
-
+        print(cmd_split)
         os.system(cmd_split)
 
         for id in seq_data.ids:
             file = dir_path + id + '.fa'
             file_list.append(file)
 
-        list_id_file= parallel_extraction(file_list, method, kmers_list, kmc_path, k, dir_path)
+        list_id_file = parallel_extraction(file_list, method, kmers_list, kmc_path, k, dir_path)
         save_id_file_list(list_id_file,file_list_ids_file)
         ids, kmers_list = construct_data(Xy_file, dir_path, list_id_file)
 
     else:
         with open(file_list_ids_file, 'r') as handle:
             list_id_file = [tuple(line.strip('\n').split(',')) for line in handle]
-        # Detect if a GPU is available
-        if len(list_physical_devices('GPU')) > 0:
-            ids, kmers_list = construct_data_GPU(Xy_file, list_id_file, kmers_list)
-        else:
-            ids, kmers_list = construct_data(Xy_file, dir_path, list_id_file)
+
+        ids, kmers_list = construct_data(Xy_file, dir_path, list_id_file)
 
     os.remove(file_list_ids_file)
 
