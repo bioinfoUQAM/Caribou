@@ -1,7 +1,7 @@
 #!/usr/bin python3
 
-from Caribou.models.classification import bacterial_classification
-from Caribou.utils import load_Xy_data
+from models.bacteria_extraction import bacteria_extraction
+from utils import load_Xy_data
 
 import pandas as pd
 
@@ -18,7 +18,7 @@ from pathlib import Path
 
 __author__ = "Nicolas de Montigny"
 
-__all__ = ['bacteria_classification_train_cv']
+__all__ = ['bacteria_extraction_train_cv']
 
 # GPU & CPU setup
 ################################################################################
@@ -30,7 +30,7 @@ if gpus:
 
 # Initialisation / validation of parameters from CLI
 ################################################################################
-def bacteria_classification_train_cv(opt):
+def bacteria_extraction_train_cv(opt):
 
     # Verify existence of files and load data
     if not os.path.isfile(opt['data_bacteria']):
@@ -45,8 +45,30 @@ def bacteria_classification_train_cv(opt):
             print("Cannot find file {} ! Exiting".format(os.path.isfile(data_bacteria['X'])))
             sys.exit()
 
+    # Verify existence of files for host data + concordance and load
+    if opt['data_host'] is not None:
+        if not os.path.isfile(opt['data_host']):
+            print("Cannot find file {} ! Exiting".format(file))
+            sys.exit()
+        else:
+            data_host = load_Xy_data(opt['data_host'])
+            # Verify concordance of k length between datasets
+            if k_length != len(data_host['kmers_list'][0]):
+                print("K length of bacteria dataset is {} while K length from host is {}").format(k_length, len(data_host['kmers_list'][0]))
+                print("K length between datasets is inconsistent ! Exiting")
+                sys.exit()
+            else:
+                # Verify that kmers profile file exists
+                if not os.path.isfile(data_host['X']):
+                    print("Cannot find file {} ! Exiting".format(os.path.isfile(data_host['X'])))
+                    sys.exit()
+    else:
+        host = None
+
     # Verify that model type is valid / choose default depending on host presence
-    if opt['model_type'] is None:
+    if host is None:
+        opt['model_type'] = 'onesvm'
+    elif opt['model_type'] is None and host is not None:
         opt['model_type'] = 'attention'
 
     # Validate batch size
@@ -63,7 +85,6 @@ def bacteria_classification_train_cv(opt):
     if opt['training_epochs'] <= 0:
         print("Invalid number of training iterations for neural networks")
         sys.exit()
-
 
     # Validate path for saving
     outdir_path, outdir_folder = os.path.split(opt['outdir'])
@@ -82,30 +103,47 @@ def bacteria_classification_train_cv(opt):
     makedirs(outdirs["main_outdir"], mode=0o700, exist_ok=True)
     makedirs(outdirs["models_dir"], mode=0o700, exist_ok=True)
 
-# Training and cross-validation of models for classification of bacterias
+# Training and cross-validation of models for bacteria extraction / host removal
 ################################################################################
 
-    bacterial_classification(None,
-        data_bacteria,
-        k_length,
-        outdirs,
-        opt['database_name'],
-        opt['training_epochs'],
-        classifier = opt['model_type'],
-        batch_size = opt['batch_size'],
-        verbose = opt['verbose'],
-        cv = True,
-        n_jobs = opt['nb_cv_jobs'])
+    if host is None:
+        bacteria_extraction(None,
+            data_bacteria,
+            k_length,
+            outdirs,
+            opt['database_name'],
+            opt['training_epochs'],
+            classifier = opt['model_type'],
+            batch_size = opt['batch_size'],
+            verbose = opt['verbose'],
+            cv = True,
+            n_jobs = opt['nb_cv_jobs']
+            )
+    else:
+        bacteria_extraction(None,
+            (data_bacteria, data_host),
+            k_length,
+            outdirs,
+            opt['database_name'],
+            opt['training_epochs'],
+            classifier = opt['model_type'],
+            batch_size = opt['batch_size'],
+            verbose = opt['verbose'],
+            cv = True,
+            n_jobs = opt['nb_cv_jobs']
+            )
 
     print("Caribou finished training and cross-validating the {} model without faults").format(opt['model_type'])
+
 
 # Argument parsing from CLI
 ################################################################################
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='This script trains and cross-validates a model for the bacteria classification step.')
+    parser = argparse.ArgumentParser(description='This script trains and cross-validates a model for the bacteria extraction / host removal step.')
     parser.add_argument('-db','--data_bacteria', required=True, type=Path, help='PATH to a npz file containing the data corresponding to the k-mers profile for the bacteria database')
+    parser.add_argument('-dh','--data_host', default=None, type=Path, help='PATH to a npz file containing the data corresponding to the k-mers profile for the host')
     parser.add_argument('-dt','--database_name', required=True, help='Name of the bacteria database used to name files')
-    parser.add_argument('-model','--model_type', default='lstm_attention', choices=['sgd','svm','mlr','mnb','lstm_attention','cnn','widecnn'], help='The type of model to train')
+    parser.add_argument('-model','--model_type', default=None, choices=[None,'linearsvm','attention','lstm','deeplstm'], help='The type of model to train')
     parser.add_argument('-bs','--batch_size', default=32, type=int, help='Size of the batch size to use, defaults to 32')
     parser.add_argument('-cv','--nb_cv_jobs', default=10, type=int, help='The number of cross validation jobs to run, defaults to 10')
     parser.add_argument('-e','--training_epochs', default=100, type=int, help='The number of training iterations for the neural networks models if one ise chosen, defaults to 100')
@@ -115,4 +153,4 @@ if __name__ == "__main__":
 
     opt = vars(args)
 
-    bacteria_classification_train_cv(opt)
+    bacteria_extraction_train_cv(opt)

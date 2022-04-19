@@ -8,9 +8,9 @@ from sklearn.linear_model import SGDOneClassSVM, SGDClassifier
 
 from keras.models import load_model
 
-from Caribou.utils import *
-from Caribou.models.models_utils import *
-from Caribou.models.build_neural_networks import *
+from utils import *
+from models.models_utils import *
+from models.build_neural_networks import *
 
 from joblib import load
 

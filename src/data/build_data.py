@@ -1,6 +1,6 @@
-from Caribou.data.seq_collections import SeqCollection
-from Caribou.data.kmer_collections import build_kmers_Xy_data, build_kmers_X_data
-from Caribou.utils import load_Xy_data, save_Xy_data
+from data.seq_collections import SeqCollection
+from data.kmer_collections import build_kmers_Xy_data, build_kmers_X_data
+from utils import load_Xy_data, save_Xy_data
 
 import os.path
 
@@ -19,12 +19,12 @@ def build_load_save_data(file, hostfile, prefix, dataset, host, kmers_list=None,
     data_host = None
 
     # Generate the names of files
-    Xy_file = "{}/Xy_genome_{}_data_K{}.h5f".format(prefix,dataset,k)
-    data_file = "{}/Xy_genome_{}_data_K{}.npz".format(prefix,dataset,k)
-    Xy_file_host = "{}/Xy_genome_{}_data_K{}.h5f".format(prefix,host,k)
-    data_file_host = "{}/Xy_genome_{}_data_K{}.npz".format(prefix,host,k)
-    seqfile = "{}/seqdata_{}.txt".format(prefix, dataset)
-    seqfile_host = "{}/seqdata_{}.txt".format(prefix, dataset)
+    Xy_file = os.path.join(prefix,"Xy_genome_{}_data_K{}.h5f".format(dataset,k))
+    data_file = os.path.join(prefix,"Xy_genome_{}_data_K{}.npz".format(dataset,k))
+    Xy_file_host = os.path.join(prefix,"Xy_genome_{}_data_K{}.h5f".format(host,k))
+    data_file_host = os.path.join(prefix,"Xy_genome_{}_data_K{}.npz".format(host,k))
+    seqfile = os.path.join(prefix,"seqdata_{}.txt".format(dataset))
+    seqfile_host = os.path.join(prefix,"seqdata_{}.txt".format(dataset))
 
     # Load file if already exists
     if os.path.isfile(data_file) and os.path.isfile(data_file_host) and isinstance(hostfile, tuple):

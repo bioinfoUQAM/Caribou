@@ -11,7 +11,7 @@ import pickle
 
 import os
 
-from Caribou.utils import load_Xy_data
+from utils import load_Xy_data
 
 __author__ = "Nicolas de Montigny"
 
@@ -122,7 +122,7 @@ def out_summary(abundances, order, summary, host, summary_file):
 
 def out_kronagram(abundances, order, krona_file, krona_out, seq_data, database_kmers, dataset):
     # Kronagram / interactive tree
-    krona_path = "{}/KronaTools/scripts/ImportText.pl".format(os.path.dirname(os.path.realpath(__file__)))
+    krona_path = os.path.join(os.path.dirname(os.path.realpath(__file__)),"KronaTools","scripts","ImportText.pl")
     create_krona_file(abundances, order, krona_file, seq_data, database_kmers)
     perl_loc = run("which perl", shell = True, capture_output = True, text = True)
     cmd = "{} {} {} -o {} -n {}".format(perl_loc.stdout.strip("\n"), krona_path, krona_file, krona_out, dataset)

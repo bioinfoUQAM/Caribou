@@ -1,9 +1,9 @@
 #!/usr/bin python3
 
-from Caribou.data.build_data import build_load_save_data
-from Caribou.models.bacteria_extraction import bacteria_extraction
-from Caribou.models.classification import bacterial_classification
-from Caribou.outputs.outputs import outputs
+from data.build_data import build_load_save_data
+from models.bacteria_extraction import bacteria_extraction
+from models.classification import bacterial_classification
+from outputs.outputs import outputs
 
 import pandas as pd
 

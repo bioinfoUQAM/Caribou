@@ -7,7 +7,7 @@ from tensorflow.keras.initializers import GlorotNormal
 from keras.models import Model, Sequential
 from keras.layers import Dense, Input, LSTM, Embedding, Dropout, Conv1D, Conv2D, MaxPooling1D, MaxPooling2D, ReLU, Concatenate, Flatten, Attention, Activation, Bidirectional
 
-from Caribou.models.attentionLayer import AttentionWeightedAverage
+from models.attentionLayer import AttentionWeightedAverage
 
 __author__ = "Nicolas de Montigny"
 

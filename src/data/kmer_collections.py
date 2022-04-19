@@ -77,9 +77,9 @@ def kmers_collection(seq_data, Xy_file, length, k, dataset, method = 'seen', kme
     collection = {}
     #
     collection['data'] = Xy_file
-    dir_path = os.path.split(Xy_file)[0] + "/tmp/"
-    kmc_path = "{}/KMC/bin".format(os.path.dirname(os.path.realpath(__file__)))
-    faSplit = "{}/faSplit".format(os.path.dirname(os.path.realpath(__file__)))
+    dir_path = os.path.join(os.path.split(Xy_file)[0],"tmp")
+    kmc_path = os.path.join(os.path.dirname(os.path.realpath(__file__)),"KMC","bin")
+    faSplit = os.path.join(os.path.dirname(os.path.realpath(__file__)),"faSplit")
     #
     collection['ids'], collection['kmers_list'] = compute_kmers(seq_data, method, kmers_list, k, dir_path, faSplit, kmc_path, Xy_file, dataset)
     #
@@ -122,22 +122,22 @@ def save_kmers_profile(df, Xy_file, tmp = True):
         data = handle.create_carray("/", "data", obj = df)
 
 def compute_seen_kmers_of_sequence(kmc_path, k, dir_path, ind, file):
-    if not os.path.isfile('{}/{}.csv'.format(dir_path, ind)):
+    if not os.path.isfile(os.path.join(dir_path,'{}.csv'.format(ind))):
         # Make tmp folder per sequence
-        tmp_folder = "{}tmp_{}/".format(dir_path, ind)
+        tmp_folder = os.path.join(dir_path,"tmp_{}".format(ind))
         id = os.path.splitext(os.path.basename(file))[0]
         try:
             os.mkdir(tmp_folder)
             # Count k-mers with KMC
-            cmd_count = "{}/kmc -k{} -fm -ci1 -cs1000000000 -m10 -hp {} {}/{} {}".format(kmc_path, k, file, tmp_folder, ind, tmp_folder)
+            cmd_count = os.path.join(kmc_path,"kmc -k{} -fm -ci1 -cs1000000000 -m10 -hp {} {} {}".format(k, file, os.path.join(tmp_folder, ind), tmp_folder))
             run(cmd_count, shell = True, capture_output=True)
             # Transform k-mers db with KMC
-            cmd_transform = "{}/kmc_tools transform {}/{} dump {}/{}.txt".format(kmc_path, tmp_folder, ind, dir_path, ind)
+            cmd_transform = os.path.join(kmc_path,"kmc_tools transform {} dump {}".format(kmc_path, os.path,join(tmp_folder, ind), os.path.join(dir_path, "{}.txt".format(ind))))
             run(cmd_transform, shell = True, capture_output=True)
         except:
             pass
 
-        return id, "{}/{}.txt".format(dir_path, ind)
+        return id, os.path.join(dir_path,"{}.txt".format(ind))
 
 def compute_given_kmers_of_sequence(kmers_list, kmc_path, k, dir_path, ind, file):
     # Make tmp folder per sequence
@@ -146,16 +146,16 @@ def compute_given_kmers_of_sequence(kmers_list, kmc_path, k, dir_path, ind, file
     try:
         os.mkdir(tmp_folder)
         # Count k-mers with KMC
-        cmd_count = "{}/kmc -k{} -fm -ci1 -cs1000000000 -m10 -hp {} {}/{} {}".format(kmc_path, k, file, tmp_folder, ind, tmp_folder)
+        cmd_count = os.path.join(kmc_path,"kmc -k{} -fm -ci1 -cs1000000000 -m10 -hp {} {} {}".format(k, file, os.path.join(tmp_folder, ind), tmp_folder))
         run(cmd_count, shell = True, capture_output=True)
         # Transform k-mers db with KMC
-        cmd_transform = "{}/kmc_tools transform {}/{} dump {}/{}.txt".format(kmc_path, tmp_folder, ind, dir_path, ind)
+        cmd_transform = os.path.join(kmc_path,"kmc_tools transform {} dump {}".format(kmc_path, os.path,join(tmp_folder, ind), os.path.join(dir_path, "{}.txt".format(ind))))
         run(cmd_transform, shell = True, capture_output=True)
     except:
         pass
 
     try:
-        profile = pd.read_table('{}/{}.txt'.format(dir_path, ind), names = [id], index_col = 0, dtype = object).T
+        profile = pd.read_table(os.path.join(dir_path,"{}.txt".format(ind)), names = [id], index_col = 0, dtype = object).T
         # Temp pandas df to write given kmers to file
         df = pd.DataFrame(np.zeros((1,len(kmers_list))), columns = kmers_list, index = [id])
 
@@ -165,11 +165,11 @@ def compute_given_kmers_of_sequence(kmers_list, kmc_path, k, dir_path, ind, file
             else:
                 df.at[id,kmer] = 0
 
-                df.T.to_csv('{}/{}.txt'.format(dir_path, ind), sep = "\t", header = ['kmers',id])
+                df.T.to_csv(os.path.join(dir_path,"{}.txt".format(ind)), sep = "\t", header = ['kmers',id])
     except:
         print("Kmers extraction error for sequence {}".format(id))
 
-    return id, '{}/{}.txt'.format(dir_path, ind)
+    return id, os.path.join(dir_path,"{}.txt".format(ind))
 
 def compute_kmers(seq_data, method, kmers_list, k, dir_path, faSplit, kmc_path, Xy_file, dataset):
     file_list_ids_file = os.path.join(os.path.dirname(Xy_file),'list_id_file_{}.txt'.format(dataset))

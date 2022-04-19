@@ -7,7 +7,7 @@ import os
 
 from tensorflow.keras.utils import to_categorical
 
-from Caribou.data.generators import iter_generator
+from data.generators import iter_generator
 
 __author__ = "Nicolas de Montigny"
 
