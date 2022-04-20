@@ -131,7 +131,7 @@ def compute_seen_kmers_of_sequence(kmc_path, k, dir_path, ind, file):
         print(cmd_count)
         run(cmd_count, shell = True, capture_output=True)
         # Transform k-mers db with KMC
-        cmd_transform = os.path.join(kmc_path,"kmc_tools transform {} dump {}".format(os.path,join(tmp_folder, str(ind)), os.path.join(dir_path, "{}.txt".format(ind))))
+        cmd_transform = os.path.join(kmc_path,"kmc_tools transform {} dump {}".format(os.path.join(tmp_folder, str(ind)), os.path.join(dir_path, "{}.txt".format(ind))))
         print(cmd_transform)
         run(cmd_transform, shell = True, capture_output=True)
 
@@ -147,7 +147,7 @@ def compute_given_kmers_of_sequence(kmers_list, kmc_path, k, dir_path, ind, file
         cmd_count = os.path.join(kmc_path,"kmc -k{} -fm -ci1 -cs1000000000 -m10 -hp {} {} {}".format(k, file, os.path.join(tmp_folder, str(ind)), tmp_folder))
         run(cmd_count, shell = True, capture_output=True)
         # Transform k-mers db with KMC
-        cmd_transform = os.path.join(kmc_path,"kmc_tools transform {} dump {}".format(os.path,join(tmp_folder, str(ind)), os.path.join(dir_path, "{}.txt".format(ind))))
+        cmd_transform = os.path.join(kmc_path,"kmc_tools transform {} dump {}".format(os.path.join(tmp_folder, str(ind)), os.path.join(dir_path, "{}.txt".format(ind))))
         run(cmd_transform, shell = True, capture_output=True)
     except:
         pass
