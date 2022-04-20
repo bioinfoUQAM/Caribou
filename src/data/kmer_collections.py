@@ -91,6 +91,8 @@ def construct_data(Xy_file, dir_path, list_id_file):
     df = None
     # Iterate over ids / files
     for id, file in list_id_file:
+        print(id)
+        print(file)
         if df is None:
             df = vaex.from_csv(file, sep = '\t', header = None, names = ['kmers', id])
         else:
