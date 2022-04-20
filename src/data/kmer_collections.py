@@ -76,7 +76,7 @@ def kmers_collection(seq_data, Xy_file, length, k, dataset, method = 'seen', kme
     collection = {}
     #
     collection['data'] = Xy_file
-    dir_path = os.path.join(os.path.split(Xy_file)[0],"tmp")
+    dir_path = os.path.join(os.path.split(Xy_file)[0],"tmp","")
     kmc_path = os.path.join(os.path.dirname(os.path.realpath(__file__)),"KMC","bin")
     faSplit = os.path.join(os.path.dirname(os.path.realpath(__file__)),"faSplit")
     #
@@ -177,7 +177,7 @@ def compute_kmers(seq_data, method, kmers_list, k, dir_path, faSplit, kmc_path, 
         os.system(cmd_split)
 
         for id in seq_data.ids:
-            file = dir_path + id + '.fa'
+            file = os.path.join(dir_path,'{}.fa'.format(id))
             file_list.append(file)
 
         list_id_file = parallel_extraction(file_list, method, kmers_list, kmc_path, k, dir_path)
