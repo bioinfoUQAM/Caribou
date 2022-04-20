@@ -100,7 +100,7 @@ def construct_data(Xy_file, dir_path, list_id_file):
                 # Read each file individually
                 tmp = vaex.from_csv(file, sep = '\t', header = None, names = ['kmers', id])
                 # Join each files to the previously computed dataframe
-                df = df.join(tmp, on='kmers', how = 'left')
+                df = df.join(tmp, on = 'kmers', how = 'left')
             except ValueError:
                 print("Identical sequence IDs not supported, every sequence should have a unique ID")
 
