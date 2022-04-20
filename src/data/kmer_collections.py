@@ -125,15 +125,16 @@ def compute_seen_kmers_of_sequence(kmc_path, k, dir_path, ind, file):
         # Make tmp folder per sequence
         tmp_folder = os.path.join(dir_path,"tmp_{}".format(ind))
         id = os.path.splitext(os.path.basename(file))[0]
-        os.mkdir(tmp_folder)
-        # Count k-mers with KMC
-        cmd_count = os.path.join(kmc_path,"kmc -k{} -fm -ci1 -cs1000000000 -m10 -hp {} {} {}".format(k, file, os.path.join(tmp_folder, str(ind)), tmp_folder))
-        print(cmd_count)
-        run(cmd_count, shell = True, capture_output=True)
-        # Transform k-mers db with KMC
-        cmd_transform = os.path.join(kmc_path,"kmc_tools transform {} dump {}".format(os.path.join(tmp_folder, str(ind)), os.path.join(dir_path, "{}.txt".format(ind))))
-        print(cmd_transform)
-        run(cmd_transform, shell = True, capture_output=True)
+        try:
+            os.mkdir(tmp_folder)
+            # Count k-mers with KMC
+            cmd_count = os.path.join(kmc_path,"kmc -k{} -fm -ci1 -cs1000000000 -m10 -hp {} {} {}".format(k, file, os.path.join(tmp_folder, str(ind)), tmp_folder))
+            run(cmd_count, shell = True, capture_output=True)
+            # Transform k-mers db with KMC
+            cmd_transform = os.path.join(kmc_path,"kmc_tools transform {} dump {}".format(os.path.join(tmp_folder, str(ind)), os.path.join(dir_path, "{}.txt".format(ind))))
+            run(cmd_transform, shell = True, capture_output=True)
+        except:
+            pass
 
         return id, os.path.join(dir_path,"{}.txt".format(ind))
 
