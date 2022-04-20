@@ -110,7 +110,7 @@ def construct_data(Xy_file, dir_path, list_id_file):
     # Fill NAs with 0
     df = df.fillna(0)
     # Convert to numpy array to transpose and reconvert to vaex df
-    df = np.array(df.to_arrays(column_names = ids, array_type = 'numpy'))
+    df = np.array(df.to_arrays(array_type = 'numpy'))
 
     save_kmers_profile(df, Xy_file, tmp = False)
 
