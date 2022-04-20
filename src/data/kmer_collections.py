@@ -94,19 +94,22 @@ def construct_data(Xy_file, dir_path, list_id_file):
     for id, file in list_id_file:
         if df is None:
             df = vaex.read_csv(file, sep = '\t', header = None, names = ['kmers', id])
+            print(df)
         else:
             try:
                 # Read each file individually
                 tmp = vaex.read_csv(file, sep = '\t', header = None, names = ['kmers', id])
+                print(tmp)
                 # Join each files to the previously computed dataframe
                 df = df.join(tmp, on='kmers', how = 'left')
+                print(df)
                 ids.append(id)
+                print(ids)
             except ValueError:
                 print("Identical sequence IDs not supported, every sequence should have a unique ID")
 
     # Extract k-mers list
     kmers_list = list(df.kmers.values)
-    print(df)
     # Fill NAs with 0
     df = df.fillna(0)
     # Convert to numpy array to transpose and reconvert to vaex df
