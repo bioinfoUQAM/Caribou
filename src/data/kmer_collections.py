@@ -86,11 +86,12 @@ def kmers_collection(seq_data, Xy_file, length, k, dataset, method = 'seen', kme
 
     return collection
 
-def construct_data(Xy_file, dir_path, list_id_file):
-    ids = [id for id,file in list_id_file]
+def construct_data(Xy_file, dir_path, list_id_file, kmers_list):
+    ids = []
     df = vaex.from_pandas(pd.DataFrame({'kmers':kmers_list}))
     # Iterate over ids / files
     for id, file in list_id_file:
+        ids.append(id)
         #try:
         # Read each file individually
         tmp = vaex.from_csv(file, sep = '\t', header = None, names = ['kmers', id])
@@ -181,22 +182,21 @@ def compute_kmers(seq_data, method, kmers_list, k, dir_path, faSplit, kmc_path, 
             file = os.path.join(dir_path,'{}.fa'.format(id))
             file_list.append(file)
 
-        list_id_file = parallel_extraction(file_list, method, kmers_list, kmc_path, k, dir_path)
+        list_id_file, kmers_list = parallel_extraction(file_list, method, kmers_list, kmc_path, k, dir_path)
         save_id_file_list(list_id_file,file_list_ids_file)
-        ids, kmers_list = construct_data(Xy_file, dir_path, list_id_file)
+        ids, kmers_list = construct_data(Xy_file, dir_path, list_id_file, kmers_list)
 
     else:
         with open(file_list_ids_file, 'r') as handle:
             list_id_file = [tuple(line.strip('\n').split(',')) for line in handle]
 
-        ids, kmers_list = construct_data(Xy_file, dir_path, list_id_file)
+        ids, kmers_list = construct_data(Xy_file, dir_path, list_id_file, kmers_list)
 
     os.remove(file_list_ids_file)
 
     return ids, kmers_list
 
 def save_id_file_list(list_id_file, file):
-    print(list_id_file)
     with open(file, 'w') as handle:
         for id, file in list_id_file:
             handle.write("{},{}\n".format(id,file))
