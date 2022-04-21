@@ -88,13 +88,14 @@ def kmers_collection(seq_data, Xy_file, length, k, dataset, method = 'seen', kme
 
 def construct_data(Xy_file, dir_path, list_id_file, kmers_list):
     ids = []
-    df = vaex.from_pandas(pd.DataFrame({'kmers':kmers_list}))
+    df = vaex.from_pandas(pd.DataFrame({'kmers':kmers_list}, dtype = object))
+    print(df)
     # Iterate over ids / files
     for id, file in list_id_file:
         ids.append(id)
         #try:
         # Read each file individually
-        tmp = vaex.from_csv(file, sep = '\t', header = None, names = ['kmers', id])
+        tmp = vaex.from_csv(file, sep = '\t', header = None, names = ['kmers', id], dtype = object)
         # Join each files to the previously computed dataframe
         df = df.join(tmp, on = 'kmers', how = 'left')
         #except ValueError:
@@ -111,7 +112,7 @@ def construct_data(Xy_file, dir_path, list_id_file, kmers_list):
     # Fill NAs with 0
     df = df.fillna(0)
     # Convert to numpy array to transpose and reconvert to vaex df
-    df = np.array(df.to_arrays(column_names  = ids, array_type = 'numpy'))
+    df = np.array(df.to_arrays(column_names  = ids, array_type = 'numpy'), dtype = np.int32)
     print(df)
     save_kmers_profile(df, Xy_file, tmp = False)
 
