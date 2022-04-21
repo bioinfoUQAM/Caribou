@@ -88,30 +88,27 @@ def kmers_collection(seq_data, Xy_file, length, k, dataset, method = 'seen', kme
 
 def construct_data(Xy_file, dir_path, list_id_file):
     ids = [id for id,file in list_id_file]
-    df = None
-    iter = 0
+    df = vaex.from_pandas(pd.DataFrame({'kmers':kmers_list}))
     # Iterate over ids / files
     for id, file in list_id_file:
-        print(iter)
-        iter += 1
-        if df is None:
-            df = vaex.from_csv(file, sep = '\t', header = None, names = ['kmers', id])
-            print(df)
-        else:
-            #try:
-            # Read each file individually
-            tmp = vaex.from_csv(file, sep = '\t', header = None, names = ['kmers', id])
-            print(tmp)
-            # Join each files to the previously computed dataframe
-            df = df.join(tmp, on = 'kmers', how = 'left')
-            print(df)
-            #except ValueError:
-                #print("Identical sequence IDs not supported, every sequence should have a unique ID")
+        #try:
+        # Read each file individually
+        tmp = vaex.from_csv(file, sep = '\t', header = None, names = ['kmers', id])
+        # Join each files to the previously computed dataframe
+        df = df.join(tmp, on = 'kmers', how = 'left')
+        #except ValueError:
+            #print("Identical sequence IDs not supported, every sequence should have a unique ID")
 
     # Extract k-mers list
     kmers_list = list(df.kmers.values)
+    # Drop NAs filled columns
+    print("before na drop")
+    print(df)
+    df = df.dropna()
+    print("after na drop")
+    print(df)
     # Fill NAs with 0
-    #df = df.fillna(0)
+    df = df.fillna(0)
     # Convert to numpy array to transpose and reconvert to vaex df
     df = np.array(df.to_arrays(column_names  = ids, array_type = 'numpy'))
     print(df)
@@ -209,10 +206,11 @@ def parallel_extraction(file_list, method, kmers_list, kmc_path, k, dir_path):
             results = Parallel(n_jobs = -1, prefer = 'threads', verbose = 100)(
             delayed(compute_seen_kmers_of_sequence)
             (kmc_path, k, dir_path, i, file) for i, file in enumerate(file_list))
+            kmers_list = ["".join(t) for t in product("ACGT", repeat=k)]
     elif method == 'given':
         with parallel_backend('threading'):
             results = Parallel(n_jobs = -1, prefer = 'threads', verbose = 100)(
             delayed(compute_given_kmers_of_sequence)
             (kmers_list, kmc_path, k, dir_path, i, file) for i, file in enumerate(file_list))
 
-    return results
+    return results, kmers_list
