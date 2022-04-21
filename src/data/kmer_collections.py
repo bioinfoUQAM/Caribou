@@ -196,6 +196,7 @@ def compute_kmers(seq_data, method, kmers_list, k, dir_path, faSplit, kmc_path, 
     return ids, kmers_list
 
 def save_id_file_list(list_id_file, file):
+    print(list_id_file)
     with open(file, 'w') as handle:
         for id, file in list_id_file:
             handle.write("{},{}\n".format(id,file))
