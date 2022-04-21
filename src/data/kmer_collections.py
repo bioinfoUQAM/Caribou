@@ -90,11 +90,11 @@ def construct_data(Xy_file, dir_path, list_id_file, kmers_list):
     df = vaex.from_pandas(pd.DataFrame({'kmers':kmers_list}))
     print(df)
     # Iterate over ids / files
-    for id, file in list_id_file:
+    for i, (id, file) in enumerate(list_id_file):
         ids.append(id)
         #try:
         # Read each file individually
-        tmp = vaex.from_csv(file, sep = '\t', header = None, names = ['kmers', '{}'.format(id)])
+        tmp = vaex.from_csv(file, sep = '\t', header = None, names = ['kmers', 'id_{}'.format(i)])
         # Join each files to the previously computed dataframe
         df = df.join(tmp, on = 'kmers', how = 'left')
         #except ValueError:
