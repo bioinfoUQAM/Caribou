@@ -87,31 +87,29 @@ def kmers_collection(seq_data, Xy_file, length, k, dataset, method = 'seen', kme
 
 def construct_data(Xy_file, dir_path, list_id_file, kmers_list):
     ids = []
+    colnames = []
     df = vaex.from_pandas(pd.DataFrame({'kmers':kmers_list}))
-    print(df)
     # Iterate over ids / files
     for i, (id, file) in enumerate(list_id_file):
-        ids.append(id)
-        #try:
-        # Read each file individually
-        tmp = vaex.from_csv(file, sep = '\t', header = None, names = ['kmers', 'id_{}'.format(i)])
-        # Join each files to the previously computed dataframe
-        df = df.join(tmp, on = 'kmers', how = 'left')
-        #except ValueError:
-            #print("Identical sequence IDs not supported, every sequence should have a unique ID")
+        try:
+            # Read each file individually
+            tmp = vaex.from_csv(file, sep = '\t', header = None, names = ['kmers', 'id_{}'.format(i)])
+            # Join each files to the previously computed dataframe
+            df = df.join(tmp, on = 'kmers', how = 'left')
+            ids.append(id)
+            colnames.append('id_{}'.format(i))
+        except ValueError:
+            print("Identical sequence IDs not supported, every sequence should have a unique ID")
 
     # Extract k-mers list
     kmers_list = list(df.kmers.values)
+    print(len(kmers_list))
     # Drop NAs filled columns
-    print("before na drop")
-    print(df)
     df = df.dropna()
-    print("after na drop")
-    print(df)
     # Fill NAs with 0
     df = df.fillna(0)
     # Convert to numpy array to transpose and reconvert to vaex df
-    df = np.array(df.to_arrays(column_names  = ids, array_type = 'numpy'), dtype = np.int32)
+    df = np.array(df.to_arrays(column_names  = colnames, array_type = 'numpy'), dtype = np.int32)
     print(df)
     save_kmers_profile(df, Xy_file, tmp = False)
 
