@@ -91,8 +91,7 @@ def construct_data(Xy_file, dir_path, list_id_file):
     df = None
     # Iterate over ids / files
     for id, file in list_id_file:
-        print(id)
-        print(file)
+
         if df is None:
             df = vaex.from_csv(file, sep = '\t', header = None, names = ['kmers', id])
         else:
@@ -106,6 +105,7 @@ def construct_data(Xy_file, dir_path, list_id_file):
 
     # Extract k-mers list
     kmers_list = list(df.kmers.values)
+    print("kmers_list :", kmers_list)
     # Fill NAs with 0
     df = df.fillna(0)
     # Convert to numpy array to transpose and reconvert to vaex df
