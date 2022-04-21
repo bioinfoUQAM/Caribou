@@ -89,14 +89,19 @@ def kmers_collection(seq_data, Xy_file, length, k, dataset, method = 'seen', kme
 def construct_data(Xy_file, dir_path, list_id_file):
     ids = [id for id,file in list_id_file]
     df = None
+    iter = 0
     # Iterate over ids / files
     for id, file in list_id_file:
+        print(iter)
+        iter += 1
         if df is None:
             df = vaex.from_csv(file, sep = '\t', header = None, names = ['kmers', id])
+            print(df)
         else:
             #try:
             # Read each file individually
             tmp = vaex.from_csv(file, sep = '\t', header = None, names = ['kmers', id])
+            print(tmp)
             # Join each files to the previously computed dataframe
             df = df.join(tmp, on = 'kmers', how = 'left')
             print(df)
