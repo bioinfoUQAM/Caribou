@@ -5,7 +5,6 @@ import warnings
 from subprocess import run
 from shutil import rmtree
 from itertools import product
-from collections import defaultdict
 
 from joblib import Parallel, delayed, parallel_backend
 
@@ -95,7 +94,7 @@ def construct_data(Xy_file, dir_path, list_id_file, kmers_list):
         ids.append(id)
         #try:
         # Read each file individually
-        tmp = vaex.from_csv(file, sep = '\t', header = None, names = ['kmers', id], dtype = object)
+        tmp = vaex.from_csv(file, sep = '\t', header = None, names = ['kmers', str(id)], dtype = object)
         # Join each files to the previously computed dataframe
         df = df.join(tmp, on = 'kmers', how = 'left')
         #except ValueError:
