@@ -94,20 +94,21 @@ def construct_data(Xy_file, dir_path, list_id_file):
         if df is None:
             df = vaex.from_csv(file, sep = '\t', header = None, names = ['kmers', id])
         else:
-            try:
-                # Read each file individually
-                tmp = vaex.from_csv(file, sep = '\t', header = None, names = ['kmers', id])
-                # Join each files to the previously computed dataframe
-                df = df.join(tmp, on = 'kmers', how = 'left')
-            except ValueError:
-                print("Identical sequence IDs not supported, every sequence should have a unique ID")
+            #try:
+            # Read each file individually
+            tmp = vaex.from_csv(file, sep = '\t', header = None, names = ['kmers', id])
+            # Join each files to the previously computed dataframe
+            df = df.join(tmp, on = 'kmers', how = 'left')
+            print(df)
+            #except ValueError:
+                #print("Identical sequence IDs not supported, every sequence should have a unique ID")
 
     # Extract k-mers list
     kmers_list = list(df.kmers.values)
     # Fill NAs with 0
     #df = df.fillna(0)
     # Convert to numpy array to transpose and reconvert to vaex df
-    df = np.array(df.to_arrays(array_type = 'numpy'))
+    df = np.array(df.to_arrays(column_names  = ids, array_type = 'numpy'))
     print(df)
     save_kmers_profile(df, Xy_file, tmp = False)
 
