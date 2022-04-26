@@ -98,8 +98,8 @@ def construct_data(Xy_file, dir_path, list_id_file, kmers_list):
             df = df.join(tmp, on = 'kmers', how = 'left')
             ids.append(id)
             colnames.append('id_{}'.format(i))
-        except ValueError:
-            print("Identical sequence IDs not supported, every sequence should have a unique ID")
+        except:
+            print("No k-mers to extract in sequence {}".format(id))
 
     # Drop NAs filled columns
     df = df.dropna()
@@ -125,7 +125,7 @@ def compute_seen_kmers_of_sequence(kmc_path, k, dir_path, ind, file):
         id = os.path.splitext(os.path.basename(file))[0]
         os.mkdir(tmp_folder)
         # Count k-mers with KMC
-        cmd_count = os.path.join(kmc_path,"kmc -k{} -fm -ci1 -cs1000000000 -m10 -hp {} {} {}".format(k, file, os.path.join(tmp_folder, str(ind)), tmp_folder))
+        cmd_count = os.path.join(kmc_path,"kmc -k{} -fm -ci4 -m10 -hp {} {} {}".format(k, file, os.path.join(tmp_folder, str(ind)), tmp_folder))
         run(cmd_count, shell = True, capture_output=True)
         # Transform k-mers db with KMC
         cmd_transform = os.path.join(kmc_path,"kmc_tools transform {} dump {}".format(os.path.join(tmp_folder, str(ind)), os.path.join(dir_path, "{}.txt".format(ind))))
@@ -139,7 +139,7 @@ def compute_given_kmers_of_sequence(kmers_list, kmc_path, k, dir_path, ind, file
     id = os.path.splitext(os.path.basename(file))[0]
     os.mkdir(tmp_folder)
     # Count k-mers with KMC
-    cmd_count = os.path.join(kmc_path,"kmc -k{} -fm -ci1 -cs1000000000 -m10 -hp {} {} {}".format(k, file, os.path.join(tmp_folder, str(ind)), tmp_folder))
+    cmd_count = os.path.join(kmc_path,"kmc -k{} -fm -ci4 -m10 -hp {} {} {}".format(k, file, os.path.join(tmp_folder, str(ind)), tmp_folder))
     run(cmd_count, shell = True, capture_output=True)
     # Transform k-mers db with KMC
     cmd_transform = os.path.join(kmc_path,"kmc_tools transform {} dump {}".format(os.path.join(tmp_folder, str(ind)), os.path.join(dir_path, "{}.txt".format(ind))))
@@ -158,7 +158,7 @@ def compute_given_kmers_of_sequence(kmers_list, kmc_path, k, dir_path, ind, file
 
                 df.T.to_csv(os.path.join(dir_path,"{}.txt".format(ind)), sep = "\t", header = ['kmers',id])
     except:
-        print("Kmers extraction error for sequence {}".format(id))
+        print("No k-mers to extract in sequence {}".format(id))
 
     return id, os.path.join(dir_path,"{}.txt".format(ind))
 
