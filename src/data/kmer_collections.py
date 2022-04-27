@@ -102,10 +102,12 @@ def construct_data(Xy_file, dir_path, list_id_file, kmers_list):
             print("No k-mers to extract in sequence {}".format(id))
 
     print(df)
-    # Drop NAs filled columns
-    df = df.dropna()
     # Fill NAs with 0
     df = df.fillna(0)
+    # Get row sums
+    df['sum'] = df.func.sum_row_wise(*[df[k] for k in df.get_column_names()])
+    # Filter dataframe to remove rows filled with 0
+    df = df[df.sum > 0]
     # Extract k-mers list
     kmers_list = list(df.kmers.values)
     # Convert to numpy array to transpose and reconvert to vaex df
@@ -119,6 +121,14 @@ def save_kmers_profile(df, Xy_file, tmp = True):
     # Convert vaez dataframe to numpy array and write directly to disk with pytables
     with tb.open_file(Xy_file, "w") as handle:
         data = handle.create_carray("/", "data", obj = df, shape = df.shape)
+
+# Function taken vaex github https://github.com/vaexio/vaex/issues/1082#issuecomment-735434883
+@vaex.register_function()
+def sum_row_wise(*args):
+    out = args[0].copy()
+    for other in args[1:]:
+        np.add(other, out, out=out)
+    return out
 
 def compute_seen_kmers_of_sequence(kmc_path, k, dir_path, ind, file):
     if not os.path.isfile(os.path.join(dir_path,'{}.csv'.format(ind))):
