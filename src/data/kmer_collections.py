@@ -116,7 +116,7 @@ def construct_data(Xy_file, dir_path, list_id_file, kmers_list):
 def save_kmers_profile(df, Xy_file, tmp = True):
     # Convert vaez dataframe to numpy array and write directly to disk with pytables
     with tb.open_file(Xy_file, "w") as handle:
-        data = handle.create_carray("/", "data", obj = df)
+        data = handle.create_carray("/", "data", obj = df, shape = df.shape)
 
 def compute_seen_kmers_of_sequence(kmc_path, k, dir_path, ind, file):
     if not os.path.isfile(os.path.join(dir_path,'{}.csv'.format(ind))):
