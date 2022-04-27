@@ -101,6 +101,7 @@ def construct_data(Xy_file, dir_path, list_id_file, kmers_list):
         except:
             print("No k-mers to extract in sequence {}".format(id))
 
+    print(df)
     # Drop NAs filled columns
     df = df.dropna()
     # Fill NAs with 0
