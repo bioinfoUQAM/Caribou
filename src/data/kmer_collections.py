@@ -104,7 +104,7 @@ def construct_data(Xy_file, dir_path, list_id_file, kmers_list):
     # Fill NAs with 0
     df = df.fillna(0)
     # Get row sums
-    df['sum'] = df.func.sum_row_wise(*[df[k] for k in df.get_column_names()])
+    df['sum'] = df.func.sum_row_wise(*[df[k] for k in colnames])
     # Filter dataframe to remove rows filled with 0
     df = df[df['sum'] > 0]
     # Extract k-mers list
