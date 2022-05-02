@@ -118,7 +118,7 @@ def construct_data(Xy_file, dir_path, list_id_file, kmers_list):
 def save_kmers_profile(df, Xy_file, tmp = True):
     # Convert vaez dataframe to numpy array and write directly to disk with pytables
     with tb.open_file(Xy_file, "w") as handle:
-        data = handle.create_carray("/", "data", obj = df, shape = df.shape)
+        data = handle.create_carray("/", "data", obj = df)
 
 # Function taken vaex github https://github.com/vaexio/vaex/issues/1082#issuecomment-735434883
 @vaex.register_function()
