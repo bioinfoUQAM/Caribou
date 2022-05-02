@@ -3,7 +3,7 @@
 __author__="Nicolas de Montigny"
 
 HELP=0
-while getopts d:i:c:o:h option; do
+while getopts "d:i:c:o:h" option; do
   case "${option}" in
     d) DIR=${OPTARG};;
     directory) DIR=${OPTARG};;
@@ -32,6 +32,7 @@ then
   -o --output Path to output files
   -h --help Show this help message
   """
+  exit 0
 fi
 
 

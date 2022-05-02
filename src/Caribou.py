@@ -1,9 +1,9 @@
-#!/usr/bin/python3
+#!/usr/bin python3
 
-from Caribou.data.build_data import build_load_save_data
-from Caribou.models.bacteria_extraction import bacteria_extraction
-from Caribou.models.classification import bacterial_classification
-from Caribou.outputs.outputs import outputs
+from data.build_data import build_load_save_data
+from models.bacteria_extraction import bacteria_extraction
+from models.classification import bacterial_classification
+from outputs.outputs import outputs
 
 import pandas as pd
 
@@ -12,9 +12,12 @@ from tensorflow.compat.v1.keras.backend import set_session
 from tensorflow.config import list_physical_devices
 
 import sys
-import configparser
 import os.path
+import argparse
+import configparser
+
 from os import makedirs
+from pathlib import Path
 
 __author__ = "Nicolas de Montigny"
 
@@ -30,16 +33,10 @@ if gpus:
 
 # Part 0 - Initialisation / extraction of parameters from config file
 ################################################################################
-def caribou(argv):
-
-    if len(argv) != 2:
-        print("Config file is missing ! ! !")
-        sys.exit()
-
-    print("Running {}".format(argv[0]), flush=True)
+def caribou(opt):
 
     # Get argument values from ini file
-    config_file = argv[1]
+    config_file = opt['config']
     config = configparser.ConfigParser(
             interpolation=configparser.ExtendedInterpolation())
 
@@ -67,8 +64,7 @@ def caribou(argv):
     n_cvJobs = config.getint("settings", "nb_cv_jobs", fallback = 1)
     verbose = config.getboolean("settings", "verbose", fallback = True)
     training_batch_size = config.getint("settings", "training_batch_size", fallback = 32)
-    binary_saving_host = config.getboolean("settings", "binary_save_host", fallback = True)
-    binary_saving_unclassified = config.getboolean("settings", "binary_save_unclassified", fallback = True)
+    training_epochs = config.getint("settings","neural_network_training_iterations", fallback = 100)
     classifThreshold = config.getfloat("settings", "classification_threshold", fallback = 0.8)
 
     # outputs
@@ -96,7 +92,7 @@ def caribou(argv):
         print("Created output folder")
         os.makedirs(outdir)
     elif not os.path.exists(outdir_path):
-        print("Cannot find output folder ! Exiting")
+        print("Cannot find where to create output folder ! Exiting")
         sys.exit()
 
     # settings
@@ -108,7 +104,7 @@ def caribou(argv):
         print("Invalid host extraction classifier ! Exiting")
         print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
         sys.exit()
-    if multi_classifier not in ["ridge","svm","mlr","mnb","lstm_attention","cnn","deepcnn"]:
+    if multi_classifier not in ["ridge","svm","mlr","mnb","lstm_attention","cnn","widecnn"]:
         print("Invalid multiclass bacterial classifier ! Exiting")
         print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
         sys.exit()
@@ -128,12 +124,8 @@ def caribou(argv):
         print("Invalid number of training batch size ! Please enter a positive integer ! Exiting")
         print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
         sys.exit()
-    if binary_saving_host not in [True, False, None]:
-        print("Invalid value for host data saving ! Please use boolean values ! Exiting")
-        print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
-        sys.exit()
-    if binary_saving_unclassified not in [True, False, None]:
-        print("Invalid value for unclassifiable sequences ! Please use boolean values ! Exiting")
+    if training_epochs <= 0:
+        print("Invalid number of iterations for training neural networks ! Please enter a value bigger than 0 ! Exiting")
         print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
         sys.exit()
     if not 0 < classifThreshold <= 1 or type(classifThreshold) != float:
@@ -160,7 +152,7 @@ def caribou(argv):
         binary_classifier = "onesvm"
 
     # Check batch_size
-    if multi_classifier in ["cnn","deepcnn"] and training_batch_size < 20:
+    if multi_classifier in ["cnn","widecnn"] and training_batch_size < 20:
         training_batch_size = 20
 
     # Folders creation for output
@@ -202,7 +194,7 @@ def caribou(argv):
 
     # Metagenome to analyse
     k_profile_metagenome = build_load_save_data(metagenome_seq_file,
-        "none",
+        None,
         outdirs["data_dir"],
         metagenome,
         host,
@@ -218,12 +210,11 @@ def caribou(argv):
             k_length,
             outdirs,
             database,
+            training_epochs,
             classifier = binary_classifier,
             batch_size = training_batch_size,
             verbose = verbose,
             cv = cv,
-            saving_host = binary_saving_host,
-            saving_unclassified = binary_saving_unclassified,
             n_jobs = n_cvJobs
             )
     else:
@@ -232,12 +223,11 @@ def caribou(argv):
             k_length,
             outdirs,
             database,
+            training_epochs,
             classifier = binary_classifier,
             batch_size = training_batch_size,
             verbose = verbose,
             cv = cv,
-            saving_host = binary_saving_host,
-            saving_unclassified = binary_saving_unclassified,
             n_jobs = n_cvJobs
             )
 
@@ -249,6 +239,7 @@ def caribou(argv):
         k_length,
         outdirs,
         database,
+        training_epochs,
         classifier = multi_classifier,
         batch_size = training_batch_size,
         threshold = classifThreshold,
@@ -275,4 +266,10 @@ def caribou(argv):
 
 
 if __name__ == "__main__":
-    caribou(sys.argv)
+    parser = argparse.ArgumentParser(description='This script runs the entire Caribou analysis Pipeline')
+    parser.add_argument('-c','--config', required=True, type=Path, help='PATH to a configuration file containing the choices made by the user. Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki ')
+    args = parser.parse_args()
+
+    opt = vars(args)
+
+    caribou(opt)

@@ -1,8 +1,8 @@
-#!/usr/bin/R
+#!/usr/bin R
 library(reticulate)
 
 .onLoad <- function(libname, pkgname) {
-  caribou = import("Caribou", delay_load = TRUE)
+  caribou = import("src", delay_load = TRUE)
 }
 
 caribou = function(config_file):

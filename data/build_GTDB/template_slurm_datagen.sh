@@ -18,6 +18,10 @@ User need only to change paths to their own and change path to other scripts if 
 If there is no host to extract sequences and classes from, simply comment the lines for the host
 """
 
+# To download the GTDB latest release, uncomment the folloowing line and execute it in the desired folder on a unix command line interface before executing the rest of the script
+#wget https://data.gtdb.ecogenomic.org/releases/latest/genomic_files_reps/gtdb_genomes_reps.tar.gz
+#tar -xf gtdb_genomes_reps*.tar.gz
+
 FASTA_DIR_BACT=[path/to/directory/containing/subdirs/or/fastas/to/merge/for/bacterias]
 
 LIST_FILES_BACT=[path/to/file/containing/path/to/files/to/be/merged/for/bacterias]
