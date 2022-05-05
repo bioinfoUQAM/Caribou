@@ -10,4 +10,5 @@ scipy
 tables
 tensorflow
 keras
-vaex-core
+vaex
+diskcache
