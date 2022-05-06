@@ -11,7 +11,7 @@ scipy
 tables
 tensorflow
 keras
-vaex[core]
-vaex[ml]
-vaex[hdf5]
+vaex-core
+vaex-ml
+vaex-hdf5
 diskcache
