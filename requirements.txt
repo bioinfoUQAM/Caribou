@@ -1,5 +1,6 @@
 setuptools
 wheel
+cargo
 Bio
 h5py
 matplotlib
@@ -10,5 +11,7 @@ scipy
 tables
 tensorflow
 keras
-vaex
+vaex[core]
+vaex[ml]
+vaex[hdf5]
 diskcache
