@@ -53,9 +53,9 @@ def get_abundances(data):
             abundances[taxa] = {}
             for cls in df.unique('classes'):
                 if cls in abundances[taxa]:
-                    abundances[taxa][class] += 1
+                    abundances[taxa][cls] += 1
                 else:
-                    abundances[taxa][class] = 1
+                    abundances[taxa][cls] = 1
 
     return abundances, order
 
@@ -209,11 +209,10 @@ def out_fasta(classified_data, order, fasta_file, fasta_outdir):
     for taxa in list_taxa:
         taxa_dir = os.path.join(fasta_outdir,taxa)
         df = vaex.open(classified_data[taxa]['profile'])
-        classes = df.unique('classes')
-        for class in classes:
-            outfile_class = os.path.join(taxa_dir,'{}.fa.gz'.format(class))
-            df_class = df[df.classes.str.match(class)]
-            ids = list(df_class.id.values)
-            with gzip.open(outfile_class, 'w') as handle:
+        for cls in df.unique('classes'):
+            outfile_cls = os.path.join(taxa_dir,'{}.fa.gz'.format(cls))
+            df_cls = df[df.classes.str.match(cls)]
+            ids = list(df_cls.id.values)
+            with gzip.open(outfile_cls, 'w') as handle:
                 for id in ids:
                     SeqIO.write(records[id], handle, 'fasta')
