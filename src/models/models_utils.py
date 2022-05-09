@@ -221,7 +221,7 @@ def fit_model_sk(clf, df, cls, batch_size, shuffle, clf_file, predict_type):
                                                  batch_size = batch_size,
                                                  num_epochs = training_epochs,
                                                  shuffle = shuffle,
-                                                 prediction_type = predict_type
+                                                 prediction_type = predict_type,
                                                  prediction_name = 'predicted_classes',
                                                  partial_fit_kwargs = {'classes':cls})
     model.fit(df = df)
