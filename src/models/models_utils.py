@@ -184,7 +184,7 @@ def fit_model(df, batch_size, classifier, clf, training_epochs, shuffle = True, 
         df_train, df_valid = df.split_random([0.8, 0.2], random_state=42)
         fit_model_keras(clf, df_train, df_valid, training_epochs, clf_file)
 
-def model_predict(df, clf_file classifier, threshold = 0.8):
+def model_predict(df, clf_file, classifier, threshold = 0.8):
     df.state_load(clf_file)
 
     if classifier in ['attention','lstm','deeplstm']:
