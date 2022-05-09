@@ -204,7 +204,7 @@ def out_fasta(classified_data, order, fasta_file, fasta_outdir):
         with open(fasta_file, 'rt') as handle:
             records = SeqIO.index(handle, 'fasta')
 
-    list_taxa = [order[i] for i in range(len(order)-1, -1, -1))]
+    list_taxa = [order[i] for i in range(len(order)-1, -1, -1)]
     list_taxa.remove('unclassified')
     for taxa in list_taxa:
         taxa_dir = os.path.join(fasta_outdir,taxa)
