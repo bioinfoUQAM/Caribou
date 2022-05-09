@@ -1,22 +1,22 @@
 import numpy as np
 import pandas as pd
 
-from copy import copy
 from Bio import SeqIO
-from subprocess import run
+from copy import copy
 
 import os
 import vaex
 import gzip
 import pickle
 
+from subprocess import run
 from utils import load_Xy_data
 
 __author__ = 'Nicolas de Montigny'
 
-__all__ = ['outputs','get_abundances','out_abundances','abundance_table','out_summary','out_kronagram','create_krona_file','out_report','out_fasta']
+__all__ = ['to_user','get_abundances','out_abundances','abundance_table','out_summary','out_kronagram','create_krona_file','out_report','out_fasta']
 
-def outputs(database_kmers, results_dir, k, classifier, dataset, host, classified_data, seq_file, input_fasta_file, abundance_stats = True, kronagram = True, full_report = True, extract_fasta = True):
+def to_user(database_kmers, results_dir, k, classifier, dataset, host, classified_data, seq_file, input_fasta_file, abundance_stats = True, kronagram = True, full_report = True, extract_fasta = True):
     abund_file = '{}abundance_K{}_{}_{}.csv'.format(results_dir, k, classifier, dataset)
     summary_file = '{}summary_K{}_{}_{}.csv'.format(results_dir, k, classifier, dataset)
     krona_file = '{}kronagram_K{}_{}_{}.csv'.format(results_dir, k, classifier, dataset)

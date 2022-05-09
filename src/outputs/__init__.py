@@ -13,4 +13,4 @@
 
 __author__ = "Nicolas de Montigny"
 
-__all__ = ['outputs','KronaTools']
+__all__ = ['out','KronaTools']
