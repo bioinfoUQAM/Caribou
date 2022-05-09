@@ -51,7 +51,7 @@ def get_abundances(data):
             abundances[taxa] = len(df)
         else:
             abundances[taxa] = {}
-            for class in df.unique('classes'):
+            for class in list(df.unique('classes')):
                 if class in abundances[taxa]:
                     abundances[taxa][class] += 1
                 else:
