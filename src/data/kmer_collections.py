@@ -89,15 +89,14 @@ def compute_seen_kmers_of_sequence(kmc_path, k, dir_path, ind, file):
     cmd_transform = os.path.join(kmc_path,"kmc_tools transform {} dump {}".format(os.path.join(tmp_folder, str(ind)), os.path.join(dir_path, "{}.txt".format(ind))))
     run(cmd_transform, shell = True, capture_output=True)
 
-    try:
-        # Transpose kmers profile with pandas
-        tmp_df = pd.read_table(os.path.join(dir_path,"{}.txt".format(ind)), sep = '\t', header = None, names = ['id', str(id)])
-        tmp_df.T.to_csv(os.path.join(dir_path,"{}.txt".format(ind)), header = False)
+    # Transpose kmers profile with pandas
+    tmp_df = pd.read_table(os.path.join(dir_path,"{}.txt".format(ind)), sep = '\t', header = None, names = ['id', str(id)])
+    tmp_df.T.to_csv(os.path.join(dir_path,"{}.txt".format(ind)), header = False)
 
-        # Convert kmers profile csv to vaex hdf5
-        tmp_df = vaex.from_csv(os.path.join(dir_path,"{}.txt".format(ind)), convert = True)
-    except:
-        print("No k-mers to extract in sequence {}".format(id))
+    # Convert kmers profile csv to vaex hdf5
+    tmp_df = vaex.from_csv(os.path.join(dir_path,"{}.txt".format(ind)), convert = True)
+    # except:
+        # print("No k-mers to extract in sequence {}".format(id))
 
 def compute_given_kmers_of_sequence(kmers_list, kmc_path, k, dir_path, ind, file):
     # Make tmp folder per sequence
