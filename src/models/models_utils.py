@@ -3,20 +3,18 @@ import numpy as np
 import tables as tb
 import matplotlib.pyplot as plt
 
-import os
-import shutil
-import glob
 import re
+import os
 import vaex
+import glob
+import shutil
+import warnings
 
 from sklearn.base import clone
-
 from keras.callbacks import EarlyStopping
-
 from tensorflow.keras.models import clone_model
-
 from joblib import Parallel, delayed, parallel_backend
-import warnings
+
 
 __author__ = 'Nicolas de Montigny'
 

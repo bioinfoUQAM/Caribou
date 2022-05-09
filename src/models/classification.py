@@ -1,18 +1,15 @@
 import pandas as pd
 import numpy as np
 
-import sys
 import os
+import sys
 import vaex
-
-from sklearn.linear_model import SGDClassifier
-from sklearn.naive_bayes import MultinomialNB
 
 from utils import *
 from models.models_utils import *
 from models.build_neural_networks import *
-
-from joblib import load
+from sklearn.naive_bayes import MultinomialNB
+from sklearn.linear_model import SGDClassifier
 
 __author__ = 'Nicolas de Montigny'
 

@@ -1,14 +1,13 @@
 import os
+import vaex
 import warnings
 
-from subprocess import run
 from shutil import rmtree
-
+from subprocess import run
 from joblib import Parallel, delayed, parallel_backend
 
 import numpy as np
 import pandas as pd
-import vaex
 
 __author__ = ['Amine Remita', 'Nicolas de Montigny']
 

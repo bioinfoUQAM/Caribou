@@ -1,9 +1,8 @@
+from utils import load_Xy_data, save_Xy_data
 from data.seq_collections import SeqCollection
 from data.kmer_collections import build_kmers_Xy_data, build_kmers_X_data
-from utils import load_Xy_data, save_Xy_data
 
 import os
-
 import pickle
 
 __author__ = "Nicolas de Montigny"

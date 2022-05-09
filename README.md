@@ -13,7 +13,6 @@ The Caribou analysis pipeline is packed with executables for all dependencies th
 - [faSplit](https://github.com/ucscGenomeBrowser/kent/blob/8b379e58f89d4a779e768f8c41b042bda714d101/src/utils/faSplit/faSplit.c)
 - [KMC](https://github.com/refresh-bio/KMC)
 - [KronaTools](https://github.com/marbl/Krona/tree/master/KronaTools)
-- [A RAPIDS container](https://rapids.ai/index.html)
 
 ### [Optional] GPU acceleration
 #### GPU setup
@@ -33,6 +32,25 @@ Should the user want to use this environment, this can be done easily through [S
 ```
 singularity shell --nv -B a/folder/containing/data/to/include/in/the/environment path/to/Caribou/Caribou/supplement/Caribou.sif
 ```
+
+### [Optional] Containers
+Containers with the Caribou package and all dependencies already installed can be found in the folder `Caribou/containers`
+It is recommended to execute the Caribou pipeline inside a container to ease usage and reduce the probability of getting bugs while executing / installing.
+
+#### Docker
+[Docker](https://www.docker.com/) is a container virtual environment that can be run on any desktop or cloud.
+It can be installed on any system following the [instructions provided in the Docker documentation](https://www.docker.com/get-started/).
+
+#### Singularity / Apptainer
+[Singularity / Apptainer](https://apptainer.org/docs/user/main/index.html) is an HPC optimized container system and should be used instead of Docker if the user wants to use a container on an HPC cluster.
+It is often already installed on HPC clusters, but should the user need to install it, [instructions can be found here.](https://apptainer.org/docs/user/main/quick_start.html)
+
+Afterwards, using the environment can be done by two ways :
+- Shell : Use the environment in a shell interface and run commands as described later in this document.
+```
+singularity shell --nv -B a/folder/containing/data/to/bind/in/the/environment path/to/Caribou/containers/Caribou_singularity.sif
+```
+- Exec : Execute instructions scripts when using the container for production on a compute cluster managed by schedulers (ex: Slurm, Torque, PBS, etc.). Instructions for usage of the exec command are provided in the [documentation.](https://apptainer.org/docs/user/main/cli/apptainer_exec.html) and applied example on Compute Canada clusters using Slurm Workload Manager can be found on their [wiki.](https://docs.computecanada.ca/wiki/Singularity#Running_a_single_command). Usage may differ slightly depending on the HPC clusters and Workload Managers used.
 
 ### [Optional] Python virtual environment
 It is recommended to use the analysis pipeline in a virtual environment to be sure that no other installed package can interfere. \

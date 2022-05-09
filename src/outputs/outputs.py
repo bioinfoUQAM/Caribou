@@ -1,15 +1,14 @@
-
 import numpy as np
 import pandas as pd
 
-from subprocess import run
 from copy import copy
 from Bio import SeqIO
+from subprocess import run
 
-import pickle
-import gzip
-import vaex
 import os
+import vaex
+import gzip
+import pickle
 
 from utils import load_Xy_data
 

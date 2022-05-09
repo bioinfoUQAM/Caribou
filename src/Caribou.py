@@ -5,18 +5,15 @@ from models.bacteria_extraction import bacteria_extraction
 from models.classification import bacterial_classification
 from outputs.outputs import outputs
 
-import pandas as pd
-
 from tensorflow.compat.v1 import ConfigProto, Session
 from tensorflow.compat.v1.keras.backend import set_session
 from tensorflow.config import list_physical_devices
 
+import os
 import sys
-import os.path
 import argparse
 import configparser
 
-from os import makedirs
 from pathlib import Path
 
 __author__ = 'Nicolas de Montigny'
@@ -166,14 +163,14 @@ def caribou(opt):
     outdirs['data_dir'] = os.path.join(outdirs['main_outdir'], 'data/')
     outdirs['models_dir'] = os.path.join(outdirs['main_outdir'], 'models/')
     outdirs['results_dir'] = os.path.join(outdirs['main_outdir'], 'results/')
-    makedirs(outdirs['main_outdir'], mode=0o700, exist_ok=True)
-    makedirs(outdirs['data_dir'], mode=0o700, exist_ok=True)
-    makedirs(outdirs['models_dir'], mode=0o700, exist_ok=True)
-    makedirs(outdirs['results_dir'], mode=0o700, exist_ok=True)
+    os.makedirs(outdirs['main_outdir'], mode=0o700, exist_ok=True)
+    os.makedirs(outdirs['data_dir'], mode=0o700, exist_ok=True)
+    os.makedirs(outdirs['models_dir'], mode=0o700, exist_ok=True)
+    os.makedirs(outdirs['results_dir'], mode=0o700, exist_ok=True)
 
     if cv:
         outdirs['plots_dir'] = os.path.join(outdirs['main_outdir'], 'plots/')
-        makedirs(outdirs['plots_dir'], mode=0o700, exist_ok=True)
+        os.makedirs(outdirs['plots_dir'], mode=0o700, exist_ok=True)
 
 # Part 1 - K-mers profile extraction
 ################################################################################

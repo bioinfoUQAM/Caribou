@@ -1,17 +1,14 @@
-import pandas as pd
 import numpy as np
+import pandas as pd
 
-import sys
 import os
+import sys
 import vaex
-
-from sklearn.linear_model import SGDOneClassSVM, SGDClassifier
 
 from utils import *
 from models.models_utils import *
 from models.build_neural_networks import *
-
-from joblib import load
+from sklearn.linear_model import SGDOneClassSVM, SGDClassifier
 
 __author__ = 'Nicolas de Montigny'
 

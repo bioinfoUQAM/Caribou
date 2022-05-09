@@ -2,13 +2,11 @@
 import pandas as pd
 import numpy as np
 import tables as tb
-import vaex
 
 import os
+import vaex
 
 from tensorflow.keras.utils import to_categorical
-
-from data.generators import iter_generator
 
 __author__ = "Nicolas de Montigny"
 

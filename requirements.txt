@@ -1,6 +1,5 @@
 setuptools
 wheel
-cargo
 Bio
 h5py
 matplotlib
@@ -8,7 +7,6 @@ numpy < 1.22, >= 1.18
 pandas
 sklearn
 scipy
-tables
 tensorflow
 keras
 vaex-core
