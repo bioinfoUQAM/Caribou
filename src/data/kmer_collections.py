@@ -63,19 +63,18 @@ def kmers_collection(seq_data, Xy_file, length, k, dataset, method = 'seen', kme
 
 def construct_data(Xy_file, dir_path):
 
-    with vaex.cache.disk():
-        df = vaex.open(os.path.join(dir_path,"*.txt.hdf5"))
-        colnames = list(df.columns)
-        colnames.remove('id')
-        # Fill NAs with 0
-        df = df.fillna(0, column_names = colnames)
-        # Remove columns filled with 0
-        for col in colnames:
-            if int(df.sum(col)) == 0:
-                df = df.drop(col)
-        df = df.extract()
-        # Save dataframe
-        df.export_hdf5(Xy_file)
+    df = vaex.open(os.path.join(dir_path,"*.txt.hdf5"))
+    colnames = list(df.columns)
+    colnames.remove('id')
+    # Fill NAs with 0
+    df = df.fillna(0, column_names = colnames)
+    # Remove columns filled with 0
+    for col in colnames:
+        if int(df.sum(col)) == 0:
+            df = df.drop(col)
+    df = df.extract()
+    # Save dataframe
+    df.export_hdf5(Xy_file)
 
 
 def compute_seen_kmers_of_sequence(kmc_path, k, dir_path, ind, file):
