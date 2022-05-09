@@ -87,9 +87,12 @@ def caribou(opt):
 
     # Verify path for saving
     outdir_path, outdir_folder = os.path.split(outdir)
+    print(outdir)
+    print(outdir_path)
+    print(outdir_folder)
     if not os.path.isdir(outdir_folder) and os.path.exists(outdir_path):
         print("Created output folder")
-        os.makedirs(outdir_folder)
+        os.makedirs(outdir)
     elif not os.path.exists(outdir_path):
         print("Cannot find where to create output folder ! Exiting")
         sys.exit()
