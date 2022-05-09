@@ -18,10 +18,9 @@ from joblib import Parallel, delayed, parallel_backend
 
 __author__ = 'Nicolas de Montigny'
 
-__all__ = ['scaleX','test_labels','cv_score','make_score_df','choose_delete_models_sk','choose_delete_models_keras','plot_figure',
+__all__ = ['scaleX','cv_score','make_score_df','choose_delete_model','plot_figure',
            'cross_validation_training','fit_predict_cv','fit_model','model_predict',
-           'fit_model_oneSVM_sk','fit_model_linear_sk','fit_model_multi_sk','predict_binary_sk','predict_multi_sk',
-           'fit_model_keras','predict_binary_keras','predict_multi_keras']
+           'fit_model_oneSVM_sk','fit_model_sk','fit_model_keras']
 
 # Ignore warnings to have a more comprehensible output on stdout
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
