@@ -11,6 +11,7 @@ from tensorflow.config import list_physical_devices
 
 import os
 import sys
+import vaex
 import argparse
 import configparser
 
@@ -196,12 +197,13 @@ def caribou(opt):
         )
 
     # Metagenome to analyse
+    df = vaex.open(k_profile_database['profile'])
     k_profile_metagenome = build_load_save_data(metagenome_seq_file,
         None,
         outdirs['data_dir'],
         metagenome,
         host,
-        kmers_list = k_profile_database['kmers_list']
+        kmers_list = list(df.columns)
     )
 
 # Part 2 - Binary classification of bacteria / host sequences

@@ -3,6 +3,7 @@ from data.seq_collections import SeqCollection
 from data.kmer_collections import build_kmers_Xy_data, build_kmers_X_data
 
 import os
+import vaex
 import pickle
 
 __author__ = "Nicolas de Montigny"
@@ -48,7 +49,7 @@ def build_load_save_data(file, hostfile, prefix, dataset, host, kmers_list=None,
         # Assign kmers_list to variable ater extracting database data
         if kmers_list is None:
             df = vaex.open(data['profile'])
-            kmers_list = values(df.columns)
+            kmers_list = list(df.columns)
 
         # Build Xy_data of host
         if isinstance(hostfile, tuple) and kmers_list is not None:

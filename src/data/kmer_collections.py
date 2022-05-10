@@ -64,7 +64,7 @@ def kmers_collection(seq_data, Xy_file, length, k, dataset, method = 'seen', kme
 
 def construct_data(Xy_file, dir_path):
 
-    df = vaex.open(os.path.join(dir_path,"*.txt.hdf5"))
+    df = vaex.open(os.path.join(dir_path,"*.csv"), convert = Xy_file)
     colnames = list(df.columns)
     colnames.remove('id')
     # Fill NAs with 0
@@ -92,10 +92,10 @@ def compute_seen_kmers_of_sequence(kmc_path, k, dir_path, ind, file):
 
     # Transpose kmers profile with pandas
     tmp_df = pd.read_table(os.path.join(dir_path,"{}.txt".format(ind)), sep = '\t', header = None, names = ['id', str(id)])
-    tmp_df.T.to_csv(os.path.join(dir_path,"{}.txt".format(ind)), header = False)
+    tmp_df.T.to_csv(os.path.join(dir_path,"{}.csv".format(ind)), header = False)
 
-    # Convert kmers profile csv to vaex hdf5
-    tmp_df = vaex.from_csv(os.path.join(dir_path,"{}.txt".format(ind)), convert = True)
+    rmtree(tmp_folder)
+    os.remove(os.path.join(dir_path,"{}.txt".format(ind)))
     # except:
         # print("No k-mers to extract in sequence {}".format(id))
 
@@ -121,9 +121,9 @@ def compute_given_kmers_of_sequence(kmers_list, kmc_path, k, dir_path, ind, file
             else:
                 df.at[id,kmer] = 0
 
-                df.to_csv(os.path.join(dir_path,"{}.txt".format(ind)), header = False, index_label = 'id')
-                # Convert kmers profile csv to vaex hdf5
-                tmp_df = vaex.from_csv(os.path.join(dir_path,"{}.txt".format(ind)), convert = True)
+                df.to_csv(os.path.join(dir_path,"{}.csv".format(ind)), header = False, index_label = 'id')
+        shutil.rmtree(tmp_folder)
+        os.remove(os.path.join(dir_path,"{}.txt".format(ind)))
     except:
         print("No k-mers to extract in sequence {}".format(id))
 
