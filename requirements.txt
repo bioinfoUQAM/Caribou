@@ -9,5 +9,7 @@ sklearn
 scipy
 tensorflow
 keras
-vaex
+vaex-core
+vaex-hdf5
+vaex-ml
 diskcache
