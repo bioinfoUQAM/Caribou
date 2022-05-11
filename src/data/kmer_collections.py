@@ -75,6 +75,7 @@ def construct_data(Xy_file, dir_path):
             df = df.drop(col)
     df = df.extract()
     # Save dataframe
+    os.remove(Xy_file)
     df.export_hdf5(Xy_file)
 
 
@@ -111,21 +112,21 @@ def compute_given_kmers_of_sequence(kmers_list, kmc_path, k, dir_path, ind, file
     cmd_transform = os.path.join(kmc_path,"kmc_tools transform {} dump {}".format(os.path.join(tmp_folder, str(ind)), os.path.join(dir_path, "{}.txt".format(ind))))
     run(cmd_transform, shell = True, capture_output=True)
 
-    try:
-        profile = pd.read_table(os.path.join(dir_path,"{}.txt".format(ind)), names = [id], index_col = 0, dtype = object).T
-        # Temp pandas df to write given kmers to file
-        df = pd.DataFrame(np.zeros((1,len(kmers_list))), columns = kmers_list, index = [id])
-        for kmer in kmers_list:
-            if kmer in profile.columns:
-                df.at[id,kmer] = profile.loc[id,kmer]
-            else:
-                df.at[id,kmer] = 0
+    profile = pd.read_table(os.path.join(dir_path,"{}.txt".format(ind)), sep = '\t', header = None, names = ['id', str(id)]).T
+    # Temp pandas df to write given kmers to file
+    df = pd.DataFrame(np.zeros((1,len(kmers_list))), columns = kmers_list, index = [id])
+    for kmer in kmers_list:
+        if kmer in profile.columns:
+            df.at[id,kmer] = profile.loc[id,kmer]
+        else:
+            df.at[id,kmer] = 0
 
-                df.to_csv(os.path.join(dir_path,"{}.csv".format(ind)), header = False, index_label = 'id')
-        shutil.rmtree(tmp_folder)
-        os.remove(os.path.join(dir_path,"{}.txt".format(ind)))
-    except:
-        print("No k-mers to extract in sequence {}".format(id))
+            df.to_csv(os.path.join(dir_path,"{}.csv".format(ind)), header = False, index_label = 'id')
+    rmtree(tmp_folder)
+    os.remove(os.path.join(dir_path,"{}.txt".format(ind)))
+
+    # except:
+        # print("No k-mers to extract in sequence {}".format(id))
 
 def compute_kmers(seq_data, method, kmers_list, k, dir_path, faSplit, kmc_path, Xy_file, dataset):
     file_list = []
