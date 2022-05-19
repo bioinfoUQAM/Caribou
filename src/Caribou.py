@@ -33,7 +33,7 @@ if gpus:
 ################################################################################
 def caribou(opt):
 
-    # Get argument values from ini file
+    # Get argument values from config file
     config_file = opt['config']
     config = configparser.ConfigParser(
             interpolation=configparser.ExtendedInterpolation())
@@ -273,7 +273,7 @@ def caribou(opt):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='This script runs the entire Caribou analysis Pipeline')
-    parser.add_argument('-c','--config', required=True, type=Path, help='PATH to a configuration file containing the choices made by the user. Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki ')
+    parser.add_argument('-c','--config', required=True, type=Path, help='PATH to a configuration file containing the choices made by the user. Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
     args = parser.parse_args()
 
     opt = vars(args)
