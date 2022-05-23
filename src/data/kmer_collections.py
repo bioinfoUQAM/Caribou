@@ -1,6 +1,5 @@
 import os
 import vaex
-
 import warnings
 
 from shutil import rmtree
@@ -64,7 +63,7 @@ def kmers_collection(seq_data, Xy_file, length, k, dataset, method = 'seen', kme
 
 def construct_data(Xy_file, dir_path):
 
-    df = vaex.open(os.path.join(dir_path,"*.csv"), convert = True)
+    df = vaex.open(os.path.join(dir_path,"*.csv.hdf5"), convert = Xy_file)
     colnames = list(df.columns)
     colnames.remove('id')
     # Fill NAs with 0
@@ -95,10 +94,11 @@ def compute_seen_kmers_of_sequence(kmc_path, k, dir_path, ind, file):
     tmp_df = pd.read_table(os.path.join(dir_path,"{}.txt".format(ind)), sep = '\t', header = None, names = ['id', str(id)])
     tmp_df.T.to_csv(os.path.join(dir_path,"{}.csv".format(ind)), header = False)
 
+    # Convert csv to vaex hdf5
+    tmp_df = vaex.open(os.path.join(dir_path,"{}.csv".format(ind)), convert = True)
+    # Delete temp dir and file
     rmtree(tmp_folder)
     os.remove(os.path.join(dir_path,"{}.txt".format(ind)))
-    # except:
-        # print("No k-mers to extract in sequence {}".format(id))
 
 def compute_given_kmers_of_sequence(kmers_list, kmc_path, k, dir_path, ind, file):
     # Make tmp folder per sequence
@@ -114,19 +114,20 @@ def compute_given_kmers_of_sequence(kmers_list, kmc_path, k, dir_path, ind, file
 
     profile = pd.read_table(os.path.join(dir_path,"{}.txt".format(ind)), sep = '\t', header = None, names = ['id', str(id)]).T
     # Temp pandas df to write given kmers to file
-    df = pd.DataFrame(np.zeros((1,len(kmers_list))), columns = kmers_list, index = [id])
+    tmp_df = pd.DataFrame(np.zeros((1,len(kmers_list))), columns = kmers_list, index = [id])
     for kmer in kmers_list:
         if kmer in profile.columns:
-            df.at[id,kmer] = profile.loc[id,kmer]
+            tmp_df.at[id,kmer] = profile.loc[id,kmer]
         else:
-            df.at[id,kmer] = 0
+            tmp_df.at[id,kmer] = 0
 
-            df.to_csv(os.path.join(dir_path,"{}.csv".format(ind)), header = False, index_label = 'id')
+    tmp_df.to_csv(os.path.join(dir_path,"{}.csv".format(ind)), header = False, index_label = 'id')
+
+    # Convert csv to vaex hdf5
+    tmp_df = vaex.open(os.path.join(dir_path,"{}.csv".format(ind)), convert = True)
+    # Delete temp dir and file
     rmtree(tmp_folder)
     os.remove(os.path.join(dir_path,"{}.txt".format(ind)))
-
-    # except:
-        # print("No k-mers to extract in sequence {}".format(id))
 
 def compute_kmers(seq_data, method, kmers_list, k, dir_path, faSplit, kmc_path, Xy_file, dataset):
     file_list = []
