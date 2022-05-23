@@ -63,7 +63,7 @@ def kmers_collection(seq_data, Xy_file, length, k, dataset, method = 'seen', kme
 
 def construct_data(Xy_file, dir_path):
 
-    df = vaex.open(os.path.join(dir_path,"*.csv.hdf5"), convert = Xy_file)
+    df = vaex.open(os.path.join(dir_path,"*.csv.hdf5"))
     colnames = list(df.columns)
     colnames.remove('id')
     # Fill NAs with 0
