@@ -6,7 +6,6 @@ channels:
   - pytorch
   - conda-forge
 dependencies:
-  - ca-certificates
   - setuptools
   - wheel
   - biopython

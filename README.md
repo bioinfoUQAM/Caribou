@@ -24,10 +24,10 @@ To install GPU dependencies on your machine if wanted, refer to following tutori
 - [GPU for tensorflow](https://www.tensorflow.org/install/gpu)
 
 ### [Optional] Containers
-Containers with the Caribou package and all dependencies already installed can be found in the folder `Caribou/containers`
-It is recommended to execute the Caribou pipeline inside a container to ease usage and reduce the probability of getting bugs while executing / installing.
+Containers with the Caribou package and all dependencies already installed can be found in the folder `Caribou/containers`.
+It is recommended to execute the Caribou pipeline inside a container to ease usage and reproductibility.
 
-The Caribou containers are modified versions of the [official Tensorflow container available on docker hub](https://hub.docker.com/r/tensorflow/tensorflow) and require to have the following dependencies installed:
+The Caribou containers are modified versions of Tensorflow containers and require to have the following dependencies installed prior to use:
 - [Docker](https://www.docker.com/) or [Singularity / Apptainer](https://apptainer.org/docs/user/main/index.html) depending on the version used.
 - [NVIDIA GPU Drivers](https://docs.nvidia.com/datacenter/tesla/tesla-installation-notes/index.html) which are platform specific.
 - [NVIDIA Container Toolkit](https://github.com/NVIDIA/nvidia-docker)
@@ -36,7 +36,9 @@ The Caribou containers are modified versions of the [official Tensorflow contain
 [Docker](https://www.docker.com/) is a container virtual environment that can be run on any desktop or cloud.
 It can be installed on any system following the [instructions provided in the Docker documentation](https://www.docker.com/get-started/).
 
-The Docker container must be imported from the tar archive included in this git before being able to use it.
+The Docker container is built on top of the [official Tensorflow container available on docker hub](https://hub.docker.com/r/tensorflow/tensorflow) with dependencies and Caribou installed in a python virtual environment.
+
+It must be imported from the tar archive included in this repo before being able to use it.
 Assuming that docker is already installed in command line :
 ```
 docker load path/to/Caribou/containers/caribou_docker.tar
@@ -55,6 +57,9 @@ docker run --gpus all -d caribou_docker  [command].py
 #### Singularity / Apptainer
 [Singularity / Apptainer](https://apptainer.org/docs/user/main/index.html) is an HPC optimized container system and should be used instead of Docker if the user wants to use a container on an HPC cluster.
 It is often already installed on HPC clusters, but should the user need to install it, [instructions can be found here.](https://apptainer.org/docs/user/main/quick_start.html)
+
+The Singularity / apptainer container is a [Tensorflow container optimised for HPC by NVIDIA](https://catalog.ngc.nvidia.com/orgs/nvidia/containers/tensorflow) with dependencies and Caribou installed in a python virtual environment.
+
 
 As with docker, the environment can be used in two ways :
 - Shell : Use the environment in a shell interface and run commands as described later in this document.

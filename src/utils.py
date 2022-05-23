@@ -1,7 +1,6 @@
 
 import pandas as pd
 import numpy as np
-import tables as tb
 
 import os
 import vaex
@@ -19,36 +18,8 @@ def load_Xy_data(Xy_file):
             return f['data'].tolist()
 
 # Save data to file
-def save_Xy_data(data, Xy_file):
-    if type(data) == pd.core.frame.DataFrame:
-        with tb.open_file(Xy_file, "a") as handle:
-            array = handle.create_carray("/", "data", obj = np.array(data,dtype=np.float32))
-    elif type(data) == dict:
-        np.savez(Xy_file, data=data)
-
-def save_predicted_kmers(positions_list, y, kmers_list, ids, infile, outfile, classif):
-    data = None
-    if classif == "binary":
-        generator = iter_generator(infile, y, 1, kmers_list, ids, classif, cv = 0, shuffle = False, training = False, positions_list = positions_list)
-        with tb.open_file(outfile, "w") as handle:
-            for X, y in generator.iterator:
-                df = np.array(X, dtype = "float32")
-                if data is None:
-                    data = handle.create_earray("/", "data", obj = df)
-                else:
-                    data.append(df)
-        generator.handle.close()
-    elif classif == "multi":
-        generator = iter_generator(infile, y, 1, kmers_list, ids, classif, cv = 0, shuffle = False, training = False, positions_list = positions_list)
-        for i, (X, y) in enumerate(generator.iterator):
-            with pd.HDFStore(outfile) as data:
-                X.fillna(0, axis = 0, inplace = True)
-                X = X.astype('int64')
-                if not os.path.isfile(outfile):
-                    X.to_hdf(data, "data", format = "table", mode = "w", min_itemsize = len(max(ids, key = len)))
-                else:
-                    X.to_hdf(data, "data", format = "table", mode = "a", append = True)
-        generator.handle.close()
+def save_Xy_data(df, Xy_file):
+    np.savez(Xy_file, data = df)
 
 def merge_database_host(database_data, host_data):
     merged_data = dict()
