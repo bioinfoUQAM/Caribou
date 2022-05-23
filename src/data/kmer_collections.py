@@ -63,7 +63,9 @@ def kmers_collection(seq_data, Xy_file, length, k, dataset, method = 'seen', kme
 
 def construct_data(Xy_file, dir_path):
 
-    df = vaex.open(os.path.join(dir_path,"*.csv.hdf5"))
+    with vaex.cache.memory_infinite(clear = True):
+        df = vaex.open(os.path.join(dir_path,"*.csv"), progress = True, convert = Xy_file)
+
     colnames = list(df.columns)
     colnames.remove('id')
     # Fill NAs with 0
@@ -95,7 +97,7 @@ def compute_seen_kmers_of_sequence(kmc_path, k, dir_path, ind, file):
     tmp_df.T.to_csv(os.path.join(dir_path,"{}.csv".format(ind)), header = False)
 
     # Convert csv to vaex hdf5
-    tmp_df = vaex.open(os.path.join(dir_path,"{}.csv".format(ind)), convert = True)
+    # tmp_df = vaex.open(os.path.join(dir_path,"{}.csv".format(ind)), convert = True)
     # Delete temp dir and file
     rmtree(tmp_folder)
     os.remove(os.path.join(dir_path,"{}.txt".format(ind)))
