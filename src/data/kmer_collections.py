@@ -1,5 +1,6 @@
 import os
 import vaex
+import glob
 import warnings
 
 from shutil import rmtree
@@ -62,9 +63,19 @@ def kmers_collection(seq_data, Xy_file, length, k, dataset, method = 'seen', kme
     rmtree(dir_path)
 
 def construct_data(Xy_file, dir_path):
+    df = None
+    files_list = glob.glob(os.path.join(dir_path, '*.csv'))
 
     with vaex.cache.memory_infinite(clear = True):
-        df = vaex.open(os.path.join(dir_path,"*.csv"), progress = True, convert = Xy_file)
+        for i, file in enumerate(files_list):
+            print('File # : ',i)
+            if i == 0:
+                df = vaex.open(file, convert = True)
+            else:
+                df_tmp = vaex.open(file, convert = True)
+                df.concat(df_tmp, resolver = 'flexible')
+        print(df)
+        # df = vaex.open(os.path.join(dir_path,"*.csv"))
 
     colnames = list(df.columns)
     colnames.remove('id')
