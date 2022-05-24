@@ -63,19 +63,8 @@ def kmers_collection(seq_data, Xy_file, length, k, dataset, method = 'seen', kme
     rmtree(dir_path)
 
 def construct_data(Xy_file, dir_path):
-    df = None
-    files_list = glob.glob(os.path.join(dir_path, '*.csv'))
 
-    with vaex.cache.memory_infinite(clear = True):
-        for i, file in enumerate(files_list):
-            print('File # : ',i)
-            if i == 0:
-                df = vaex.open(file, convert = True)
-            else:
-                df_tmp = vaex.open(file, convert = True)
-                df.concat(df_tmp, resolver = 'flexible')
-        print(df)
-        # df = vaex.open(os.path.join(dir_path,"*.csv"))
+    df = vaex.open(os.path.join(dir_path,"*.csv"), convert = True, progress = True)
 
     colnames = list(df.columns)
     colnames.remove('id')
@@ -89,7 +78,6 @@ def construct_data(Xy_file, dir_path):
     # Save dataframe
     os.remove(Xy_file)
     df.export_hdf5(Xy_file)
-
 
 def compute_seen_kmers_of_sequence(kmc_path, k, dir_path, ind, file):
     # Make tmp folder per sequence
