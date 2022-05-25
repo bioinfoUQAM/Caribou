@@ -1,14 +1,14 @@
 import re
 import copy
-import random
 import gzip
-import tables as tb
-import pandas as pd
+import random
 from os.path import splitext, dirname, isfile
 from collections import UserList, defaultdict
 
 from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
+
+import pandas as pd
 
 # From mlr_kgenomvir
 __author__ = ['Amine Remita', 'Nicolas de Montigny']

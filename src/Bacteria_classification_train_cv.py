@@ -3,17 +3,14 @@
 from models.classification import bacterial_classification
 from utils import load_Xy_data
 
-import pandas as pd
-
 from tensorflow.compat.v1 import ConfigProto, Session
 from tensorflow.compat.v1.keras.backend import set_session
 from tensorflow.config import list_physical_devices
 
+import os
 import sys
-import os.path
 import argparse
 
-from os import makedirs
 from pathlib import Path
 
 __author__ = "Nicolas de Montigny"
@@ -79,8 +76,8 @@ def bacteria_classification_train_cv(opt):
     outdirs["main_outdir"] = outdir
     outdirs["data_dir"] = os.path.join(outdirs["main_outdir"], "data/")
     outdirs["models_dir"] = os.path.join(outdirs["main_outdir"], "models/")
-    makedirs(outdirs["main_outdir"], mode=0o700, exist_ok=True)
-    makedirs(outdirs["models_dir"], mode=0o700, exist_ok=True)
+    os.makedirs(outdirs["main_outdir"], mode=0o700, exist_ok=True)
+    os.makedirs(outdirs["models_dir"], mode=0o700, exist_ok=True)
 
 # Training and cross-validation of models for classification of bacterias
 ################################################################################

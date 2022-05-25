@@ -15,6 +15,4 @@ __author__ = "Nicolas de Montigny"
 __date__   = "20210601"
 __version__ = "1.0.0"
 
-__all__ = ['data','environments','models','outputs','Caribou','utils','supplement','K-mers_extract']
-
-__import__("pkg_resources").declare_namespace("Caribou")
+__all__ = ['data','environments','models','outputs','Caribou','utils','supplement','K-mers_extract_dataset','Bacteria_classification_train_cv','Bacteria_extraction_train_cv']

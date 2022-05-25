@@ -1,12 +1,9 @@
+from utils import load_Xy_data, save_Xy_data
 from data.seq_collections import SeqCollection
 from data.kmer_collections import build_kmers_Xy_data, build_kmers_X_data
-from utils import load_Xy_data, save_Xy_data
 
-import os.path
-
-import numpy as np
-import pandas as pd
-
+import os
+import vaex
 import pickle
 
 __author__ = "Nicolas de Montigny"
@@ -50,8 +47,9 @@ def build_load_save_data(file, hostfile, prefix, dataset, host, kmers_list=None,
             save_Xy_data(data, data_file)
 
         # Assign kmers_list to variable ater extracting database data
-        if kmers_list is None and isinstance(data['kmers_list'], list):
-            kmers_list = data['kmers_list']
+        if kmers_list is None:
+            df = vaex.open(data['profile'])
+            kmers_list = list(df.columns)
 
         # Build Xy_data of host
         if isinstance(hostfile, tuple) and kmers_list is not None:
@@ -88,16 +86,14 @@ def build_load_save_data(file, hostfile, prefix, dataset, host, kmers_list=None,
 def build_Xy_data(seq_data, k, Xy_file, dataset, length = 0, kmers_list = None):
     data = dict()
 
-    X, y, kmers = build_kmers_Xy_data(seq_data, k, Xy_file,
-                                      dataset,
-                                      length = length,
-                                      kmers_list = kmers_list)
+    classes = build_kmers_Xy_data(seq_data, k, Xy_file,
+                                  dataset,
+                                  length = length,
+                                  kmers_list = kmers_list)
 
     # Data in a dictionnary
-    data["X"] = str(Xy_file)
-    data["y"] = y
-    data["kmers_list"] = kmers
-    data["ids"] = seq_data.ids
+    data["profile"] = str(Xy_file) # profils kmers
+    data["classes"] = classes # class labels
     data["taxas"] = seq_data.taxas
 
     return data
@@ -106,17 +102,14 @@ def build_Xy_data(seq_data, k, Xy_file, dataset, length = 0, kmers_list = None):
 def build_X_data(seq_data, k, X_file, kmers_list, dataset, length = 0):
     data = dict()
 
-    X, kmers, ids = build_kmers_X_data(seq_data,
-                                       X_file,
-                                       kmers_list,
-                                       k,
-                                       dataset,
-                                       length = length)
+    build_kmers_X_data(seq_data,
+                       X_file,
+                       kmers_list,
+                       k,
+                       dataset,
+                       length = length)
 
     # Data in a dictionnary
-    data["X"] = str(X_file)
-    data["kmers_list"] = kmers
-    data["ids"] = ids
-    data["taxas"] = seq_data.taxas
+    data["profile"] = str(X_file)
 
     return data

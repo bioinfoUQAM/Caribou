@@ -3,11 +3,13 @@ wheel
 Bio
 h5py
 matplotlib
-numpy < 1.22, >= 1.18
+numpy
 pandas
 sklearn
 scipy
-tables
 tensorflow
 keras
 vaex-core
+vaex-hdf5
+vaex-ml
+diskcache
