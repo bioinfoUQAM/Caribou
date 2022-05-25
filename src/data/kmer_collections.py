@@ -63,8 +63,28 @@ def kmers_collection(seq_data, Xy_file, length, k, dataset, method = 'seen', kme
     rmtree(dir_path)
 
 def construct_data(Xy_file, dir_path):
+    df = None
 
-    df = vaex.open(os.path.join(dir_path,"*.csv"), convert = True, progress = True)
+    # Get all files in a list
+    files_list = glob.glob(os.path.join(dir_path,'*.csv.hdf5'))
+    nb_files = len(files_list)
+
+    if nb_files < 1024:
+        # If less than 1024 files -> open them all at ounce
+        df = vaex.open_many(files_list)
+    else:
+        # Read + concat files in batch of 1024
+        length_last_round = nb_files % 1024
+        last_pos = 0
+        while last_pos + length_last_round < nb_files:
+            subset = files_list[last_pos:last_pos + 1024]
+            if df is None:
+                df = vaex.open_many(subset)
+            else:
+                df = df.concat(vaex.open_many(subset), resolver = 'flexible')
+                last_pos = last_pos + 1024
+        subset = files_list[last_pos:last_pos + length_last_round]
+        df = df.concat(vaex.open_many(subset), resolver = 'flexible')
 
     colnames = list(df.columns)
     colnames.remove('id')
@@ -76,7 +96,6 @@ def construct_data(Xy_file, dir_path):
             df = df.drop(col)
     df = df.extract()
     # Save dataframe
-    os.remove(Xy_file)
     df.export_hdf5(Xy_file)
 
 def compute_seen_kmers_of_sequence(kmc_path, k, dir_path, ind, file):
@@ -85,7 +104,7 @@ def compute_seen_kmers_of_sequence(kmc_path, k, dir_path, ind, file):
     id = os.path.splitext(os.path.basename(file))[0]
     os.mkdir(tmp_folder)
     # Count k-mers with KMC
-    cmd_count = os.path.join(kmc_path,"kmc -k{} -fm -ci4 -cs1000000 -m10 -hp {} {} {}".format(k, file, os.path.join(tmp_folder, str(ind)), tmp_folder))
+    cmd_count = os.path.join(kmc_path,"kmc -k{} -fm -ci4 -cs1000000000 -m10 -hp {} {} {}".format(k, file, os.path.join(tmp_folder, str(ind)), tmp_folder))
     run(cmd_count, shell = True, capture_output=True)
     # Transform k-mers db with KMC
     cmd_transform = os.path.join(kmc_path,"kmc_tools transform {} dump {}".format(os.path.join(tmp_folder, str(ind)), os.path.join(dir_path, "{}.txt".format(ind))))
@@ -96,7 +115,8 @@ def compute_seen_kmers_of_sequence(kmc_path, k, dir_path, ind, file):
     tmp_df.T.to_csv(os.path.join(dir_path,"{}.csv".format(ind)), header = False)
 
     # Convert csv to vaex hdf5
-    # tmp_df = vaex.open(os.path.join(dir_path,"{}.csv".format(ind)), convert = True)
+    tmp_df = vaex.open(os.path.join(dir_path,"{}.csv".format(ind)), convert = True)
+    tmp_df.close()
     # Delete temp dir and file
     rmtree(tmp_folder)
     os.remove(os.path.join(dir_path,"{}.txt".format(ind)))
@@ -107,7 +127,7 @@ def compute_given_kmers_of_sequence(kmers_list, kmc_path, k, dir_path, ind, file
     id = os.path.splitext(os.path.basename(file))[0]
     os.mkdir(tmp_folder)
     # Count k-mers with KMC
-    cmd_count = os.path.join(kmc_path,"kmc -k{} -fm -ci4 -cs1000000 -m10 -hp {} {} {}".format(k, file, os.path.join(tmp_folder, str(ind)), tmp_folder))
+    cmd_count = os.path.join(kmc_path,"kmc -k{} -fm -ci4 -cs1000000000 -m10 -hp {} {} {}".format(k, file, os.path.join(tmp_folder, str(ind)), tmp_folder))
     run(cmd_count, shell = True, capture_output=True)
     # Transform k-mers db with KMC
     cmd_transform = os.path.join(kmc_path,"kmc_tools transform {} dump {}".format(os.path.join(tmp_folder, str(ind)), os.path.join(dir_path, "{}.txt".format(ind))))
@@ -126,6 +146,7 @@ def compute_given_kmers_of_sequence(kmers_list, kmc_path, k, dir_path, ind, file
 
     # Convert csv to vaex hdf5
     tmp_df = vaex.open(os.path.join(dir_path,"{}.csv".format(ind)), convert = True)
+    tmpf_df.close()
     # Delete temp dir and file
     rmtree(tmp_folder)
     os.remove(os.path.join(dir_path,"{}.txt".format(ind)))

@@ -102,7 +102,7 @@ def kmers_dataset(opt):
         kmers_list = list(df.columns)
         kmers_list.remove('id')
         with open(os.path.join(outdirs["data_dir"],'kmers_list.txt'),'w') as handle:
-            handle.writelines("%s\n" % item for item in k_profile_database['kmers_list'])
+            handle.writelines("%s\n" % item for item in kmers_list)
 
         print("Caribou finished extracting k-mers of {}".format(opt['dataset_name']))
 
@@ -136,7 +136,7 @@ def kmers_dataset(opt):
         kmers_list = list(df.columns)
         kmers_list.remove('id')
         with open(os.path.join(outdirs["data_dir"],'kmers_list.txt'),'w') as handle:
-            handle.writelines("%s\n" % item for item in k_profile_database['kmers_list'])
+            handle.writelines("%s\n" % item for item in kmers_list)
 
         print("Caribou finished extracting k-mers of {} and {}".format(opt['dataset_name'],opt['host_name']))
 
