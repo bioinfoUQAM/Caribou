@@ -70,13 +70,13 @@ def construct_data(Xy_file, dir_path):
 
     # Convert all csv to vaex hdf5
     for file in files_list:
-        vaex.open(file, convert = True, progress = True)
+        vaex.open(file, convert = True)
 
     # Remake files_list with updated names
     files_list = glob.glob(os.path.join(dir_path,'*.csv.hdf5'))
     nb_files = len(files_list)
 
-    if nb_files < 1024:
+    if nb_files <= 1024:
         # If less than 1024 files -> open them all at ounce
         df = vaex.open_many(files_list)
     else:
