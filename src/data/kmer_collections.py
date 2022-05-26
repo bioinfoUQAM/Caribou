@@ -66,6 +66,13 @@ def construct_data(Xy_file, dir_path):
     df = None
 
     # Get all files in a list
+    files_list = glob.glob(os.path.join(dir_path,'*.csv'))
+
+    # Convert all csv to vaex hdf5
+    for file in files_list:
+        vaex.open(file, convert = True, progress = True)
+
+    # Remake files_list with updated names
     files_list = glob.glob(os.path.join(dir_path,'*.csv.hdf5'))
     nb_files = len(files_list)
 
@@ -114,9 +121,6 @@ def compute_seen_kmers_of_sequence(kmc_path, k, dir_path, ind, file):
     tmp_df = pd.read_table(os.path.join(dir_path,"{}.txt".format(ind)), sep = '\t', header = None, names = ['id', str(id)])
     tmp_df.T.to_csv(os.path.join(dir_path,"{}.csv".format(ind)), header = False)
 
-    # Convert csv to vaex hdf5
-    tmp_df = vaex.open(os.path.join(dir_path,"{}.csv".format(ind)), convert = True)
-    tmp_df.close()
     # Delete temp dir and file
     rmtree(tmp_folder)
     os.remove(os.path.join(dir_path,"{}.txt".format(ind)))
@@ -144,9 +148,6 @@ def compute_given_kmers_of_sequence(kmers_list, kmc_path, k, dir_path, ind, file
 
     tmp_df.to_csv(os.path.join(dir_path,"{}.csv".format(ind)), header = False, index_label = 'id')
 
-    # Convert csv to vaex hdf5
-    tmp_df = vaex.open(os.path.join(dir_path,"{}.csv".format(ind)), convert = True)
-    tmpf_df.close()
     # Delete temp dir and file
     rmtree(tmp_folder)
     os.remove(os.path.join(dir_path,"{}.txt".format(ind)))
