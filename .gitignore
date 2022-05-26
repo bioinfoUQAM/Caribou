@@ -1,4 +1,6 @@
+__pycache__/
 Caribou/__pycache__/
-Caribou/Caribou/data/__pycache__
-Caribou/Caribou/models/__pycache__
-Caribou/Caribou/simulation/__pycache__
+Caribou/src/data/__pycache__/
+Caribou/src/models/__pycache__/
+Caribou/src/outputs/__pycache__/
+Caribou/src/supplement/__pycache__/
