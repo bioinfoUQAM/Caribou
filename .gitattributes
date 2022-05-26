@@ -1,10 +1,6 @@
 ## Github language integration
 
-# Kronatools
-Caribou/outputs/KronaTools/** linguist-vendored
-
-# KMC
-Caribou/data/KMC/** linguist-vendored
-
-# faSplit
-Caribou/data/faSplit -linguist-vendored
+*.js linguist-detectable=false
+*.pl linguist-detectable=false
+*.pm linguist-detectable=false
+*.h linguist-detectable=false
