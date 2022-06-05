@@ -8,7 +8,7 @@ from collections import UserList, defaultdict
 from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
 
-import pandas as pd
+import modin.pandas as pd
 
 # From mlr_kgenomvir
 __author__ = ['Amine Remita', 'Nicolas de Montigny']

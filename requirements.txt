@@ -9,7 +9,5 @@ sklearn
 scipy
 tensorflow
 keras
-vaex-core
-vaex-hdf5
-vaex-ml
-diskcache
+ray
+modin[ray]

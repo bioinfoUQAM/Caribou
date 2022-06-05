@@ -11,10 +11,11 @@ from tensorflow.config import list_physical_devices
 
 import os
 import sys
-import vaex
+import ray
 import argparse
 import configparser
 
+import modin.pandas as pd
 from pathlib import Path
 
 __author__ = 'Nicolas de Montigny'
@@ -28,6 +29,8 @@ if gpus:
     config = ConfigProto(device_count={'GPU': len(gpus), 'CPU': os.cpu_count()})
     sess = Session(config=config)
     set_session(sess);
+
+ray.init(num_cpus = os.cpu_count())
 
 # Part 0 - Initialisation / extraction of parameters from config file
 ################################################################################

@@ -2,16 +2,17 @@
 
 from data.build_data import build_load_save_data
 
-import vaex
-
 from tensorflow.compat.v1 import ConfigProto, Session
 from tensorflow.compat.v1.keras.backend import set_session
 from tensorflow.config import list_physical_devices
 
 import sys
+import ray
 import os.path
 import argparse
 import pathlib
+
+import modin.pandas as pd
 
 from os import makedirs
 
@@ -30,6 +31,8 @@ if gpus:
     config = ConfigProto(device_count={'GPU': len(gpus), 'CPU': os.cpu_count()})
     sess = Session(config=config)
     set_session(sess);
+
+ray.init(num_cpus = os.cpu_count())
 
 # Initialisation / validation of parameters from CLI
 ################################################################################

@@ -3,8 +3,8 @@ from data.seq_collections import SeqCollection
 from data.kmer_collections import build_kmers_Xy_data, build_kmers_X_data
 
 import os
-import vaex
 import pickle
+import modin.pandas as pd
 
 __author__ = "Nicolas de Montigny"
 
@@ -16,9 +16,9 @@ def build_load_save_data(file, hostfile, prefix, dataset, host, kmers_list=None,
     data_host = None
 
     # Generate the names of files
-    Xy_file = os.path.join(prefix,"Xy_genome_{}_data_K{}.h5f".format(dataset,k))
+    Xy_file = os.path.join(prefix,"Xy_genome_{}_data_K{}.parquet".format(dataset,k))
     data_file = os.path.join(prefix,"Xy_genome_{}_data_K{}.npz".format(dataset,k))
-    Xy_file_host = os.path.join(prefix,"Xy_genome_{}_data_K{}.h5f".format(host,k))
+    Xy_file_host = os.path.join(prefix,"Xy_genome_{}_data_K{}.parquet".format(host,k))
     data_file_host = os.path.join(prefix,"Xy_genome_{}_data_K{}.npz".format(host,k))
     seqfile = os.path.join(prefix,"seqdata_{}.txt".format(dataset))
     seqfile_host = os.path.join(prefix,"seqdata_{}.txt".format(dataset))
@@ -48,8 +48,9 @@ def build_load_save_data(file, hostfile, prefix, dataset, host, kmers_list=None,
 
         # Assign kmers_list to variable ater extracting database data
         if kmers_list is None:
-            df = vaex.open(data['profile'])
-            kmers_list = list(df.columns)
+            df = pd.read_parquet(data['profile'])
+            kmers_list = df.columns
+            kmers_list.remove('id')
 
         # Build Xy_data of host
         if isinstance(hostfile, tuple) and kmers_list is not None:

@@ -9,6 +9,7 @@ from tensorflow.config import list_physical_devices
 
 import os
 import sys
+import ray
 import argparse
 
 from pathlib import Path
@@ -24,6 +25,8 @@ if gpus:
     config = ConfigProto(device_count={'GPU': len(gpus), 'CPU': os.cpu_count()})
     sess = Session(config=config)
     set_session(sess);
+
+ray.init(num_cpus = os.cpu_count())
 
 # Initialisation / validation of parameters from CLI
 ################################################################################

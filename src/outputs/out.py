@@ -1,5 +1,5 @@
 import numpy as np
-import pandas as pd
+import modin.pandas as pd
 
 from Bio import SeqIO
 from copy import copy
