@@ -3,7 +3,6 @@ import numpy as np
 
 import os
 import sys
-import vaex
 
 from utils import *
 from models.models_utils import *
@@ -30,7 +29,6 @@ def bacterial_classification(classified_data, database_k_mers, k, outdirs, datas
             classified_data['order'].append(taxa)
         else:
             clf_file = '{}bacteria_identification_classifier_{}_K{}_{}_{}_model.json'.format(outdirs['models_dir'], taxa, k, classifier, dataset)
-            labels_file = '{}label_encoding_{}_K{}_{}_{}_model.hdf5'.format(outdirs['models_dir'], taxa, k, classifier, dataset)
             if not os.path.isfile(clf_file):
                 train = True
 
@@ -47,10 +45,10 @@ def bacterial_classification(classified_data, database_k_mers, k, outdirs, datas
                 # If classifier exists load it or train if not
                 if train is True:
                     # Get training dataset and assign to variables
-                    df = vaex.open(database_k_mers['profile'])
+                    df = pd.read_parquet(database_k_mers['profile'])
                     classes_train = pd.DataFrame(database_k_mers['classes'], columns = database_k_mers['taxas']).loc[:,taxa]
                     df['classes'] = np.array(classes_train)
-                    df = label_encode(df, labels_file)
+                    df, label_encoder = label_encode(df)
 
                     clf_file = training(df, k, outdirs['plots_dir'] if cv else None, training_epochs, classifier = classifier, batch_size = batch_size, verbose = verbose, cv = cv, clf_file = clf_file, n_jobs = n_jobs)
 
@@ -59,13 +57,13 @@ def bacterial_classification(classified_data, database_k_mers, k, outdirs, datas
                 if previous_taxa_unclassified is None:
                     if verbose:
                         print('Classifying bacteria sequences at {} level'.format(taxa))
-                    df = vaex.open(classified_data['bacteria']['profile'])
-                    classified_data[taxa], previous_taxa_unclassified = classify(df, clf_file, labels_file, taxa, classified_kmers_file, unclassified_kmers_file, threshold = threshold, verbose = verbose)
+                    df = pd.read_parquet(classified_data['bacteria']['profile'])
+                    classified_data[taxa], previous_taxa_unclassified = classify(df, clf_file, label_encoder, taxa, classified_kmers_file, unclassified_kmers_file, threshold = threshold, verbose = verbose)
                 else:
                     if verbose:
                         print('Classifying bacteria sequences at {} level'.format(taxa))
-                    df = vaex.open(previous_taxa_unclassified['profile'])
-                    classified_data[taxa], previous_taxa_unclassified = classify(df, clf_file, labels_file, taxa, classified_kmers_file, unclassified_kmers_file, threshold = threshold, verbose = verbose)
+                    df = pd.read_parquet(previous_taxa_unclassified['profile'])
+                    classified_data[taxa], previous_taxa_unclassified = classify(df, clf_file, label_encoder, taxa, classified_kmers_file, unclassified_kmers_file, threshold = threshold, verbose = verbose)
 
                 save_Xy_data(classified_data[taxa],classified_kmers_file)
                 save_Xy_data(previous_taxa_unclassified, unclassified_kmers_file)
@@ -115,35 +113,32 @@ def training(df, k, outdir_plots, training_epochs, classifier = 'lstm_attention'
 
     return clf_file
 
-def classify(df, clf_file, labels_file, taxa, classified_kmers_file, unclassified_kmers_file, threshold = 0.8, verbose = 1):
+def classify(df, clf_file, label_encoder, taxa, classified_kmers_file, unclassified_kmers_file, threshold = 0.8, verbose = 1):
 
     classified_data = {}
 
     df = model_predict(df, clf_file, threshold = threshold)
-    labels_encoding = vaex.open(labels_file)
-    df = df.join(labels_encoding, how = left, on = 'label_encoded_classes')
+    df = label_decode(df, label_encoder)
 
     if verbose:
         print('Extracting predicted sequences at {} taxonomic level'.format(taxa))
 
     # Make sure classes are writen in lowercase
-    df['classes'] = df.classes.str.lower()
+    df['classes'] = df['classes'].str.lower()
 
-    df_classified = df[df.classes.str.notequals('unknown')]
-    df_classified = df_classified.drop('label_encoded_classes')
-    df_unclassified = df[df.classes.str.match('unknown')]
-    df_unclassified = df_unclassified.drop(['classes','label_encoded_classes'])
+    df_classified = df[df['classes'].str.notequals('unknown')]
+    df_unclassified = df[df['classes'].str.match('unknown')]
 
     # Save / add to classified/unclassified data
     try:
-        df_classified.export_hdf5(classified_kmers_file)
+        df_classified.to_parquet(classified_kmers_file)
         classified_data['classified'] = {}
         classified_data['classified']['profile'] = str(classified_kmers_file)
     except:
         if verbose:
             print('No classified data at {} taxonomic level, cannot save it to file or add it to classified data'.format(taxa))
     try:
-        df_unclassified.export_hdf5(unclassified_kmers_file)
+        df_unclassified.to_parquet(unclassified_kmers_file)
         classified_data['unclassified'] = {}
         classified_data['unclassified']['profile'] = str(unclassified_kmers_file)
     except:

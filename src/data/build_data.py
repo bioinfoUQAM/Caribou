@@ -16,9 +16,9 @@ def build_load_save_data(file, hostfile, prefix, dataset, host, kmers_list=None,
     data_host = None
 
     # Generate the names of files
-    Xy_file = os.path.join(prefix,"Xy_genome_{}_data_K{}.parquet".format(dataset,k))
+    Xy_file = os.path.join(prefix,"Xy_genome_{}_data_K{}".format(dataset,k))
     data_file = os.path.join(prefix,"Xy_genome_{}_data_K{}.npz".format(dataset,k))
-    Xy_file_host = os.path.join(prefix,"Xy_genome_{}_data_K{}.parquet".format(host,k))
+    Xy_file_host = os.path.join(prefix,"Xy_genome_{}_data_K{}".format(host,k))
     data_file_host = os.path.join(prefix,"Xy_genome_{}_data_K{}.npz".format(host,k))
     seqfile = os.path.join(prefix,"seqdata_{}.txt".format(dataset))
     seqfile_host = os.path.join(prefix,"seqdata_{}.txt".format(dataset))
@@ -49,7 +49,7 @@ def build_load_save_data(file, hostfile, prefix, dataset, host, kmers_list=None,
         # Assign kmers_list to variable ater extracting database data
         if kmers_list is None:
             df = pd.read_parquet(data['profile'])
-            kmers_list = df.columns
+            kmers_list = list(df.columns)
             kmers_list.remove('id')
 
         # Build Xy_data of host

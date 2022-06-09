@@ -1,6 +1,3 @@
-
-import math
-
 import tensorflow as tf
 from tensorflow import cast
 from tensorflow.keras.initializers import GlorotNormal

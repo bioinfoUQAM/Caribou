@@ -1,18 +1,23 @@
-import modin.pandas as pd
 import numpy as np
-import tables as tb
+import modin.pandas as pd
 import matplotlib.pyplot as plt
 
 import re
 import os
-import vaex
+import ray
 import glob
 import shutil
 import warnings
 
 from sklearn.base import clone
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import precision_recall_fscore_support
+
 from keras.callbacks import EarlyStopping
 from tensorflow.keras.models import clone_model
+
+from ray.util.joblib import register_ray
 from joblib import Parallel, delayed, parallel_backend
 
 
@@ -26,14 +31,19 @@ __all__ = ['scaleX','cv_score','make_score_df','choose_delete_model','plot_figur
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 warnings.filterwarnings('ignore')
 
+register_ray()
+
 # Utils for all types of models / framework
 ################################################################################
 
 # Data scaling
-def scaleX(df, kmers):
-    scaler = vaex.ml.StandardScaler(features = kmers, prefix = 'scaled_')
-    scaler.fit(df)
-    df = scaler.transform(df)
+def scaleX(df):
+    kmers = list(df.columns)
+    kmers.remove('id')
+    kmers.remove('classes')
+    with parallel_backend('ray'):
+        scaler = StandardScaler()
+        df[kmers] = scaler.fit_transform(df[kmers])
 
     return df
 
@@ -41,7 +51,7 @@ def scaleX(df, kmers):
 def choose_delete_model(df_scores):
     clf_max = df_scores.idxmax()[2]
     path = os.path.dirname(clf_max)
-    models_list = glob.glob(os.path.join(path, re.sub('_iter_\d+..json', '',clf_max)) + '*')
+    models_list = glob.glob(os.path.join(path, re.sub('_iter_\d+..json','',clf_max)) + '*')
     models_list.remove(clf_max)
     for file in models_list:
         os.remove(file)
@@ -51,7 +61,7 @@ def choose_delete_model(df_scores):
     return clf
 
 # Outputs scores for cross validation in a dictionnary
-def cv_score(df, classifier):
+def cv_score(y_true, y_pred, classifier):
     scores = {clf_name:{}}
 
     if classifier in ['onesvm','linearsvm', 'attention','lstm','deeplstm']:
@@ -59,7 +69,7 @@ def cv_score(df, classifier):
     elif classifier in ['sgd','svm','mlr','mnb','lstm_attention','cnn','widecnn']:
         average = 'macro'
 
-    support = df.ml.metrics.precision_recall_fscore(df.label_encoded_classes, df.predicted_classes , average = average)
+    support = precision_recall_fscore_support(y_true, y_pred , average = average)
 
     scores[clf_name]['Precision'] = support[0]
     scores[clf_name]['Recall'] = support[1]
@@ -105,7 +115,7 @@ def plot_figure(df_scores, n_jobs, outdir_plots, k, classifier):
 ################################################################################
 
 # Multiple parallel model training with cross-validation
-def cross_validation_training(df, batch_size, k, classifier, outdir_plots, clf, training_epochs, cv = 1, shuffle = True, verbose = True, clf_file = None, n_jobs = 1):
+def cross_validation_training(X_train, y_train, batch_size, k, classifier, outdir_plots, clf, training_epochs, cv = 1, shuffle = True, verbose = True, clf_file = None, n_jobs = 1):
 
     # cv_scores is a list of n fold dicts
     # each dict contains the results of the iteration
@@ -124,7 +134,7 @@ def cross_validation_training(df, batch_size, k, classifier, outdir_plots, clf, 
         with parallel_backend('threading'):
             cv_scores = Parallel(n_jobs = -1, prefer = 'threads', verbose = 100 if verbose else 0)(
                                 delayed(fit_predict_cv)
-                                (df, batch_size, classifier, clone(clf),
+                                (X_train, y_train, batch_size, classifier, clone(clf),
                                 training_epochs, shuffle = shuffle, clf_file = clf_name)
                                 for clf_name, df in zip(clf_names, df_data))
 
@@ -132,7 +142,7 @@ def cross_validation_training(df, batch_size, k, classifier, outdir_plots, clf, 
         with parallel_backend('threading'):
             cv_scores = Parallel(n_jobs = -1, prefer = 'threads', verbose = 100 if verbose else 0)(
                                 delayed(fit_predict_cv)
-                                (df, batch_size, classifier, clone_model(clf),
+                                (X_train, y_train, batch_size, classifier, clone_model(clf),
                                 training_epochs, shuffle = shuffle, clf_file = clf_name)
                                 for clf_name, df in zip(clf_names, df_data))
     for file in X_data:
@@ -151,38 +161,39 @@ def cross_validation_training(df, batch_size, k, classifier, outdir_plots, clf, 
     return clf_file
 
 # Model training and cross validating individually
-def fit_predict_cv(df, batch_size, classifier, clf, training_epochs, shuffle = True, clf_file = None):
-    scaleX(df)
-    cls = df.unique('label_encoded_classes')
+def fit_predict_cv(X_train, y_train, batch_size, classifier, clf, training_epochs, shuffle = True, clf_file = None):
+    X_train = scaleX(X_train)
+    cls = np.unique(df['classes'])
 
-    if classifier in ['onesvm','linearsvm','sgd','svm','mlr','mnb']:
-        df_train, df_test = df.split_random([0.8, 0.2], random_state=42)
-        if classifier == 'onesvm':
-            fit_model_oneSVM_sk(clf, df_train, batch_size, shuffle, clf_file)
-        else:
-            fit_model_sk(clf, df, cls, batch_size, shuffle, clf_file, predict_type = 'predict' if classifier == 'linearsvm' else 'predict_proba')
-
-    elif classifier in ['attention','lstm','deeplstm','lstm_attention','cnn','widecnn']:
-        df_train, df_valid, df_test = df.split_random([0.8, 0.1, 0.1], random_state=42)
-        fit_model_keras(clf, df_train, df_valid, training_epochs, clf_file)
-
-    df_test = model_predict(df_test, clf_file)
-    return cv_score(df_test, classifier)
-
-def fit_model(df, batch_size, classifier, clf, training_epochs, shuffle = True, clf_file = None):
-    scaleX(df)
-    cls = df.unique('label_encoded_classes')
+    with parallel_backend('ray'):
+        X_train, X_test, y_train, y_test = train_test_split(X_train, y_train, train_size = 0.8, random_state=42)
 
     if classifier in ['onesvm','linearsvm','sgd','svm','mlr','mnb']:
         if classifier == 'onesvm':
-            fit_model_oneSVM_sk(clf, df_train, batch_size, shuffle, clf_file)
+            clf = fit_model_oneSVM_sk(clf, X_train, batch_size, shuffle, clf_file)
         else:
-            fit_model_sk(clf, df, cls, batch_size, shuffle, clf_file, predict_type = 'predict' if classifier == 'linearsvm' else 'predict_proba')
+            clf = fit_model_sk(clf, X_train, y_train, cls, batch_size, shuffle, clf_file, predict_type = 'predict' if classifier == 'linearsvm' else 'predict_proba')
 
     elif classifier in ['attention','lstm','deeplstm','lstm_attention','cnn','widecnn']:
-        df_train, df_valid = df.split_random([0.8, 0.2], random_state=42)
-        fit_model_keras(clf, df_train, df_valid, training_epochs, clf_file)
+        clf = fit_model_keras(clf, X_train, y_train, training_epochs, clf_file)
 
+    y_pred = model_predict(X_test, clf_file)
+    return cv_score(y_test, y_pred, classifier)
+
+def fit_model(X_train, y_train, batch_size, classifier, clf, training_epochs, shuffle = True, clf_file = None):
+    X_train = scaleX(X_train)
+    cls = np.unique(df['classes'])
+
+    if classifier in ['onesvm','linearsvm','sgd','svm','mlr','mnb']:
+        if classifier == 'onesvm':
+            clf = fit_model_oneSVM_sk(clf, X_train, batch_size, shuffle, clf_file)
+        else:
+            clf = fit_model_sk(clf, X_train, y_train, cls, batch_size, shuffle, clf_file, predict_type = 'predict' if classifier == 'linearsvm' else 'predict_proba')
+
+    elif classifier in ['attention','lstm','deeplstm','lstm_attention','cnn','widecnn']:
+        clf = fit_model_keras(clf, X_train, y_train, training_epochs, clf_file)
+
+"""
 def model_predict(df, clf_file, classifier, threshold = 0.8):
     df.state_load(clf_file)
 
@@ -199,21 +210,18 @@ def model_predict(df, clf_file, classifier, threshold = 0.8):
         df['predicted_classes'] = array_predicted
 
     return df
-
+"""
 # Scikit-learn versions
 ################################################################################
-def fit_model_oneSVM_sk(clf, df, batch_size, shuffle, clf_file):
-    model = vaex.ml.sklearn.IncrementalPredictor(model = clf,
-                                                 features = df.get_column_names(regex='^standard'),
-                                                 target = 'label_encoded_classes',
-                                                 batch_size = batch_size,
-                                                 shuffle = shuffle,
-                                                 prediction_name = 'predicted_classes')
-    model.fit(df = df)
-    df = model.transform(df)
-    df.state_write(clf_file)
+def fit_model_oneSVM_sk(clf, X_train, batch_size, shuffle, clf_file):
+# CONTINUE ADAPTING TO RAY / MODIN USING PARTIAL FIT FOR ONLINE LEARNING
+    with parallel_backend('ray'):
+        clf.fit(X_train)
 
-def fit_model_sk(clf, df, cls, batch_size, shuffle, clf_file, predict_type):
+    return clf
+
+"""
+def fit_model_sk(clf, X_train, y_train, cls, batch_size, shuffle, clf_file, predict_type):
     model = vaex.ml.sklearn.IncrementalPredictor(model = clf,
                                                  features = df.get_column_names(regex='^standard'),
                                                  target = 'label_encoded_classes',
@@ -226,10 +234,9 @@ def fit_model_sk(clf, df, cls, batch_size, shuffle, clf_file, predict_type):
     model.fit(df = df)
     df = model.transform(df)
     df.state_write(clf_file)
-
 # Keras versions
 ################################################################################
-def fit_model_keras(clf, df_train, df_valid, training_epochs, clf_file):
+def fit_model_keras(clf, X_train, y_train, training_epochs, clf_file):
     features = df_valid.get_column_names(regex='^standard')
     train_generator = df_train.ml.tensorflow.to_keras_generator(features = features,
                                                                 target = 'label_encoded_classes',
@@ -250,3 +257,4 @@ def fit_model_keras(clf, df_train, df_valid, training_epochs, clf_file):
                                           prediction_name = 'predicted_classes')
     df = model.transform(df_train)
     df_train.state_write(clf_file)
+"""

@@ -101,7 +101,7 @@ def kmers_dataset(opt):
         )
 
         # Save kmers list to file for further extractions
-        df = vaex.open(k_profile_database['profile'])
+        df = pd.read_parquet(k_profile_database['profile'])
         kmers_list = list(df.columns)
         kmers_list.remove('id')
         with open(os.path.join(outdirs["data_dir"],'kmers_list.txt'),'w') as handle:
@@ -135,7 +135,7 @@ def kmers_dataset(opt):
         )
 
         # Save kmers list to file for further extractions
-        df = vaex.open(k_profile_database['profile'])
+        df = pd.read_parquet(k_profile_database['profile'])
         kmers_list = list(df.columns)
         kmers_list.remove('id')
         with open(os.path.join(outdirs["data_dir"],'kmers_list.txt'),'w') as handle:

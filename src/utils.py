@@ -39,17 +39,22 @@ def merge_database_host(database_data, host_data):
     merged_data["kmers_list"] = database_data["kmers_list"]
     merged_data["taxas"] = list(set(database_data["taxas"]).union(host_data["taxas"]))
 
-    df_db = pd.read_parquet(database_data["X"])
-    df_host = pd.read_parquet(host_data["X"])
+    df_db = pd.read_csv(database_data["X"])
+    df_host = pd.read_csv(host_data["X"])
     df_merged = pd.concat([df_db, df_host])
-    df_merged.to_parquet(merged_file)
+    df_merged.to_csv(merged_file)
 
     return merged_data
 
 def label_encode(df):
+    with parallel_backend('ray'):
+        label_encoder = LabelEncoder()
+        df['classes'] = label_encoder.fit_transform(df['classes'])
 
-with parallel_backend('ray'):
-    label_encoder = LabelEncoder()
-    df['classes'] = label_encoder.fit_transform(df['classes'])
+    return df, label_encoder
+
+def label_decode(df,label_encoder):
+    with parallel_backend('ray'):
+        df['classes'] = label_encoder.inverse_transform(df['classes'])
 
     return df

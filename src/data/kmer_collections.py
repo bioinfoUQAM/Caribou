@@ -65,7 +65,7 @@ def kmers_collection(seq_data, Xy_file, length, k, dataset, method = 'seen', kme
 
     rmtree(dir_path)
 
-def parallel_concat(files_list):
+def csv_concat(files_list):
     df_list = []
     for file in files_list:
         df_list.append(pd.read_csv(file))
@@ -76,21 +76,25 @@ def parallel_concat(files_list):
 
 def construct_data(Xy_file, dir_path):
     files_list = glob.glob(os.path.join(dir_path,'*.csv'))
-    n_lists = len(files_list) / 100
-    files_list = np.array_split(files_list, n_lists)
+    n_lists = np.ceil(len(files_list) / 100)
+    if n_lists > 1:
+        files_list = np.array_split(files_list, n_lists)
 
-    # Parallel reading and concat by batches of 100 profiles
-    with parallel_backend('ray'):
-        df_list = Parallel(n_jobs = -1, prefer = 'threads', verbose = 100)(
-                  delayed(parallel_concat)() for file in (files_list))
+        # Parallel reading and concat by batches of 100 profiles
+        with parallel_backend('ray'):
+            df_list = Parallel(n_jobs = -1, prefer = 'threads', verbose = 100)(
+                      delayed(csv_concat)(list) for list in (files_list))
+        df = pd.concat(df_list)
 
-    df = pd.concat(df_list)
+    else:
+        df = csv_concat(files_list)
 
     # Replace NAs with 0
     df = df.fillna(0)
-
-    # Save dataframe
-    df.to_parquet(Xy_file)
+    # Convert dataframe to ray dataset
+    df = ray.data.from_modin(df)
+    # Save dataset
+    df.write_parquet(Xy_file)
 
 def compute_seen_kmers_of_sequence(kmc_path, k, dir_path, ind, file):
     # Make tmp folder per sequence
@@ -153,7 +157,7 @@ def compute_kmers(seq_data, method, kmers_list, k, dir_path, faSplit, kmc_path, 
         file = os.path.join(dir_path,'{}.fa'.format(id))
         file_list.append(file)
 
-    #Extract kmers in parallel using KMC3
+    # Extract kmers in parallel using KMC3
     parallel_extraction(file_list, method, kmers_list, kmc_path, k, dir_path)
     # build kmers matrix
     construct_data(Xy_file, dir_path)
@@ -161,12 +165,12 @@ def compute_kmers(seq_data, method, kmers_list, k, dir_path, faSplit, kmc_path, 
 
 def parallel_extraction(file_list, method, kmers_list, kmc_path, k, dir_path):
     if method == 'seen':
-        with parallel_backend('ray'):
+        with parallel_backend('threading'):
             Parallel(n_jobs = -1, prefer = 'threads', verbose = 100)(
             delayed(compute_seen_kmers_of_sequence)
             (kmc_path, k, dir_path, i, file) for i, file in enumerate(file_list))
     elif method == 'given':
-        with parallel_backend('ray'):
+        with parallel_backend('threading'):
             Parallel(n_jobs = -1, prefer = 'threads', verbose = 100)(
             delayed(compute_given_kmers_of_sequence)
             (kmers_list, kmc_path, k, dir_path, i, file) for i, file in enumerate(file_list))
