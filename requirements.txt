@@ -4,7 +4,6 @@ Bio
 h5py
 matplotlib
 numpy
-pandas
 sklearn
 scipy
 tensorflow

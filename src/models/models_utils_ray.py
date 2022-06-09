@@ -18,7 +18,7 @@ from keras.callbacks import EarlyStopping
 from tensorflow.keras.models import clone_model
 
 from ray.util.joblib import register_ray
-from joblib import Parallel, delayed, parallel_backend
+from joblib import Parallel, delayed, parallel_backend, dump, load
 
 
 __author__ = 'Nicolas de Montigny'
@@ -170,12 +170,12 @@ def fit_predict_cv(X_train, y_train, batch_size, classifier, clf, training_epoch
 
     if classifier in ['onesvm','linearsvm','sgd','svm','mlr','mnb']:
         if classifier == 'onesvm':
-            clf = fit_model_oneSVM_sk(clf, X_train, batch_size, shuffle, clf_file)
+            fit_model_oneSVM_sk(clf, X_train, batch_size, shuffle, clf_file)
         else:
-            clf = fit_model_sk(clf, X_train, y_train, cls, batch_size, shuffle, clf_file, predict_type = 'predict' if classifier == 'linearsvm' else 'predict_proba')
+            fit_model_sk(clf, X_train, y_train, cls, batch_size, shuffle, clf_file, predict_type = 'predict' if classifier == 'linearsvm' else 'predict_proba')
 
     elif classifier in ['attention','lstm','deeplstm','lstm_attention','cnn','widecnn']:
-        clf = fit_model_keras(clf, X_train, y_train, training_epochs, clf_file)
+        fit_model_keras(clf, X_train, y_train, training_epochs, clf_file)
 
     y_pred = model_predict(X_test, clf_file)
     return cv_score(y_test, y_pred, classifier)
@@ -210,51 +210,106 @@ def model_predict(df, clf_file, classifier, threshold = 0.8):
         df['predicted_classes'] = array_predicted
 
     return df
+
+def model_predict(clf_file, X, kmers_list, ids, classifier, nb_classes, labels_list, threshold = 0.8, verbose = True):
+    predict = []
+    y = pd.Series(range(len(ids)))
+
+    if classifier in ["onesvm","linearsvm"]:
+        generator = iter_generator(X, y, 1, kmers_list, ids, classifier, cv = 0, shuffle = False, training = False)
+        predict = predict_binary_sk(clf_file, len(ids), generator)
+        generator.handle.close()
+    elif classifier in ["attention","lstm","deeplstm"]:
+        generator = iter_generator_keras(X, y, 1, kmers_list, ids, 0, classifier, shuffle = False, training = False)
+        predict = predict_binary_keras(clf_file, generator)
+        generator.handle.close()
+    elif classifier in ["sgd","svm","mlr","mnb"]:
+        generator = iter_generator(X, y, 1, kmers_list, ids, classifier, cv = 0, shuffle = False, training = False)
+        predict = predict_multi_sk(clf_file, labels_list, generator, threshold = threshold)
+        generator.handle.close()
+    elif classifier in ["lstm_attention","cnn","widecnn"]:
+        generator = iter_generator_keras(X, y, 1, kmers_list, ids, 0, classifier, shuffle = False, training = False)
+        predict = predict_multi_keras(clf_file, labels_list, generator, threshold = threshold)
+        generator.handle.close()
+
+    return predict
 """
 # Scikit-learn versions
 ################################################################################
-def fit_model_oneSVM_sk(clf, X_train, batch_size, shuffle, clf_file):
-# CONTINUE ADAPTING TO RAY / MODIN USING PARTIAL FIT FOR ONLINE LEARNING
+def fit_model_oneSVM_sk(clf, X_train, clf_file):
+# TEST TO SEE IF FIT WORKS / PARTIAL_FIT NEEDED
     with parallel_backend('ray'):
         clf.fit(X_train)
 
-    return clf
+    dump(clf, clf_file)
 
+def fit_model_sk(clf, X_train, y_train, clf_file):
+# TEST TO SEE IF FIT WORKS / PARTIAL_FIT NEEDED
+    with parallel_backend('ray'):
+        clf.fit(X_train, y_train)
+
+    dump(clf, clf_file)
 """
-def fit_model_sk(clf, X_train, y_train, cls, batch_size, shuffle, clf_file, predict_type):
-    model = vaex.ml.sklearn.IncrementalPredictor(model = clf,
-                                                 features = df.get_column_names(regex='^standard'),
-                                                 target = 'label_encoded_classes',
-                                                 batch_size = batch_size,
-                                                 num_epochs = training_epochs,
-                                                 shuffle = shuffle,
-                                                 prediction_type = predict_type,
-                                                 prediction_name = 'predicted_classes',
-                                                 partial_fit_kwargs = {'classes':cls})
-    model.fit(df = df)
-    df = model.transform(df)
-    df.state_write(clf_file)
+def predict_binary_sk(clf_file, nb_ids, generator):
+    y_pred = np.empty(nb_ids, dtype=np.int32)
+
+    clf = load(clf_file)
+    for i, (X, y) in enumerate(generator.iterator):
+        y_pred[i] = clf.predict(X)
+
+    return y_pred
+
+def predict_multi_sk(clf_file, labels_list, generator, threshold = 0.8):
+    y_pred = []
+
+    clf = load(clf_file)
+    for i, (X, y) in enumerate(generator.iterator):
+        predict = clf.predict_proba(X)
+        if predict[0,np.argmax(predict[0])] >= threshold:
+            y_pred.append(labels_list[np.argmax(predict[0])])
+        else:
+            y_pred.append(-1)
+
+    return y_pred
+"""
 # Keras versions
 ################################################################################
-def fit_model_keras(clf, X_train, y_train, training_epochs, clf_file):
-    features = df_valid.get_column_names(regex='^standard')
-    train_generator = df_train.ml.tensorflow.to_keras_generator(features = features,
-                                                                target = 'label_encoded_classes',
-                                                                batch_size = batch_size)
-    val_generator = df_valid.ml.tensorflow.to_keras_generator(features = features,
-                                                                target = 'label_encoded_classes',
-                                                                batch_size = batch_size)
+def fit_model_keras
 
+def fit_model_keras(clf, train_generator, val_generator, training_epochs, clf_file):
+    modelcheckpoint = ModelCheckpoint(filepath=clf_file,monitor='val_accuracy', verbose=1, save_best_only=True, mode='auto')
     early = EarlyStopping(monitor='val_accuracy', mode='min', verbose=1, patience=10)
     clf.fit(x = train_generator,
             validation_data = val_generator,
             epochs = training_epochs,
-            callbacks = [early],
+            callbacks = [modelcheckpoint,early],
             use_multiprocessing = True,
             workers = os.cpu_count())
-    model = vaex.ml.tensorflow.KerasModel(model = clf,
-                                          features = features,
-                                          prediction_name = 'predicted_classes')
-    df = model.transform(df_train)
-    df_train.state_write(clf_file)
+
+"""
+def predict_binary_keras(clf_file, generator):
+    clf = load_model(clf_file)
+    predict = clf.predict(generator,
+                          use_multiprocessing = True,
+                          workers = os.cpu_count())
+
+    y_pred = np.around(predict.reshape(1, predict.size)[0]).astype(np.int64)
+    generator.handle.close()
+
+    return y_pred
+
+def predict_multi_keras(clf_file, labels_list, generator, threshold = 0.8):
+    y_pred = []
+
+    clf = load_model(clf_file)
+    predict = clf.predict(generator,
+                          use_multiprocessing = True,
+                          workers = os.cpu_count())
+    for i in range(len(predict)):
+        if np.argmax(predict[i]) >= threshold:
+            y_pred.append(labels_list[np.argmax(predict[i])])
+        else:
+            y_pred.append(-1)
+
+    return y_pred
 """

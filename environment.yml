@@ -1,8 +1,5 @@
 name: caribou
 channels:
-  - gpuci
-  - rapidsai
-  - nvidia
   - pytorch
   - conda-forge
 dependencies:
@@ -12,12 +9,9 @@ dependencies:
   - h5py
   - matplotlib
   - numpy
-  - pandas
   - scikit-learn
   - scipy
   - tensorflow
   - keras
-  - vaex-core
-  - vaex-hdf5
-  - vaex-ml
-  - diskcache
+  - ray
+  - modin[ray]
