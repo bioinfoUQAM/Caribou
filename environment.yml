@@ -1,7 +1,6 @@
-name: caribou
+name: base
 channels:
-  - pytorch
-  - conda-forge
+  - defaults
 dependencies:
   - setuptools
   - wheel
