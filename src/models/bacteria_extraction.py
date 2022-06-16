@@ -6,13 +6,12 @@ import sys
 
 from utils import *
 from models.models_utils import *
-from models.build_neural_networks import *
-from sklearn.linear_model import SGDOneClassSVM, SGDClassifier
 
 __author__ = 'Nicolas de Montigny'
 
 __all__ = ['bacteria_extraction','training','extract_bacteria_sequences']
 
+# TODO: FINISH CONVERTING TO CLASSES FOR MODELS
 def bacteria_extraction(metagenome_k_mers, database_k_mers, k, outdirs, dataset, training_epochs, classifier = 'deeplstm', batch_size = 32, verbose = 1, cv = 1, n_jobs = 1):
     # classified_data is a dictionnary containing data dictionnaries at each classified level:
     # {taxa:{'X':path to vaex dataframe hdf5 file}}
@@ -74,39 +73,13 @@ def bacteria_extraction(metagenome_k_mers, database_k_mers, k, outdirs, dataset,
 
 
 def training(X_train, y_train, k, outdir_plots, training_epochs, classifier = 'deeplstm', batch_size = 32, verbose = 1, cv = 1, clf_file = None, n_jobs = 1):
-    if classifier == 'onesvm':
-        if verbose:
-            print('Training bacterial extractor with One Class SVM')
-        clf = SGDOneClassSVM(nu = 0.05, tol = 1e-4)
-    elif classifier == 'linearsvm':
-        if verbose:
-            print('Training bacterial / host classifier with Linear SVM')
-        clf = SGDClassifier(early_stopping = False, n_jobs = -1)
+    if classifier in ['onesvm','linearsvm']:
+        model = Sklearn_model(classifier, clf_file, outdir, batch_size, k, verbose)
     elif classifier in ['attention','lstm','deeplstm']:
-        strategy = tf.distribute.MultiWorkerMirroredStrategy()
-        with strategy.scope():
-            if classifier == 'attention':
-                if verbose:
-                    print('Training bacterial / host classifier based on Attention Weighted Neural Network')
-                clf = build_attention(k)
-            elif classifier == 'lstm':
-                if verbose:
-                    print('Training bacterial / host classifier based on Shallow LSTM Neural Network')
-                clf = build_LSTM(k, batch_size)
-            elif classifier == 'deeplstm':
-                if verbose:
-                    print('Training bacterial / host classifier based on Deep LSTM Neural Network')
-                clf = build_deepLSTM(k, batch_size)
+        model = Keras_TF_model(classifier, clf_file, outdir, nb_classes, batch_size, k, verbose)
     else:
         print('Bacteria extractor unknown !!!\n\tModels implemented at this moment are :\n\tBacteria isolator :  One Class SVM (onesvm)\n\tBacteria/host classifiers : Linear SVM (linearsvm)\n\tNeural networks : Attention (attention), Shallow LSTM (lstm) and Deep LSTM (deeplstm)')
         sys.exit()
-
-    if cv:
-        clf_file = cross_validation_training(X_train, y_train, batch_size, k, classifier, outdir_plots, clf, training_epochs, cv = cv, verbose = verbose, clf_file = clf_file, n_jobs = n_jobs)
-    else:
-        fit_model(X_train, y_train, batch_size, classifier, clf, training_epochs, shuffle = True, clf_file = clf_file)
-
-    return clf_file
 
 def extract_bacteria_sequences(df, clf_file, label_encoder, bacteria_kmers_file, host_kmers_file, unclassified_kmers_file = None, verbose = 1):
 

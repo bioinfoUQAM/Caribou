@@ -81,7 +81,7 @@ def construct_data(Xy_file, dir_path):
         files_list = np.array_split(files_list, n_lists)
 
         # Parallel reading and concat by batches of 100 profiles
-        with parallel_backend('ray'):
+        with parallel_backend('threading'):
             df_list = Parallel(n_jobs = -1, prefer = 'threads', verbose = 100)(
                       delayed(csv_concat)(list) for list in (files_list))
         df = pd.concat(df_list)
@@ -94,7 +94,7 @@ def construct_data(Xy_file, dir_path):
     # Convert dataframe to ray dataset
     df = ray.data.from_modin(df)
     # Save dataset
-    df.write_parquet(Xy_file)
+    df.repartition(os.cpu_count()).write_parquet(Xy_file)
 
 def compute_seen_kmers_of_sequence(kmc_path, k, dir_path, ind, file):
     # Make tmp folder per sequence

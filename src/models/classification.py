@@ -6,14 +6,13 @@ import sys
 
 from utils import *
 from models.models_utils import *
-from models.build_neural_networks import *
-from sklearn.naive_bayes import MultinomialNB
-from sklearn.linear_model import SGDClassifier
+
 
 __author__ = 'Nicolas de Montigny'
 
 __all__ = ['bacterial_classification','training','classify']
 
+# TODO: FINISH CONVERTING TO CLASSES FOR MODELS
 def bacterial_classification(classified_data, database_k_mers, k, outdirs, dataset, training_epochs, classifier = 'lstm_attention', batch_size = 32, threshold = 0.8, verbose = 1, cv = 1, n_jobs = 1):
     previous_taxa_unclassified = None
 
@@ -73,45 +72,14 @@ def bacterial_classification(classified_data, database_k_mers, k, outdirs, datas
 
 def training(df, k, outdir_plots, training_epochs, classifier = 'lstm_attention', batch_size = 32, verbose = 1, cv = 1, clf_file = None, n_jobs = 1):
     nb_classes = len(df.unique('label_encoded_classes'))
-    # Model trained in MetaVW
-    if classifier == 'sgd':
-        if verbose:
-            print('Training multiclass classifier with SGD and squared loss function')
-        clf = SGDClassifier(loss = 'squared_error', n_jobs = -1, random_state = 42)
-    elif classifier == 'svm':
-        if verbose:
-            print('Training multiclass classifier with Linear SVM and SGD hinge loss')
-        clf = SGDClassifier(loss = 'hinge', n_jobs = -1, random_state = 42)
-    elif classifier == 'mlr':
-        if verbose:
-            print('Training multiclass classifier with Multinomial Logistic Regression')
-        clf = SGDClassifier(loss = 'log', n_jobs = -1, random_state = 42)
-    elif classifier == 'mnb':
-        if verbose:
-            print('Training multiclass classifier with Multinomial Naive Bayes')
-        clf = MultinomialNB()
-    elif classifier == 'lstm_attention':
-        if verbose:
-            print('Training multiclass classifier based on Deep Neural Network hybrid between LSTM and Attention')
-        clf = build_LSTM_attention(k, nb_classes, batch_size)
-    elif classifier == 'cnn':
-        if verbose:
-            print('Training multiclass classifier based on CNN Neural Network')
-        clf = build_CNN(k, batch_size, nb_classes)
-    elif classifier == 'widecnn':
-        if verbose:
-            print('Training multiclass classifier based on Wide CNN Network')
-        clf = build_wideCNN(k, batch_size, nb_classes)
+
+    if classifier in ['sgd','svm','mlr','mnb']:
+        model = Sklearn_model()
+    elif classifier in ['lstm_attention','cnn','widecnn']:
+        model = Keras_TF_model()
     else:
         print('Bacteria classifier type unknown !!!\n\tModels implemented at this moment are :\n\tLinear models :  Ridge regressor (sgd), Linear SVM (svm), Multiple Logistic Regression (mlr)\n\tProbability classifier : Multinomial Bayes (mnb)\n\tNeural networks : Deep hybrid between LSTM and Attention (lstm_attention), CNN (cnn) and Wide CNN (widecnn)')
         sys.exit()
-
-    if cv:
-        clf_file = cross_validation_training(df, batch_size, k, classifier, outdir_plots, clf, training_epochs, cv = cv, verbose = verbose, clf_file = clf_file, n_jobs = n_jobs)
-    else:
-        fit_model(df, batch_size, classifier, clf, training_epochs, shuffle = True, clf_file = clf_file)
-
-    return clf_file
 
 def classify(df, clf_file, label_encoder, taxa, classified_kmers_file, unclassified_kmers_file, threshold = 0.8, verbose = 1):
 
