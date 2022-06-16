@@ -71,6 +71,7 @@ def bacteria_extraction(metagenome_k_mers, database_k_mers, k, outdirs, dataset,
 
             return classified_data
 
+# TODO: CONTINUE ADAPTING FOR USE WITH CLASSES
 def extract_bacteria_sequences(df_file, model, verbose = True):
 
     df = pd.read_parquet(df_file)
