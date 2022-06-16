@@ -59,7 +59,7 @@ class Models_utils(ABC):
 
         self._fit_model(X_train, y_train)
 
-        y_pred = self.predict(X_test, clf_file)
+        y_pred = self.predict(X_test)
         self._cv_score(y_test, y_pred)
 
     @abstractmethod

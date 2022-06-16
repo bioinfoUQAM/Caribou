@@ -75,6 +75,7 @@ class Keras_TF_model(Models_utils):
 
     def _fit_model(self, X, y):
         X = self.scaleX(X)
+        self.labels_list = np.unique(y['classes'])
         self.multi_worker_dataset = self._join_shuffle_data(X, y, self.global_batch_size)
 
         self.trainer.start()
@@ -104,41 +105,33 @@ class Keras_TF_model(Models_utils):
 
         return df
 
-    def predict(self, X, df, clf_file, classifier, threshold = 0.8):
-# TODO: Finish figuring how to predict with Ray
-        print('To do')
-        # predict = df.map_batches(load_model_keras)
-        # return predict
+    def predict(self, df, threshold = 0.8):
+        if self.classifier in ['attention','lstm','deeplstm']:
+            y_pred = _predict_binary(df)
+        elif self.classifier in ['lstm_attention','cnn','widecnn']:
+            y_pred = _predict_multi(df, threshold)
 
-####################################################
+        return y_pred
 
-'''
-def predict_keras():
-    predictor = predictor = TensorflowPredictor()
+    def _predict_binary(self, df):
+        predictor = TensorflowPredictor().from_checkpoint(checkpoint = self.checkpoint, model_definition = self._build)
 
-def predict_binary_keras(clf_file, generator):
-    clf = load_model(clf_file)
-    predict = clf.predict(generator,
-                          use_multiprocessing = True,
-                          workers = os.cpu_count())
+        predicted = np.array(predictor.predict(df))
 
-    y_pred = np.around(predict.reshape(1, predict.size)[0]).astype(np.int64)
-    generator.handle.close()
+        y_pred = np.around(predicted.reshape(1, predicted.size)[0]).astype(np.int64)
 
-    return y_pred
+        return y_pred
 
-def predict_multi_keras(clf_file, labels_list, generator, threshold = 0.8):
-    y_pred = []
+    def _predict_multi(self, df, threshold):
+        y_pred = []
+        predictor = TensorflowPredictor().from_checkpoint(checkpoint = self.checkpoint, model_definition = self._build)
 
-    clf = load_model(clf_file)
-    predict = clf.predict(generator,
-                          use_multiprocessing = True,
-                          workers = os.cpu_count())
-    for i in range(len(predict)):
-        if np.argmax(predict[i]) >= threshold:
-            y_pred.append(labels_list[np.argmax(predict[i])])
-        else:
-            y_pred.append(-1)
+        predicted = np.array(predictor.predict(df))
 
-    return y_pred
-'''
+        for i in range(len(predicted)):
+            if np.argmax(predicted[i]) >= threshold:
+                y_pred.append(self.labels_list[np.argmax(predicted[i])])
+            else:
+                y_pred.append(-1)
+
+        return y_pred

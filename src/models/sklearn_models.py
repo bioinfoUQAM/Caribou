@@ -62,41 +62,41 @@ class Sklearn_model(Models_utils):
 
     def _fit_model(self, X, y):
         X = self.scaleX(X)
+        self.labels_list = np.unique(y['classes'])
         with parallel_backend('ray'):
             if self.classifier == 'onesvm':
-                self.clf.fit(X)
+                for batch in X.iter_batches(batch_size = self.batch_size):
+                    self.clf.partial_fit(batch)
             else:
-                self.clf.fit(X, y)
+                for batch_X, batch_y in zip(X.iter_batches(batch_size = self.batch_size), y.iter_batches(batch_size = self.batch_size)):
+                    self.clf.partial_fit(batch_X, batch_y)
 
         dump(self.clf, self.clf_file)
 
-    def predict(self, X, df, clf_file, classifier, threshold = 0.8):
-# TODO: Finish figuring how to predict with Ray
-        print('To do')
-        # predicted_prices = lm.predict(features)
-        # return predict
+    def predict(self, df, threshold = 0.8):
+        if self.classifier in ['onesvm','linearsvm']:
+            y_pred = _predict_binary(df)
+        elif self.classifier in ['sgd','svm','mlr','mnb']:
+            y_pred = _predict_multi(df, threshold)
 
-################################################################################
-'''
-def predict_binary_sk(clf_file, nb_ids, generator):
-    y_pred = np.empty(nb_ids, dtype=np.int32)
+        return y_pred
 
-    clf = load(clf_file)
-    for i, (X, y) in enumerate(generator.iterator):
-        y_pred[i] = clf.predict(X)
+    def _predict_binary(self, df):
+        y_pred = np.empty(nb_ids, dtype=np.int32)
 
-    return y_pred
+        for i, row in enumerate(df.iter_rows()):
+            y_pred[i] = clf.predict(row)
 
-def predict_multi_sk(clf_file, labels_list, generator, threshold = 0.8):
-    y_pred = []
+        return y_pred
 
-    clf = load(clf_file)
-    for i, (X, y) in enumerate(generator.iterator):
-        predict = clf.predict_proba(X)
-        if predict[0,np.argmax(predict[0])] >= threshold:
-            y_pred.append(labels_list[np.argmax(predict[0])])
-        else:
-            y_pred.append(-1)
+    def _predict_multi(self, df, threshold):
+        y_pred = []
 
-    return y_pred
-'''
+        for i, row in enumerate(df.iter_rows()):
+            predicted = clf.predict_proba(row)
+            if predicted[0,np.argmax(predict[0])] >= threshold:
+                y_pred.append(self.labels_list[np.argmax(predicted[0])])
+            else:
+                y_pred.append(-1)
+
+        return y_pred
