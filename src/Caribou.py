@@ -173,10 +173,6 @@ def caribou(opt):
     os.makedirs(outdirs['models_dir'], mode=0o700, exist_ok=True)
     os.makedirs(outdirs['results_dir'], mode=0o700, exist_ok=True)
 
-    if cv:
-        outdirs['plots_dir'] = os.path.join(outdirs['main_outdir'], 'plots/')
-        os.makedirs(outdirs['plots_dir'], mode=0o700, exist_ok=True)
-
 # Part 1 - K-mers profile extraction
 ################################################################################
 

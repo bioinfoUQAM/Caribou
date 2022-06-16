@@ -5,8 +5,7 @@ import json
 
 from keras.callbacks import EarlyStopping
 
-from ray import tune
-from ray.train import Trainer
+from ray.train import Trainer, save_checkpoint, CheckpointStrategy
 from ray.ml.predictors.tensorflow import TensorflowPredictor
 
 from models.build_neural_networks import *
@@ -19,11 +18,11 @@ __all__ = []
 Class to be used to build, train and predict models using Ray with Keras Tensorflow backend
 '''
 class Keras_TF_model(Models_utils):
-    def __init__(classifier, clf_file, outdir, nb_classes, batch_size, k, verbose):
+    def __init__(classifier, dataset, outdir_model, outdir_results, batch_size, k, verbose):
         # Parameters
         self.classifier = classifier
-        self.clf_file = clf_file
-        self.outdir = outdir
+        self.clf_file = '{}bacteria_binary_classifier_K{}_{}_{}_model.jb'.format(outdir_model, k, classifier, dataset)
+        self.outdir = outdir_results
         self.batch_size = batch_size
         self.k = k
         self.verbose = verbose
@@ -65,8 +64,6 @@ class Keras_TF_model(Models_utils):
                     print('Training multiclass classifier based on Wide CNN Network')
                 self.clf = build_wideCNN(self.k, self.batch_size, self.nb_classes)
 
-
-# TODO: ADAPT WITH CHECKPOINTS WITH RAY TRAIN/TUNE
     def train(self, X, y, cv = True):
         if cv:
             self._cross_validation(X, y)
@@ -75,23 +72,28 @@ class Keras_TF_model(Models_utils):
 
     def _fit_model(self, X, y):
         X = self.scaleX(X)
+        y = label_encode(y)
         self.labels_list = np.unique(y['classes'])
         self.multi_worker_dataset = self._join_shuffle_data(X, y, self.global_batch_size)
 
-        self.trainer.start()
-        self.trainer.run(self._fit_ray)
-        self.trainer.shutdown()
+        checkpoint_strategy = CheckpointStrategy(num_to_keep = 1,
+                                    checkpoint_score_attribute='val_accuracy',
+                                    checkpoint_score_order='max')
 
+        self.trainer.start()
+        self.trainer.run(self._fit_ray, checkpoint_strategy = checkpoint_strategy)
+        self.checkpoint = self.trainer.best_checkpoint
+        self.trainer.shutdown()
 
     def _fit_ray(self):
 
         self._build()
 
-# TODO: Checkpoints using RAY not keras
-        modelcheckpoint = ModelCheckpoint(filepath=self.clf_file, monitor='val_accuracy', verbose=1, save_best_only=True, mode='auto')
-        early = EarlyStopping(monitor='val_accuracy', mode='min', verbose=1, patience=10)
+        early = EarlyStopping(monitor='val_accuracy', mode='max', verbose=1, patience=10)
 
         self.clf.fit(self.multi_worker_dataset, epochs = self.training_epochs)
+
+        save_checkpoint(model_weights = self.clf.get_weights())
 
     def _join_shuffle_data(X_train, y_train, batch_size):
         df = ray.data.from_modin(X_train.join(y_train, on = 'id', how = 'left'))
@@ -120,7 +122,7 @@ class Keras_TF_model(Models_utils):
 
         y_pred = np.around(predicted.reshape(1, predicted.size)[0]).astype(np.int64)
 
-        return y_pred
+        return label_decode(y_pred)
 
     def _predict_multi(self, df, threshold):
         y_pred = []
@@ -134,4 +136,4 @@ class Keras_TF_model(Models_utils):
             else:
                 y_pred.append(-1)
 
-        return y_pred
+        return label_decode(y_pred)

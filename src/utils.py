@@ -6,16 +6,9 @@ import os
 import ray
 import joblib
 
-from ray.util.joblib import register_ray
-from sklearn.preprocessing import LabelEncoder
-from tensorflow.keras.utils import to_categorical
-from joblib import parallel_backend
-
 __author__ = "Nicolas de Montigny"
 
 __all__ = ['load_Xy_data','save_Xy_data','save_predicted_kmers','merge_database_host','label_encode']
-
-register_ray()
 
 # Load data from file
 def load_Xy_data(Xy_file):
@@ -45,16 +38,3 @@ def merge_database_host(database_data, host_data):
     df_merged.to_csv(merged_file)
 
     return merged_data
-
-def label_encode(df):
-    with parallel_backend('ray'):
-        label_encoder = LabelEncoder()
-        df['classes'] = label_encoder.fit_transform(df['classes'])
-
-    return df, label_encoder
-
-def label_decode(df,label_encoder):
-    with parallel_backend('ray'):
-        df['classes'] = label_encoder.inverse_transform(df['classes'])
-
-    return df

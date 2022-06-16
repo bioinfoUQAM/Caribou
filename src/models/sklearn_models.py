@@ -17,16 +17,17 @@ Class to be used to build, train and predict models using Ray with Scikit-learn 
 '''
 
 class Sklearn_model(Models_utils):
-    def __init__(classifier, clf_file, outdir, batch_size, k, verbose):
+    def __init__(classifier, dataset, outdir_model, outdir_results, batch_size, k, verbose):
         # Parameters
         self.classifier = classifier
-        self.clf_file = clf_file
-        self.outdir = outdir
+        self.clf_file = '{}bacteria_binary_classifier_K{}_{}_{}_model.jb'.format(outdir_model, k, classifier, dataset)
+        self.outdir = outdir_results
         self.batch_size = batch_size
         self.k = k
         self.verbose = verbose
         # Computes
         self.clf = self._build()
+
 
     def _build(self):
         if self.classifier == 'onesvm':
@@ -62,6 +63,7 @@ class Sklearn_model(Models_utils):
 
     def _fit_model(self, X, y):
         X = self.scaleX(X)
+        y = label_encode(y)
         self.labels_list = np.unique(y['classes'])
         with parallel_backend('ray'):
             if self.classifier == 'onesvm':
@@ -87,7 +89,7 @@ class Sklearn_model(Models_utils):
         for i, row in enumerate(df.iter_rows()):
             y_pred[i] = clf.predict(row)
 
-        return y_pred
+        return label_decode(y_pred)
 
     def _predict_multi(self, df, threshold):
         y_pred = []
@@ -99,4 +101,4 @@ class Sklearn_model(Models_utils):
             else:
                 y_pred.append(-1)
 
-        return y_pred
+        return label_decode(y_pred)

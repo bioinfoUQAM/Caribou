@@ -5,7 +5,6 @@ import warnings
 
 from shutil import rmtree
 from subprocess import run
-from ray.util.joblib import register_ray
 from joblib import Parallel, delayed, parallel_backend
 
 import numpy as np
@@ -27,8 +26,6 @@ Converted to be only functions instead of object for parallelization.
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 warnings.filterwarnings("ignore")
-
-register_ray()
 
 # #####
 # Data build functions
@@ -84,7 +81,10 @@ def construct_data(Xy_file, dir_path):
         with parallel_backend('threading'):
             df_list = Parallel(n_jobs = -1, prefer = 'threads', verbose = 100)(
                       delayed(csv_concat)(list) for list in (files_list))
-        df = pd.concat(df_list)
+        df = df_list[0]
+        df_list.pop(0)
+        for df_tmp in df_list:
+            df = pd.concat(df, df_tmp)
 
     else:
         df = csv_concat(files_list)

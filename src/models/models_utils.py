@@ -5,16 +5,16 @@ from abc import ABC, abstractmethod
 import os
 import warnings
 
-from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import precision_recall_fscore_support
+from sklearn.preprocessing import StandardScaler, LabelEncoder
 
 from joblib import parallel_backend
 from ray.util.joblib import register_ray
 
 __author__ = 'Nicolas de Montigny'
 
-__all__ = []
+__all__ = ['Models_utils']
 
 # Ignore warnings to have a more comprehensible output on stdout
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
@@ -66,3 +66,16 @@ class Models_utils(ABC):
     def _fit_model(self):
         """
         """
+
+    def label_encode(self, df):
+        with parallel_backend('ray'):
+            self.label_encoder = LabelEncoder()
+            df['classes'] = self.label_encoder.fit_transform(df['classes'])
+
+        return df
+
+    def label_decode(self, df):
+        with parallel_backend('ray'):
+            df['classes'] = self.label_encoder.inverse_transform(df['classes'])
+
+        return df
