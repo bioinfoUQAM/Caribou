@@ -76,6 +76,7 @@ class Sklearn_model(Models_utils):
         dump(self.clf, self.clf_file)
 
     def predict(self, df, threshold = 0.8):
+        df = ray.data.from_modin(df)
         if self.classifier in ['onesvm','linearsvm']:
             y_pred = _predict_binary(df)
         elif self.classifier in ['sgd','svm','mlr','mnb']:

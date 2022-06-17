@@ -3,6 +3,7 @@ import modin.pandas as pd
 from abc import ABC, abstractmethod
 
 import os
+import ray
 import warnings
 
 from sklearn.model_selection import train_test_split
@@ -36,6 +37,7 @@ class Models_utils(ABC):
             scaler = StandardScaler()
             df[kmers] = scaler.fit_transform(df[kmers])
 
+        df = ray.data.from_modin(df)
         return df
 
     # Outputs scores for cross validation in a dictionnary

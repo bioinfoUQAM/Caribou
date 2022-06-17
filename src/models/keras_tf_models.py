@@ -108,6 +108,7 @@ class Keras_TF_model(Models_utils):
         return df
 
     def predict(self, df, threshold = 0.8):
+        df = ray.data.from_modin(df)
         if self.classifier in ['attention','lstm','deeplstm']:
             y_pred = _predict_binary(df)
         elif self.classifier in ['lstm_attention','cnn','widecnn']:

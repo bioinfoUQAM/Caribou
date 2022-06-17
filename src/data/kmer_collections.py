@@ -84,7 +84,7 @@ def construct_data(Xy_file, dir_path):
         df = df_list[0]
         df_list.pop(0)
         for df_tmp in df_list:
-            df = pd.concat(df, df_tmp)
+            df = pd.concat([df, df_tmp])
 
     else:
         df = csv_concat(files_list)
