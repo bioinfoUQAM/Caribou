@@ -72,7 +72,7 @@ class Keras_TF_model(Models_utils):
 
     def _fit_model(self, X, y):
         X = self.scaleX(X)
-        y = label_encode(y)
+        y = _label_encode(y)
         self.labels_list = np.unique(y['classes'])
         self.multi_worker_dataset = self._join_shuffle_data(X, y, self.global_batch_size)
 
@@ -96,7 +96,8 @@ class Keras_TF_model(Models_utils):
         save_checkpoint(model_weights = self.clf.get_weights())
 
     def _join_shuffle_data(X_train, y_train, batch_size):
-        df = ray.data.from_modin(X_train.join(y_train, on = 'id', how = 'left'))
+        df = X_train.join(y_train, on = 'id', how = 'left')
+        df = self._convert_data_ray_ds(df)
         df = df.random_shuffle()
         df = df.to_tf(
         label_column = 'classes',
@@ -108,7 +109,7 @@ class Keras_TF_model(Models_utils):
         return df
 
     def predict(self, df, threshold = 0.8):
-        df = ray.data.from_modin(df)
+        df = self._convert_data_ray_ds(df)
         if self.classifier in ['attention','lstm','deeplstm']:
             y_pred = _predict_binary(df)
         elif self.classifier in ['lstm_attention','cnn','widecnn']:
@@ -123,7 +124,7 @@ class Keras_TF_model(Models_utils):
 
         y_pred = np.around(predicted.reshape(1, predicted.size)[0]).astype(np.int64)
 
-        return label_decode(y_pred)
+        return _label_decode(y_pred)
 
     def _predict_multi(self, df, threshold):
         y_pred = []
@@ -137,4 +138,4 @@ class Keras_TF_model(Models_utils):
             else:
                 y_pred.append(-1)
 
-        return label_decode(y_pred)
+        return _label_decode(y_pred)

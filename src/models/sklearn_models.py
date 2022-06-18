@@ -63,7 +63,7 @@ class Sklearn_model(Models_utils):
 
     def _fit_model(self, X, y):
         X = self.scaleX(X)
-        y = label_encode(y)
+        y = _label_encode(y)
         self.labels_list = np.unique(y['classes'])
         with parallel_backend('ray'):
             if self.classifier == 'onesvm':
@@ -76,7 +76,7 @@ class Sklearn_model(Models_utils):
         dump(self.clf, self.clf_file)
 
     def predict(self, df, threshold = 0.8):
-        df = ray.data.from_modin(df)
+        df = self._convert_data_ray_ds(df)
         if self.classifier in ['onesvm','linearsvm']:
             y_pred = _predict_binary(df)
         elif self.classifier in ['sgd','svm','mlr','mnb']:
@@ -90,7 +90,7 @@ class Sklearn_model(Models_utils):
         for i, row in enumerate(df.iter_rows()):
             y_pred[i] = clf.predict(row)
 
-        return label_decode(y_pred)
+        return _label_decode(y_pred)
 
     def _predict_multi(self, df, threshold):
         y_pred = []
@@ -102,4 +102,4 @@ class Sklearn_model(Models_utils):
             else:
                 y_pred.append(-1)
 
-        return label_decode(y_pred)
+        return _label_decode(y_pred)

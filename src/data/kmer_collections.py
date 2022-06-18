@@ -9,6 +9,7 @@ from joblib import Parallel, delayed, parallel_backend
 
 import numpy as np
 import modin.pandas as pd
+import modin.config as cfg
 
 __author__ = ['Amine Remita', 'Nicolas de Montigny']
 
@@ -26,6 +27,8 @@ Converted to be only functions instead of object for parallelization.
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 warnings.filterwarnings("ignore")
+
+cfg.NPartitions.put(int(os.cpu_count() ** 0.5))
 
 # #####
 # Data build functions
