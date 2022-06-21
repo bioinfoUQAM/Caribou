@@ -84,14 +84,3 @@ class Models_utils(ABC):
             df['classes'] = self.label_encoder.inverse_transform(df['classes'])
 
         return df
-
-    def _convert_data_ray_ds(self, df):
-        if type(df) != ray.data.dataset.Dataset:
-            if type(df) == pd.DataFrame:
-                df = ray.data.from_modin(df)
-            elif type(df) == pandas.DataFrame:
-                df = ray.data.from_pandas(df)
-            elif type(df) == numpy.ndarray:
-                df = ray.data.from_numpy(df)
-
-        return df

@@ -8,6 +8,8 @@ from sklearn.linear_model import SGDOneClassSVM, SGDClassifier
 from ray.util.joblib import register_ray
 from joblib import parallel_backend, dump, load
 
+from models.models_utils import Models_utils
+
 __author__ = 'Nicolas de Montigny'
 
 __all__ = []
@@ -76,7 +78,6 @@ class Sklearn_model(Models_utils):
         dump(self.clf, self.clf_file)
 
     def predict(self, df, threshold = 0.8):
-        df = self._convert_data_ray_ds(df)
         if self.classifier in ['onesvm','linearsvm']:
             y_pred = _predict_binary(df)
         elif self.classifier in ['sgd','svm','mlr','mnb']:

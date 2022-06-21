@@ -69,7 +69,7 @@ def na_2_zero(df):
 def construct_data(Xy_file, dir_path):
     files_list = glob.glob(os.path.join(dir_path,'*.csv'))
     # Read/concatenate files with Ray
-    df = ray.data.read_csv(files_list)
+    df = ray.data.read_csv(files_list, meta_provider = FastFileMetadataProvider())
     # Fill NAs with 0
     df = df.map_batches(na_2_zero, batch_format = 'pandas')
     # Save dataset

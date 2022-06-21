@@ -12,8 +12,6 @@ import os.path
 import argparse
 import pathlib
 
-import modin.pandas as pd
-
 from os import makedirs
 
 __author__ = "Nicolas de Montigny"
@@ -101,8 +99,8 @@ def kmers_dataset(opt):
         )
 
         # Save kmers list to file for further extractions
-        df = pd.read_parquet(k_profile_database['profile'])
-        kmers_list = list(df.columns)
+        df = ray.data.read_parquet(data['profile'])
+        kmers_list = list(df.limit(1).to_pandas().columns)
         kmers_list.remove('id')
         with open(os.path.join(outdirs["data_dir"],'kmers_list.txt'),'w') as handle:
             handle.writelines("%s\n" % item for item in kmers_list)
@@ -135,8 +133,8 @@ def kmers_dataset(opt):
         )
 
         # Save kmers list to file for further extractions
-        df = pd.read_parquet(k_profile_database['profile'])
-        kmers_list = list(df.columns)
+        df = ray.data.read_parquet(data['profile'])
+        kmers_list = list(df.limit(1).to_pandas().columns)
         kmers_list.remove('id')
         with open(os.path.join(outdirs["data_dir"],'kmers_list.txt'),'w') as handle:
             handle.writelines("%s\n" % item for item in kmers_list)

@@ -1,14 +1,16 @@
 import numpy as np
 
 import os
+import ray
 import json
 
 from keras.callbacks import EarlyStopping
 
-from ray.train import Trainer, save_checkpoint, CheckpointStrategy
 from ray.ml.predictors.tensorflow import TensorflowPredictor
+from ray.train import Trainer, save_checkpoint, CheckpointStrategy
 
 from models.build_neural_networks import *
+from models.models_utils import Models_utils
 
 __author__ = 'Nicolas de Montigny'
 
@@ -96,8 +98,10 @@ class Keras_TF_model(Models_utils):
         save_checkpoint(model_weights = self.clf.get_weights())
 
     def _join_shuffle_data(X_train, y_train, batch_size):
-        df = X_train.join(y_train, on = 'id', how = 'left')
-        df = self._convert_data_ray_ds(df)
+        # Join
+        X_train = X_train.to_modin()
+        y_train = y_train.to_modin()
+        df = ray.data.from_modin(X_train.merge(y_train, on = 'id', how = 'left'))
         df = df.random_shuffle()
         df = df.to_tf(
         label_column = 'classes',
@@ -109,7 +113,6 @@ class Keras_TF_model(Models_utils):
         return df
 
     def predict(self, df, threshold = 0.8):
-        df = self._convert_data_ray_ds(df)
         if self.classifier in ['attention','lstm','deeplstm']:
             y_pred = _predict_binary(df)
         elif self.classifier in ['lstm_attention','cnn','widecnn']:

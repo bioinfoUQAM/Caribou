@@ -5,7 +5,6 @@ import os
 import sys
 
 from utils import *
-from models.models_utils import Models_utils
 from models.sklearn_models import Sklearn_model
 from models.keras_tf_models import Keras_TF_model
 
@@ -52,11 +51,11 @@ def bacteria_extraction(metagenome_k_mers, database_k_mers, k, outdirs, dataset,
             sys.exit()
         elif classifier == 'onesvm' and not isinstance(database_k_mers, tuple):
             X_train = ray.data.read_parquet(database_k_mers['profile'])
-            y_train = pd.DataFrame(database_k_mers['classes'], columns = database_k_mers['taxas']).loc[:,'domain']
+            y_train = ray.data.from_modin(pd.DataFrame(database_k_mers['classes'], columns = database_k_mers['taxas']).loc[:,'domain'])
         elif classifier != 'onesvm' and isinstance(database_k_mers, tuple):
             database_k_mers = merge_database_host(database_k_mers[0], database_k_mers[1])
             X_train = ray.data.read_parquet(database_k_mers['profile'])
-            y_train = pd.DataFrame(database_k_mers['classes'], columns = database_k_mers['taxas']).loc[:,'domain'].str.lower()
+            y_train = ray.data.from_modin(pd.DataFrame(database_k_mers['classes'], columns = database_k_mers['taxas']).loc[:,'domain'].str.lower())
         else:
             print('Only classifier One Class SVM can be used without host data!\nEither add host data in config file or choose classifier One Class SVM.')
             sys.exit()
@@ -73,13 +72,12 @@ def bacteria_extraction(metagenome_k_mers, database_k_mers, k, outdirs, dataset,
     return classified_data
 
 def extract_bacteria_sequences(df_file, model, verbose = True):
+    if verbose:
+        print('Extracting predicted bacteria sequences')
 
     df = ray.data.read_parquet(df_file)
 
     classified_data = {}
-
-    if verbose:
-        print('Extracting predicted bacteria sequences')
 
     pred = model.predict(df)
 
