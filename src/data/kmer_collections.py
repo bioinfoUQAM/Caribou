@@ -74,7 +74,6 @@ def construct_data(Xy_file, dir_path):
     df = df.map_batches(na_2_zero, batch_format = 'pandas')
     # Save dataset
     df.write_parquet(Xy_file)
-    ray.shutdown()
 
 def compute_seen_kmers_of_sequence(kmc_path, k, dir_path, ind, file):
     # Make tmp folder per sequence

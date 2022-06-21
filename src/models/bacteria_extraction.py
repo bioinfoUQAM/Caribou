@@ -51,11 +51,11 @@ def bacteria_extraction(metagenome_k_mers, database_k_mers, k, outdirs, dataset,
             print('Classifier One Class SVM cannot be used with host data!\nEither remove host data from config file or choose another bacteria extraction method.')
             sys.exit()
         elif classifier == 'onesvm' and not isinstance(database_k_mers, tuple):
-            X_train = pd.read_parquet(database_k_mers['profile'])
+            X_train = ray.data.read_parquet(database_k_mers['profile'])
             y_train = pd.DataFrame(database_k_mers['classes'], columns = database_k_mers['taxas']).loc[:,'domain']
         elif classifier != 'onesvm' and isinstance(database_k_mers, tuple):
             database_k_mers = merge_database_host(database_k_mers[0], database_k_mers[1])
-            X_train = pd.read_parquet(database_k_mers['profile'])
+            X_train = ray.data.read_parquet(database_k_mers['profile'])
             y_train = pd.DataFrame(database_k_mers['classes'], columns = database_k_mers['taxas']).loc[:,'domain'].str.lower()
         else:
             print('Only classifier One Class SVM can be used without host data!\nEither add host data in config file or choose classifier One Class SVM.')
@@ -70,11 +70,11 @@ def bacteria_extraction(metagenome_k_mers, database_k_mers, k, outdirs, dataset,
             classified_data['bacteria'] = extract_bacteria_sequences(metagenome_k_mers['profile'], model, verbose)
             save_Xy_data(classified_data['bacteria'], bacteria_data_file)
 
-            return classified_data
+    return classified_data
 
 def extract_bacteria_sequences(df_file, model, verbose = True):
 
-    df = pd.read_parquet(df_file)
+    df = ray.data.read_parquet(df_file)
 
     classified_data = {}
 

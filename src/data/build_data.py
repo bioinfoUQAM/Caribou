@@ -3,8 +3,8 @@ from data.seq_collections import SeqCollection
 from data.kmer_collections import build_kmers_Xy_data, build_kmers_X_data
 
 import os
+import ray
 import pickle
-import modin.pandas as pd
 
 __author__ = "Nicolas de Montigny"
 
@@ -48,8 +48,8 @@ def build_load_save_data(file, hostfile, prefix, dataset, host, kmers_list=None,
 
         # Assign kmers_list to variable ater extracting database data
         if kmers_list is None:
-            df = pd.read_parquet(data['profile'])
-            kmers_list = list(df.columns)
+            df = ray.data.read_parquet(data['profile'])
+            kmers_list = list(df.limit(1).to_pandas().columns)
             kmers_list.remove('id')
 
         # Build Xy_data of host
