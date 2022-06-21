@@ -30,7 +30,6 @@ if gpus:
     sess = Session(config=config)
     set_session(sess);
 
-os.environ["RAY_LOG_TO_STDERR"] = "1"
 ray.init(num_cpus = os.cpu_count())
 
 # Part 0 - Initialisation / extraction of parameters from config file
