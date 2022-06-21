@@ -28,7 +28,10 @@ Converted to be only functions instead of object for parallelization.
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 warnings.filterwarnings("ignore")
 
-cfg.NPartitions.put(int(os.cpu_count() ** 0.5))
+# Set partitions size and number for modin
+# It will be longer to execute but should preserve from memory error
+cfg.MinPartitionSize.put(100)
+cfg.NPartitions.put(int(os.cpu_count() ** 2))
 
 # #####
 # Data build functions
