@@ -9,7 +9,6 @@ from joblib import Parallel, delayed, parallel_backend
 
 import numpy as np
 import modin.pandas as pd
-import modin.config as cfg
 
 __author__ = ['Amine Remita', 'Nicolas de Montigny']
 
@@ -27,11 +26,6 @@ Converted to be only functions instead of object for parallelization.
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 warnings.filterwarnings("ignore")
-
-# Set partitions size and number for modin
-# It will be longer to execute but should preserve from memory error
-cfg.MinPartitionSize.put(100)
-cfg.NPartitions.put(int(os.cpu_count() ** 2))
 
 # #####
 # Data build functions
@@ -68,39 +62,18 @@ def kmers_collection(seq_data, Xy_file, length, k, dataset, method = 'seen', kme
 
     rmtree(dir_path)
 
-def csv_concat(files_list):
-    df_list = []
-    for file in files_list:
-        df_list.append(pd.read_csv(file))
-
-    df = pd.concat(df_list)
-
+def na_2_zero(df):
+    df = df.fillna(0)
     return df
 
 def construct_data(Xy_file, dir_path):
     files_list = glob.glob(os.path.join(dir_path,'*.csv'))
-    n_lists = np.ceil(len(files_list) / 100)
-    if n_lists > 1:
-        files_list = np.array_split(files_list, n_lists)
-
-        # Parallel reading and concat by batches of 100 profiles
-        with parallel_backend('threading'):
-            df_list = Parallel(n_jobs = -1, prefer = 'threads', verbose = 100)(
-                      delayed(csv_concat)(list) for list in (files_list))
-        df = df_list[0]
-        df_list.pop(0)
-        for df_tmp in df_list:
-            df = pd.concat([df, df_tmp])
-
-    else:
-        df = csv_concat(files_list)
-
-    # Replace NAs with 0
-    df = df.fillna(0)
-    # Convert dataframe to ray dataset
-    df = ray.data.from_modin(df)
+    # Read/concatenate files with Ray
+    df = ray.data.read_csv(files_list)
+    # Fill NAs with 0
+    df = df.map_batches(na_2_zero, batch_format = 'pandas')
     # Save dataset
-    df.repartition(os.cpu_count()).write_parquet(Xy_file)
+    df.write_parquet(Xy_file)
 
 def compute_seen_kmers_of_sequence(kmc_path, k, dir_path, ind, file):
     # Make tmp folder per sequence
@@ -159,9 +132,7 @@ def compute_kmers(seq_data, method, kmers_list, k, dir_path, faSplit, kmc_path, 
 
     os.system(cmd_split)
 
-    for id in seq_data.ids:
-        file = os.path.join(dir_path,'{}.fa'.format(id))
-        file_list.append(file)
+    file_list = glob.glob(os.path.join(dir_path,'*.fa'))
 
     # Extract kmers in parallel using KMC3
     parallel_extraction(file_list, method, kmers_list, kmc_path, k, dir_path)
