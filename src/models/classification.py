@@ -5,12 +5,13 @@ import os
 import sys
 
 from utils import *
-from models.models_utils import *
-
+from models.models_utils import Models_utils
+from models.sklearn_models import Sklearn_model
+from models.keras_tf_models import Keras_TF_model
 
 __author__ = 'Nicolas de Montigny'
 
-__all__ = ['bacterial_classification','training','classify']
+__all__ = ['bacterial_classification','classify']
 
 # TODO: FINISH CONVERTING TO CLASSES FOR MODELS
 def bacterial_classification(classified_data, database_k_mers, k, outdirs, dataset, training_epochs, classifier = 'lstm_attention', batch_size = 32, threshold = 0.8, verbose = 1, cv = 1, n_jobs = 1):
@@ -20,15 +21,22 @@ def bacterial_classification(classified_data, database_k_mers, k, outdirs, datas
 
     for taxa in taxas:
         train = False
-        classified_kmers_file = '{}Xy_classified_{}_K{}_{}_database_{}_data.hdf5'.format(outdirs['data_dir'], taxa, k, classifier, dataset)
-        unclassified_kmers_file = '{}Xy_unclassified_{}_K{}_{}_database_{}_data.hdf5'.format(outdirs['data_dir'], taxa, k, classifier, dataset)
+        classified_kmers_file = '{}Xy_classified_{}_K{}_{}_database_{}_data'.format(outdirs['data_dir'], taxa, k, classifier, dataset)
+        unclassified_kmers_file = '{}Xy_unclassified_{}_K{}_{}_database_{}_data'.format(outdirs['data_dir'], taxa, k, classifier, dataset)
 
         if taxa == taxas[-1]:
             classified_data[taxa] = previous_taxa_unclassified
             classified_data['order'].append(taxa)
         else:
-            clf_file = '{}bacteria_identification_classifier_{}_K{}_{}_{}_model.json'.format(outdirs['models_dir'], taxa, k, classifier, dataset)
-            if not os.path.isfile(clf_file):
+            if classifier in ['sgd','svm','mlr','mnb']:
+                model = Sklearn_model()
+            elif classifier in ['lstm_attention','cnn','widecnn']:
+                model = Keras_TF_model()
+            else:
+                print('Bacteria classifier type unknown !!!\n\tModels implemented at this moment are :\n\tLinear models :  Ridge regressor (sgd), Linear SVM (svm), Multiple Logistic Regression (mlr)\n\tProbability classifier : Multinomial Bayes (mnb)\n\tNeural networks : Deep hybrid between LSTM and Attention (lstm_attention), CNN (cnn) and Wide CNN (widecnn)')
+                sys.exit()
+
+            if not os.path.isfile(model.clf_file):
                 train = True
 
             # Load extracted data if already exists or train and classify bacteria depending on chosen method and taxonomic rank
@@ -73,13 +81,7 @@ def bacterial_classification(classified_data, database_k_mers, k, outdirs, datas
 def training(df, k, outdir_plots, training_epochs, classifier = 'lstm_attention', batch_size = 32, verbose = 1, cv = 1, clf_file = None, n_jobs = 1):
     nb_classes = len(df.unique('label_encoded_classes'))
 
-    if classifier in ['sgd','svm','mlr','mnb']:
-        model = Sklearn_model()
-    elif classifier in ['lstm_attention','cnn','widecnn']:
-        model = Keras_TF_model()
-    else:
-        print('Bacteria classifier type unknown !!!\n\tModels implemented at this moment are :\n\tLinear models :  Ridge regressor (sgd), Linear SVM (svm), Multiple Logistic Regression (mlr)\n\tProbability classifier : Multinomial Bayes (mnb)\n\tNeural networks : Deep hybrid between LSTM and Attention (lstm_attention), CNN (cnn) and Wide CNN (widecnn)')
-        sys.exit()
+
 
 def classify(df, clf_file, label_encoder, taxa, classified_kmers_file, unclassified_kmers_file, threshold = 0.8, verbose = 1):
 

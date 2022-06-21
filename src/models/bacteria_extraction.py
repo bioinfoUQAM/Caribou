@@ -5,13 +5,14 @@ import os
 import sys
 
 from utils import *
-from models.models_utils import *
+from models.models_utils import Models_utils
+from models.sklearn_models import Sklearn_model
+from models.keras_tf_models import Keras_TF_model
 
 __author__ = 'Nicolas de Montigny'
 
 __all__ = ['bacteria_extraction','extract_bacteria_sequences']
 
-# TODO: FINISH CONVERTING TO CLASSES FOR MODELS
 def bacteria_extraction(metagenome_k_mers, database_k_mers, k, outdirs, dataset, training_epochs, classifier = 'deeplstm', batch_size = 32, verbose = 1, cv = 1, n_jobs = 1):
     # classified_data is a dictionnary containing data dictionnaries at each classified level:
     # {taxa:{'X':path to ray dataset in parquet format}}
@@ -71,7 +72,6 @@ def bacteria_extraction(metagenome_k_mers, database_k_mers, k, outdirs, dataset,
 
             return classified_data
 
-# TODO: CONTINUE ADAPTING FOR USE WITH CLASSES
 def extract_bacteria_sequences(df_file, model, verbose = True):
 
     df = pd.read_parquet(df_file)
