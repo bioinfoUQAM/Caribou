@@ -39,7 +39,7 @@ def bacteria_classification_train_cv(opt):
     else:
         data_bacteria = load_Xy_data(opt['data_bacteria'])
         # Infer k-mers length from the extracted bacteria profile
-        k_length = len(data_bacteria['kmers_list'][0])
+        k_length = len(data_bacteria['kmers'][0])
         # Verify that kmers profile file exists
         if not os.path.isfile(data_bacteria['X']):
             print("Cannot find file {} ! Exiting".format(os.path.isfile(data_bacteria['X'])))

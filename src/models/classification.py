@@ -5,8 +5,7 @@ import os
 import sys
 
 from utils import *
-from models.sklearn_models import Sklearn_model
-from models.keras_tf_models import Keras_TF_model
+from models_classes import SklearnModel, KerasTFModel
 
 __author__ = 'Nicolas de Montigny'
 

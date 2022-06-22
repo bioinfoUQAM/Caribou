@@ -39,7 +39,7 @@ def bacteria_extraction_train_cv(opt):
     else:
         data_bacteria = load_Xy_data(opt['data_bacteria'])
         # Infer k-mers length from the extracted bacteria profile
-        k_length = len(data_bacteria['kmers_list'][0])
+        k_length = len(data_bacteria['kmers'][0])
         # Verify that kmers profile file exists
         if not os.path.isfile(data_bacteria['X']):
             print("Cannot find file {} ! Exiting".format(os.path.isfile(data_bacteria['X'])))
@@ -53,8 +53,8 @@ def bacteria_extraction_train_cv(opt):
         else:
             data_host = load_Xy_data(opt['data_host'])
             # Verify concordance of k length between datasets
-            if k_length != len(data_host['kmers_list'][0]):
-                print("K length of bacteria dataset is {} while K length from host is {}").format(k_length, len(data_host['kmers_list'][0]))
+            if k_length != len(data_host['kmers'][0]):
+                print("K length of bacteria dataset is {} while K length from host is {}").format(k_length, len(data_host['kmers'][0]))
                 print("K length between datasets is inconsistent ! Exiting")
                 sys.exit()
             else:

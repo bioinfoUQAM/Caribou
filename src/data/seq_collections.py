@@ -17,7 +17,7 @@ __all__ = ['SeqCollection']
 
 """
 Module adapted from module seq_collections.py of
-mlr_kgenomvir package [Remita et al. 2021]
+mlr_kgenomvir package [Remita et al. 2022]
 
 Keeps SeqRecords in file instead parsing them to memory
 and adapted / added functions to do so.
@@ -29,8 +29,8 @@ class SeqCollection(UserList):
     Attributes
     ----------
 
-    data : list of Bio.SeqRecord
-        Collection of sequence records
+    data : string
+        Path to a file containing sequences in fasta format
 
     labels : list
         Collection of labels of the sequences
@@ -40,9 +40,6 @@ class SeqCollection(UserList):
     label_map : dict
         mapping of sequences and their labels (classes)
 
-    taget_ind : defaultdict(list)
-        Collection of labels and the indices of belonging
-        sequences
 
     """
 
@@ -55,7 +52,6 @@ class SeqCollection(UserList):
         self.ids = []
         self.id_map = {}
         self.id_ind = defaultdict(list)
-        self.length = 0
         self.taxas = []
 
         # If arguments are two files
@@ -162,7 +158,6 @@ class SeqCollection(UserList):
                         self.__append_id(record.id)
                     except StopIteration as e:
                         error = True
-                self.length = len(self.ids)
         elif ext == "gz":
             path, ext = splitext(path)
             ext = ext.lstrip(".")
@@ -177,7 +172,6 @@ class SeqCollection(UserList):
                         self.__append_id(record.id)
                     except StopIteration as e:
                         error = True
-                self.length = len(self.ids)
 
         return my_file
 

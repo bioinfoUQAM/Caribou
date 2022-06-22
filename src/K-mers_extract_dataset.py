@@ -99,9 +99,7 @@ def kmers_dataset(opt):
         )
 
         # Save kmers list to file for further extractions
-        df = ray.data.read_parquet(data['profile'])
-        kmers_list = list(df.limit(1).to_pandas().columns)
-        kmers_list.remove('id')
+        kmers_list = k_profile_database['kmers']
         with open(os.path.join(outdirs["data_dir"],'kmers_list.txt'),'w') as handle:
             handle.writelines("%s\n" % item for item in kmers_list)
 
@@ -133,9 +131,7 @@ def kmers_dataset(opt):
         )
 
         # Save kmers list to file for further extractions
-        df = ray.data.read_parquet(data['profile'])
-        kmers_list = list(df.limit(1).to_pandas().columns)
-        kmers_list.remove('id')
+        kmers_list = k_profile_database['kmers']
         with open(os.path.join(outdirs["data_dir"],'kmers_list.txt'),'w') as handle:
             handle.writelines("%s\n" % item for item in kmers_list)
 
