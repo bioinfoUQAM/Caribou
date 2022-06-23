@@ -12,9 +12,8 @@ __all__ = ['load_Xy_data','save_Xy_data','save_predicted_kmers','merge_database_
 
 # Load data from file
 def load_Xy_data(Xy_file):
-    if os.path.basename(Xy_file).split(sep = ".")[1] == "npz":
-        with np.load(Xy_file, allow_pickle=True) as f:
-            return f['data'].tolist()
+    with np.load(Xy_file, allow_pickle=True) as f:
+        return f['data'].tolist()
 
 # Save data to file
 def save_Xy_data(df, Xy_file):
