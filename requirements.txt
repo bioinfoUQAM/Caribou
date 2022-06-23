@@ -4,12 +4,9 @@ Bio
 h5py
 matplotlib
 numpy
-pandas
 sklearn
 scipy
 tensorflow
 keras
-vaex-core
-vaex-hdf5
-vaex-ml
-diskcache
+ray
+modin[ray]

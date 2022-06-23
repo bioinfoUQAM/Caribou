@@ -11,10 +11,11 @@ from tensorflow.config import list_physical_devices
 
 import os
 import sys
-import vaex
+import ray
 import argparse
 import configparser
 
+import modin.pandas as pd
 from pathlib import Path
 
 __author__ = 'Nicolas de Montigny'
@@ -28,6 +29,8 @@ if gpus:
     config = ConfigProto(device_count={'GPU': len(gpus), 'CPU': os.cpu_count()})
     sess = Session(config=config)
     set_session(sess);
+
+ray.init(num_cpus = os.cpu_count())
 
 # Part 0 - Initialisation / extraction of parameters from config file
 ################################################################################
@@ -170,10 +173,6 @@ def caribou(opt):
     os.makedirs(outdirs['models_dir'], mode=0o700, exist_ok=True)
     os.makedirs(outdirs['results_dir'], mode=0o700, exist_ok=True)
 
-    if cv:
-        outdirs['plots_dir'] = os.path.join(outdirs['main_outdir'], 'plots/')
-        os.makedirs(outdirs['plots_dir'], mode=0o700, exist_ok=True)
-
 # Part 1 - K-mers profile extraction
 ################################################################################
 
@@ -197,13 +196,12 @@ def caribou(opt):
         )
 
     # Metagenome to analyse
-    df = vaex.open(k_profile_database['profile'])
     k_profile_metagenome = build_load_save_data(metagenome_seq_file,
         None,
         outdirs['data_dir'],
         metagenome,
         host,
-        kmers_list = list(df.columns)
+        kmers_list = k_profile_database['kmers']
     )
 
 # Part 2 - Binary classification of bacteria / host sequences

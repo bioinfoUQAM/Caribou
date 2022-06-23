@@ -2,13 +2,12 @@
 
 from data.build_data import build_load_save_data
 
-import vaex
-
 from tensorflow.compat.v1 import ConfigProto, Session
 from tensorflow.compat.v1.keras.backend import set_session
 from tensorflow.config import list_physical_devices
 
 import sys
+import ray
 import os.path
 import argparse
 import pathlib
@@ -31,6 +30,8 @@ if gpus:
     sess = Session(config=config)
     set_session(sess);
 
+ray.init(num_cpus = os.cpu_count())
+
 # Initialisation / validation of parameters from CLI
 ################################################################################
 def kmers_dataset(opt):
@@ -44,7 +45,7 @@ def kmers_dataset(opt):
     if opt['dataset_name'] is None:
         opt['dataset_name'] = "dataset"
     if opt['host_name'] is None:
-        opt['dataset_name'] = "host"
+        opt['host_name'] = "host"
     # Verification of existence of files
     for file in [opt['seq_file'],opt['cls_file'],opt['seq_file_host'],opt['cls_file_host'],opt['kmers_list']]:
         if file is not None and not os.path.isfile(file):
@@ -98,9 +99,7 @@ def kmers_dataset(opt):
         )
 
         # Save kmers list to file for further extractions
-        df = vaex.open(k_profile_database['profile'])
-        kmers_list = list(df.columns)
-        kmers_list.remove('id')
+        kmers_list = k_profile_database['kmers']
         with open(os.path.join(outdirs["data_dir"],'kmers_list.txt'),'w') as handle:
             handle.writelines("%s\n" % item for item in kmers_list)
 
@@ -132,9 +131,7 @@ def kmers_dataset(opt):
         )
 
         # Save kmers list to file for further extractions
-        df = vaex.open(k_profile_database['profile'])
-        kmers_list = list(df.columns)
-        kmers_list.remove('id')
+        kmers_list = k_profile_database['kmers']
         with open(os.path.join(outdirs["data_dir"],'kmers_list.txt'),'w') as handle:
             handle.writelines("%s\n" % item for item in kmers_list)
 

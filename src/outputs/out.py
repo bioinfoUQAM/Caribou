@@ -1,11 +1,11 @@
 import numpy as np
-import pandas as pd
+import modin.pandas as pd
 
 from Bio import SeqIO
 from copy import copy
 
 import os
-import vaex
+import ray
 import gzip
 import pickle
 
@@ -46,12 +46,12 @@ def get_abundances(data):
     order = data['order'].copy()
 
     for taxa in order:
-        df = vaex.open(data[taxa]['profile'])
+        df = ray.data.read_parquet(data[taxa]['profile']).to_modin()
         if taxa in ['bacteria','host','unclassified']:
             abundances[taxa] = len(df)
         else:
             abundances[taxa] = {}
-            for cls in df.unique('classes'):
+            for cls in np.unique(df['classes']):
                 if cls in abundances[taxa]:
                     abundances[taxa][cls] += 1
                 else:

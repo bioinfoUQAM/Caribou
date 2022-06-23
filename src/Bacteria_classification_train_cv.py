@@ -9,6 +9,7 @@ from tensorflow.config import list_physical_devices
 
 import os
 import sys
+import ray
 import argparse
 
 from pathlib import Path
@@ -25,6 +26,8 @@ if gpus:
     sess = Session(config=config)
     set_session(sess);
 
+ray.init(num_cpus = os.cpu_count())
+
 # Initialisation / validation of parameters from CLI
 ################################################################################
 def bacteria_classification_train_cv(opt):
@@ -36,7 +39,7 @@ def bacteria_classification_train_cv(opt):
     else:
         data_bacteria = load_Xy_data(opt['data_bacteria'])
         # Infer k-mers length from the extracted bacteria profile
-        k_length = len(data_bacteria['kmers_list'][0])
+        k_length = len(data_bacteria['kmers'][0])
         # Verify that kmers profile file exists
         if not os.path.isfile(data_bacteria['X']):
             print("Cannot find file {} ! Exiting".format(os.path.isfile(data_bacteria['X'])))
