@@ -207,6 +207,8 @@ class KmersCollection():
     def _batch_read_write(self, batch, dir, ind):
         df = ray.data.read_csv(batch)
         df.repartition(1).write_csv(os.path.join(dir,'{}.csv'.format(ind)))
+        for file in batch:
+            os.remove(file)
 
     def _na_2_zero(self, df):
         df = df.fillna(0)
