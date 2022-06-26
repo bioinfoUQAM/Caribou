@@ -187,12 +187,26 @@ class KmersCollection():
 
     def _construct_data(self):
         self._csv_list = glob(os.path.join(self._tmp_dir,'*.csv'))
-        # Read/concatenate files with Ray
+        # Read/concatenate files with Ray by batches
+        nb_batch = 0
+        while self._csv_list > 1000:
+            batches_list = np.array_split(len(self._csv_list)/1000)
+            batch_dir = os.path.join(self._tmp_dir, 'batch_{}'.format(nb_batch))
+            os.mkdir(batch_dir)
+            for ind, batch in enumarate(batches_list):
+                self._batch_read_write(batch, batch_dir, ind)
+            self._csv_list = glob(os.path.join(batch_dir,'*.csv'))
+            nb_batch += 1
+        # Read/concatenate batches with Ray
         self.df = ray.data.read_csv(self._csv_list)
         # Fill NAs with 0
         self.df = self.df.map_batches(self._na_2_zero, batch_format = 'pandas')
         # Save dataset
         self.df.write_parquet(self.Xy_file)
+
+    def _batch_read_write(self, batch, dir, ind):
+        df = ray.data.read_csv(batch)
+        df.repartition(1).write_csv(os.path.join(dir,'{}.csv'.format(ind)))
 
     def _na_2_zero(self, df):
         df = df.fillna(0)

@@ -8,7 +8,7 @@ import joblib
 
 __author__ = "Nicolas de Montigny"
 
-__all__ = ['load_Xy_data','save_Xy_data','save_predicted_kmers','merge_database_host','label_encode']
+__all__ = ['load_Xy_data','save_Xy_data','merge_database_host']
 
 # Load data from file
 def load_Xy_data(Xy_file):
@@ -20,20 +20,18 @@ def save_Xy_data(df, Xy_file):
     np.savez(Xy_file, data = df)
 
 def merge_database_host(database_data, host_data):
-    merged_data = dict()
+    merged_data = {}
 
-    path, ext = os.path.splitext(database_data["X"])
-    merged_file = "{}_host_merged{}".format(path, ext)
+    merged_file = "{}_host_merged".format(os.path.splitext(database_data["profile"])[0])
 
-    merged_data["X"] = merged_file
-    merged_data["y"] = np.array(pd.DataFrame(database_data["y"], columns = database_data["taxas"]).append(pd.DataFrame(host_data["y"], columns = host_data["taxas"]), ignore_index = True))
-    merged_data["ids"] = database_data["ids"] + host_data["ids"]
-    merged_data["kmers_list"] = database_data["kmers_list"]
-    merged_data["taxas"] = list(set(database_data["taxas"]).union(host_data["taxas"]))
+    merged_data['profile'] = merged_file # Kmers profile
+    merged_data['classes'] = np.array(pd.DataFrame(database_data["classes"], columns = database_data["taxas"]).append(pd.DataFrame(host_data["classes"], columns = host_data["taxas"]), ignore_index = True)) # Class labels
+    merged_data['kmers'] = database_data["kmers"] # Features
+    merged_data['taxas'] = database_data["taxas"] # Known taxas for classification
 
-    df_db = pd.read_csv(database_data["X"])
-    df_host = pd.read_csv(host_data["X"])
-    df_merged = pd.concat([df_db, df_host])
-    df_merged.to_csv(merged_file)
+    df_db = ray.data.read_parquet(database_data["profile"])
+    df_host = ray.data.read_parquet(host_data["profile"])
+    df_merged = df_db.union(df_host)
+    df_merged.write_parquet(merged_file)
 
     return merged_data

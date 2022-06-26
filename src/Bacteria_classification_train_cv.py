@@ -33,7 +33,7 @@ ray.init(num_cpus = os.cpu_count())
 def bacteria_classification_train_cv(opt):
 
     # Verify existence of files and load data
-    if not os.path.isfile(opt['data_bacteria']):
+    if not os.path.isdir(opt['data_bacteria']):
         print("Cannot find file {} ! Exiting".format(file))
         sys.exit()
     else:
@@ -52,11 +52,6 @@ def bacteria_classification_train_cv(opt):
     # Validate batch size
     if opt['batch_size'] <= 0:
         print("Invalid batch size ! Exiting")
-        sys.exit()
-
-    # Validate number of cv jobs
-    if opt['nb_cv_jobs'] <= 0:
-        print("Invalid number of cross-validation jobs")
         sys.exit()
 
     # Validate number of epochs
@@ -94,8 +89,8 @@ def bacteria_classification_train_cv(opt):
         classifier = opt['model_type'],
         batch_size = opt['batch_size'],
         verbose = opt['verbose'],
-        cv = True,
-        n_jobs = opt['nb_cv_jobs'])
+        cv = True
+        )
 
     print("Caribou finished training and cross-validating the {} model without faults").format(opt['model_type'])
 
@@ -107,7 +102,6 @@ if __name__ == "__main__":
     parser.add_argument('-dt','--database_name', required=True, help='Name of the bacteria database used to name files')
     parser.add_argument('-model','--model_type', default='lstm_attention', choices=['sgd','svm','mlr','mnb','lstm_attention','cnn','widecnn'], help='The type of model to train')
     parser.add_argument('-bs','--batch_size', default=32, type=int, help='Size of the batch size to use, defaults to 32')
-    parser.add_argument('-cv','--nb_cv_jobs', default=10, type=int, help='The number of cross validation jobs to run, defaults to 10')
     parser.add_argument('-e','--training_epochs', default=100, type=int, help='The number of training iterations for the neural networks models if one ise chosen, defaults to 100')
     parser.add_argument('-v','--verbose', action='store_true', help='Should the program be verbose')
     parser.add_argument('-o','--outdir', required=True, type=Path, help='PATH to a directory on file where outputs will be saved')
