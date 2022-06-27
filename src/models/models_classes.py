@@ -77,13 +77,20 @@ class ModelsUtils(ABC):
         """
 
     def _cross_validation(self, X_train, y_train):
+        X_train = X_train.to_modin()
+        y_train = y_train.to_modin()
         with parallel_backend('ray'):
             X_train, X_test, y_train, y_test = train_test_split(X_train, y_train, train_size = 0.8, random_state=42)
 
-            self._fit_model(X_train, y_train)
+            X_train = ray.data.from_modin(X_train)
+            y_train = ray.data.from_modin(y_train)
+            X_test = ray.data.from_modin(X_test)
+            y_test = ray.data.from_modin(y_test)
 
-            y_pred = self.predict(X_test)
-            self._cv_score(y_test, y_pred)
+        self._fit_model(X_train, y_train)
+
+        y_pred = self.predict(X_test)
+        self._cv_score(y_test, y_pred)
 
     # Outputs scores for cross validation in a dictionnary
     def _cv_score(self, y_true, y_pred):
@@ -180,22 +187,24 @@ class SklearnModel(ModelsUtils):
         return y_pred
 
     def _predict_binary(self, df):
-        y_pred = np.empty(nb_ids, dtype=np.int32)
+        y_pred = np.empty(df.count(), dtype=np.int32)
 
-        for i, row in enumerate(df.iter_rows()):
-            y_pred[i] = clf.predict(row)
+        with parallel_backend('ray'):
+            for i, row in enumerate(df.iter_rows()):
+                y_pred[i] = clf.predict(row)
 
         return _label_decode(y_pred)
 
     def _predict_multi(self, df, threshold):
-        y_pred = []
+        y_pred = np.empty(df.count(), dtype=np.int32)
 
-        for i, row in enumerate(df.iter_rows()):
-            predicted = clf.predict_proba(row)
-            if predicted[0,np.argmax(predict[0])] >= threshold:
-                y_pred.append(self.labels_list[np.argmax(predicted[0])])
-            else:
-                y_pred.append(-1)
+        with parallel_backend('ray'):
+            for i, row in enumerate(df.iter_rows()):
+                predicted = clf.predict_proba(row)
+                if predicted[0,np.argmax(predict[0])] >= threshold:
+                    y_pred[i] = self.labels_list[np.argmax(predicted[0])]
+                else:
+                    y_pred[i] = -1
 
         return _label_decode(y_pred)
 
@@ -304,15 +313,15 @@ class KerasTFModel(ModelsUtils):
         return _label_decode(y_pred)
 
     def _predict_multi(self, df, threshold):
-        y_pred = []
+        y_pred = np.empty(df.count(), dtype=np.int32)
         predictor = TensorflowPredictor().from_checkpoint(checkpoint = self.checkpoint, model_definition = self._build)
 
         predicted = np.array(predictor.predict(df))
 
         for i in range(len(predicted)):
             if np.argmax(predicted[i]) >= threshold:
-                y_pred.append(self.labels_list[np.argmax(predicted[i])])
+                y_pred[i] = self.labels_list[np.argmax(predicted[i])]
             else:
-                y_pred.append(-1)
+                y_pred[i] = -1
 
         return _label_decode(y_pred)

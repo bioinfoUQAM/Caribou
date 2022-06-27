@@ -3,6 +3,7 @@ import numpy as np
 
 import os
 import sys
+import ray
 
 from utils import *
 from models_classes import SklearnModel, KerasTFModel

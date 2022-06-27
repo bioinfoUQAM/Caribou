@@ -14,7 +14,7 @@ from utils import load_Xy_data
 
 __author__ = 'Nicolas de Montigny'
 
-__all__ = ['to_user','get_abundances','out_abundances','abundance_table','out_summary','out_kronagram','create_krona_file','out_report','out_fasta']
+__all__ = ['to_user','get_abundances','out_abundances','abundance_table','out_summary','out_kronagram','create__krona_file','out_report','out_fasta']
 
 class Outputs():
     def __init__(database_kmers, results_dir, k, classifier, dataset, host, classified_data, seq_file, abundance_stats = True, kronagram = True, full_report = True, extract_fasta = True):
@@ -27,13 +27,12 @@ class Outputs():
         with open(seq_file, 'rb') as handle:
             self.data_labels = pickle.load(handle).labels # seq_data.labels
         # File names
-        self.abund_file = '{}abundance_K{}_{}_{}.csv'.format(results_dir, k, classifier, dataset)
-        self.summary_file = '{}summary_K{}_{}_{}.csv'.format(results_dir, k, classifier, dataset)
-        self.krona_file = '{}kronagram_K{}_{}_{}.csv'.format(results_dir, k, classifier, dataset)
-        self.krona_out = '{}kronagram_K{}_{}_{}.html'.format(results_dir, k, classifier, dataset)
-        self.report_file = '{}full_report_K{}_{}_{}.csv'.format(results_dir, k, classifier, dataset)
-        self.tree_file = '{}Taxonomic_tree_K{}_{}_{}.nwk'.format(results_dir, k, classifier, dataset)
-        self.fasta_outdir = '{}fasta_by_taxa_k{}_{}_{}'.format(results_dir, k, classifier, dataset)
+        self._abund_file = '{}abundance_K{}_{}_{}.csv'.format(results_dir, k, classifier, dataset)
+        self._summary_file = '{}summary_K{}_{}_{}.csv'.format(results_dir, k, classifier, dataset)
+        self._krona_file = '{}kronagram_K{}_{}_{}.csv'.format(results_dir, k, classifier, dataset)
+        self._krona_out = '{}kronagram_K{}_{}_{}.html'.format(results_dir, k, classifier, dataset)
+        self._report_file = '{}full_report_K{}_{}_{}.csv'.format(results_dir, k, classifier, dataset)
+        self._fasta_outdir = '{}fasta_by_taxa_k{}_{}_{}'.format(results_dir, k, classifier, dataset)
         # Initialize empty
         self.abundances = {}
         self.summary = {}
@@ -99,46 +98,44 @@ class Outputs():
                 self.summary[taxa] = taxa_abund
         df['Relative Abundance (%)'] = (df['Number of reads']/total_abund)*100
         self.summary['total'] = total_abund
-        df.to_csv(abund_file, na_rep = '', header = True, index = False)
+        df.to_csv(self._abund_file, na_rep = '', header = True, index = False)
 
     def _summary(self):
-        print('to do')
+        # Summary file of operations / counts & proportions of reads at each steps
+        cols = ['Value']
+        rows = ['Abundance','','Number of reads before classification', 'Number of reads classified','Number of unclassified reads','Number of reads identified as bacteria']
+        values = np.array([np.NaN, np.NaN, self.summary['initial'], self.summary['total'], self.summary['unclassified'], self.summary['bacteria']])
+        if self.host is not None:
+            rows.append('Number of reads identified as {}'.format(self.host))
+            values = np.append(values, self.summary['host'])
+        for taxa in self.order:
+            if taxa not in ['bacteria','host','unclassified']:
+                rows.append('Number of reads classified at {} level'.format(taxa))
+                values = np.append(values, self.summary[taxa])
+        rows.extend(['','Relative abundances','','Percentage of reads classified', 'Percentage of reads unclassified','Percentage of reads identified as bacteria'])
+        values = np.append(values, [np.NaN,np.NaN,np.NaN,(self.summary['total']/self.summary['initial']*100),(self.summary['unclassified']/self.summary['initial']*100),(self.summary['bacteria']/self.summary['initial']*100)])
+        if self.host is not None:
+            rows.append('Percentage of reads identified as {}'.format(self.host))
+            values = np.append(values, self.summary['host']/self.summary['initial']*100)
 
 
-def out_summary(abundances, order, summary, host, summary_file):
-    # Summary file of operations / counts & proportions of reads at each steps
-    cols = ['Value']
-    rows = ['Abundance','','Number of reads before classification', 'Number of reads classified','Number of unclassified reads','Number of reads identified as bacteria']
-    values = np.array([np.NaN, np.NaN, summary['initial'], summary['total'], summary['unclassified'], summary['bacteria']])
-    if host is not None:
-        rows.append('Number of reads identified as {}'.format(host))
-        values = np.append(values, summary['host'])
-    for taxa in order:
-        if taxa not in ['bacteria','host','unclassified']:
-            rows.append('Number of reads classified at {} level'.format(taxa))
-            values = np.append(values, summary[taxa])
-    rows.extend(['','Relative abundances','','Percentage of reads classified', 'Percentage of reads unclassified','Percentage of reads identified as bacteria'])
-    values = np.append(values, [np.NaN,np.NaN,np.NaN,(summary['total']/summary['initial']*100),(summary['unclassified']/summary['initial']*100),(summary['bacteria']/summary['initial']*100)])
-    if host is not None:
-        rows.append('Percentage of reads identified as {}'.format(host))
-        values = np.append(values, summary['host']/summary['initial']*100)
     for taxa in order:
         if taxa not in ['bacteria','host','unclassified']:
             rows.append('Percentage of reads classified at {} level'.format(taxa))
             values = np.append(values, summary[taxa]/summary['initial']*100)
 
     df = pd.DataFrame(values, index = rows, columns = cols)
-    df.to_csv(summary_file, na_rep = '', header = False, index = True)
+    df.to_csv(_summary_file, na_rep = '', header = False, index = True)
 
-def out_kronagram(abundances, order, krona_file, krona_out, seq_data, database_kmers, dataset):
+def out_kronagram(abundances, order, _krona_file, _krona_out, seq_data, database_kmers, dataset):
     # Kronagram / interactive tree
     krona_path = os.path.join(os.path.dirname(os.path.realpath(__file__)),'KronaTools','scripts','ImportText.pl')
-    create_krona_file(abundances, order, krona_file, seq_data, database_kmers)
+    create__krona_file(abundances, order, _krona_file, seq_data, database_kmers)
     perl_loc = run('which perl', shell = True, capture_output = True, text = True)
-    cmd = '{} {} {} -o {} -n {}'.format(perl_loc.stdout.strip('\n'), krona_path, krona_file, krona_out, dataset)
+    cmd = '{} {} {} -o {} -n {}'.format(perl_loc.stdout.strip('\n'), krona_path, _krona_file, _krona_out, dataset)
     run(cmd, shell = True)
 
-def create_krona_file(abundances, order, krona_file, seq_data, database_kmers):
+def create__krona_file(abundances, order, _krona_file, seq_data, database_kmers):
     cols = ['Abundance']
     [cols.append(database_kmers['taxas'][i]) for i in range(len(database_kmers['taxas'])-1, -1, -1)]
 
@@ -171,9 +168,9 @@ def create_krona_file(abundances, order, krona_file, seq_data, database_kmers):
                             df.iloc[index,col] = np.flip(unique_rows[np.where(unique_rows == k)[0]])[0][col-1]
                     index += 1
     df = df.replace(0,np.NaN)
-    df.to_csv(krona_file, na_rep = '', header = False, index = False)
+    df.to_csv(_krona_file, na_rep = '', header = False, index = False)
 
-def out_report(classified_data, order, report_file, database_kmers, seq_data):
+def out_report(classified_data, order, _report_file, database_kmers, seq_data):
     # Report file of classification of each id
     cols = ['Sequence ID']
     [cols.append(database_kmers['taxas'][i]) for i in range(len(database_kmers['taxas'])-1, -1, -1)]
@@ -199,10 +196,10 @@ def out_report(classified_data, order, report_file, database_kmers, seq_data):
                         df.iloc[index,col] = np.flip(unique_rows[np.where(unique_rows == classification)[0]])[0][col-1]
                 index += 1
     df = df.replace(0,np.NaN)
-    df.to_csv(report_file, na_rep = '', header = True, index = False)
+    df.to_csv(_report_file, na_rep = '', header = True, index = False)
 
-def out_fasta(classified_data, order, fasta_file, fasta_outdir):
-    os.mkdir(fasta_outdir)
+def out_fasta(classified_data, order, fasta_file, _fasta_outdir):
+    os.mkdir(_fasta_outdir)
     path, ext = os.path.splitext(fasta_file)
     if ext == '.gz':
         with gzip.open(fasta_file, 'rt') as handle:
@@ -214,7 +211,7 @@ def out_fasta(classified_data, order, fasta_file, fasta_outdir):
     list_taxa = [order[i] for i in range(len(order)-1, -1, -1)]
     list_taxa.remove('unclassified')
     for taxa in list_taxa:
-        taxa_dir = os.path.join(fasta_outdir,taxa)
+        taxa_dir = os.path.join(_fasta_outdir,taxa)
         df = vaex.open(classified_data[taxa]['profile'])
         for cls in df.unique('classes'):
             outfile_cls = os.path.join(taxa_dir,'{}.fa.gz'.format(cls))

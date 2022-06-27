@@ -3,6 +3,7 @@ import modin.pandas as pd
 
 import os
 import sys
+import ray
 
 from utils import *
 from models.models_classes import SklearnModel, KerasTFModel
