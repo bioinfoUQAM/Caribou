@@ -51,9 +51,8 @@ def bacteria_extraction(metagenome_k_mers, database_k_mers, k, outdirs, dataset,
             sys.exit()
         elif classifier == 'onesvm' and not isinstance(database_k_mers, tuple):
             X_train = ray.data.read_parquet(database_k_mers['profile'])
-            # y_train = ray.data.from_modin(pd.DataFrame(database_k_mers['classes'], columns = database_k_mers['taxas']).loc[:,'domain'])
-            y_train = pd.DataFrame(database_k_mers['classes'], columns = database_k_mers['taxas']).loc[:,'domain']
-            print(y_train)
+            y_train = ray.data.from_modin(pd.DataFrame(database_k_mers['classes'].loc[:,'domain'], columns = ['classes']))
+            print(y_train.show())
         elif classifier != 'onesvm' and isinstance(database_k_mers, tuple):
             database_k_mers = merge_database_host(database_k_mers[0], database_k_mers[1])
             X_train = ray.data.read_parquet(database_k_mers['profile'])

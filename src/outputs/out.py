@@ -207,16 +207,13 @@ class Outputs():
 
         list_taxa = [order[i] for i in range(len(order)-1, -1, -1)]
         list_taxa.remove('unclassified')
-
-
-
-    for taxa in list_taxa:
-        taxa_dir = os.path.join(_fasta_outdir,taxa)
-        df = vaex.open(classified_data[taxa]['profile'])
-        for cls in df.unique('classes'):
-            outfile_cls = os.path.join(taxa_dir,'{}.fa.gz'.format(cls))
-            df_cls = df[df.classes.str.match(cls)]
-            ids = list(df_cls.id.values)
-            with gzip.open(outfile_cls, 'w') as handle:
-                for id in ids:
-                    SeqIO.write(records[id], handle, 'fasta')
+        for taxa in list_taxa:
+            taxa_dir = os.path.join(self._fasta_outdir,taxa)
+            df = pd.read_parquet(self.classified_data[taxa]['profile'])
+            for cls in np.unique(df['classes']):
+                outfile_cls = os.path.join(taxa_dir,'{}.fna.gz'.format(cls))
+                df_cls = df[df['classes'].str.match(cls)]
+                ids = list(df_cls['id'])
+                with gzip.open(outfile_cls, 'w') as handle:
+                    for id in ids:
+                        SeqIO.write(records[id], handle, 'fasta')
