@@ -193,7 +193,7 @@ class KmersCollection():
             batches_list = np.array_split(self._csv_list, len(self._csv_list)/1000)
             batch_dir = os.path.join(self._tmp_dir, 'batch_{}'.format(nb_batch))
             os.mkdir(batch_dir)
-            for ind, batch in enumarate(batches_list):
+            for ind, batch in enumerate(batches_list):
                 self._batch_read_write(batch, batch_dir, ind)
             self._csv_list = glob(os.path.join(batch_dir,'*.csv'))
             nb_batch += 1
