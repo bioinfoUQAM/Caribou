@@ -37,12 +37,13 @@ class ModelsUtils(ABC):
     '''
     Utilities for both types of framework
     '''
-    def __init__(self, classifier, outdir, batch_size, k, verbose):
+    def __init__(self, classifier, outdir, batch_size, k, taxa, verbose):
         # Parameters
         self.classifier = classifier
         self.outdir = outdir
         self.batch_size = batch_size
         self.k = k
+        self.taxa = taxa
         self.verbose = verbose
         # Initialize empty
         self.label_encoder = None
@@ -115,15 +116,15 @@ class ModelsUtils(ABC):
         df = df.to_modin()
         with parallel_backend('ray'):
             self.label_encoder = LabelEncoder()
-            df['classes'] = self.label_encoder.fit_transform(df['classes'])
+            df[self.taxa] = self.label_encoder.fit_transform(df[self.taxa])
 
-        self.labels_list = np.unique(df['classes'])
+        self.labels_list = np.unique(df[self.taxa])
         return ray.data.from_modin(df)
 
     def _label_decode(self, df):
         df = df.to_modin()
         with parallel_backend('ray'):
-            df['classes'] = self.label_encoder.inverse_transform(df['classes'])
+            df[self.taxa] = self.label_encoder.inverse_transform(df[self.taxa])
 
         return ray.data.from_modin(df)
 
@@ -131,8 +132,8 @@ class SklearnModel(ModelsUtils):
     '''
     Class to be used to build, train and predict models using Ray with Scikit-learn backend
     '''
-    def __init__(self, classifier, dataset, outdir_model, outdir_results, batch_size, k, verbose):
-        super().__init__(classifier, outdir_results, batch_size, k, verbose)
+    def __init__(self, classifier, dataset, outdir_model, outdir_results, batch_size, k, taxa, verbose):
+        super().__init__(classifier, outdir_results, batch_size, k, taxa, verbose)
         # Parameters
         self.clf_file = '{}bacteria_binary_classifier_K{}_{}_{}_model.jb'.format(outdir_model, k, classifier, dataset)
         # Computes
@@ -212,8 +213,8 @@ class KerasTFModel(ModelsUtils):
     '''
     Class to be used to build, train and predict models using Ray with Keras Tensorflow backend
     '''
-    def __init__(self, classifier, dataset, outdir_model, outdir_results, batch_size, k, verbose):
-        super().__init__(classifier, outdir_results, batch_size, k, verbose)
+    def __init__(self, classifier, dataset, outdir_model, outdir_results, batch_size, k, taxa, verbose):
+        super().__init__(classifier, outdir_results, batch_size, k, taxa, verbose)
         # Parameters
         self.clf_file = '{}bacteria_binary_classifier_K{}_{}_{}_model'.format(outdir_model, k, classifier, dataset)
         # # Initialize empty
@@ -287,7 +288,7 @@ class KerasTFModel(ModelsUtils):
         df = ray.data.from_modin(X_train.merge(y_train, on = 'id', how = 'left'))
         df = df.random_shuffle()
         df = df.to_tf(
-        label_column = 'classes',
+        label_column = self.taxa,
         batch_size = batch_size,
         output_signature = (
             tf.TensorSpec(shape=(None, batch_size), dtype=tf.int64),
