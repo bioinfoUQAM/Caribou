@@ -194,7 +194,7 @@ class KmersCollection():
             batch_dir = os.path.join(self._tmp_dir, 'batch_{}'.format(nb_batch))
             os.mkdir(batch_dir)
             for ind, batch in enumerate(batches_list):
-                self._batch_read_write(batch, batch_dir, ind)
+                self._batch_read_write(list(batch), batch_dir, ind)
             self._csv_list = glob(os.path.join(batch_dir,'*.csv'))
             nb_batch += 1
         # Read/concatenate batches with Ray
