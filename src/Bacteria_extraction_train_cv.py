@@ -33,22 +33,22 @@ ray.init(num_cpus = os.cpu_count())
 def bacteria_extraction_train_cv(opt):
 
     # Verify existence of files and load data
-    if not os.path.isdir(opt['data_bacteria']):
-        print("Cannot find file {} ! Exiting".format(file))
+    if not os.path.isfile(opt['data_bacteria']):
+        print("Cannot find file {} ! Exiting".format(opt['data_bacteria']))
         sys.exit()
     else:
         data_bacteria = load_Xy_data(opt['data_bacteria'])
         # Infer k-mers length from the extracted bacteria profile
         k_length = len(data_bacteria['kmers'][0])
         # Verify that kmers profile file exists
-        if not os.path.isfile(data_bacteria['X']):
-            print("Cannot find file {} ! Exiting".format(os.path.isfile(data_bacteria['X'])))
+        if not os.path.isdir(data_bacteria['profile']):
+            print("Cannot find data folder {} ! Exiting".format(data_bacteria['profile']))
             sys.exit()
 
     # Verify existence of files for host data + concordance and load
     if opt['data_host'] is not None:
         if not os.path.isfile(opt['data_host']):
-            print("Cannot find file {} ! Exiting".format(file))
+            print("Cannot find file {} ! Exiting".format(opt['data_host']))
             sys.exit()
         else:
             data_host = load_Xy_data(opt['data_host'])
@@ -59,8 +59,8 @@ def bacteria_extraction_train_cv(opt):
                 sys.exit()
             else:
                 # Verify that kmers profile file exists
-                if not os.path.isfile(data_host['X']):
-                    print("Cannot find file {} ! Exiting".format(os.path.isfile(data_host['X'])))
+                if not os.path.isdir(data_host['profile']):
+                    print("Cannot find file {} ! Exiting".format(data_host['profile']))
                     sys.exit()
     else:
         host = None
@@ -83,18 +83,19 @@ def bacteria_extraction_train_cv(opt):
 
     # Validate path for saving
     outdir_path, outdir_folder = os.path.split(opt['outdir'])
-    if not os.path.isdir(outdir) and os.path.exists(outdir_path):
+    if not os.path.isdir(opt['outdir']) and os.path.exists(outdir_path):
         print("Created output folder")
-        os.makedirs(outdir)
+        os.makedirs(opt['outdir'])
     elif not os.path.exists(outdir_path):
         print("Cannot find where to create output folder ! Exiting")
         sys.exit()
 
     # Folders creation for output
     outdirs = {}
-    outdirs["main_outdir"] = outdir
+    outdirs["main_outdir"] = opt['outdir']
     outdirs["data_dir"] = os.path.join(outdirs["main_outdir"], "data/")
     outdirs["models_dir"] = os.path.join(outdirs["main_outdir"], "models/")
+    outdirs["results_dir"] = os.path.join(outdirs["main_outdir"], "results/")
     os.makedirs(outdirs["main_outdir"], mode=0o700, exist_ok=True)
     os.makedirs(outdirs["models_dir"], mode=0o700, exist_ok=True)
 

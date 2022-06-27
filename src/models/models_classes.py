@@ -20,7 +20,7 @@ from ray.util.joblib import register_ray
 
 from keras.callbacks import EarlyStopping
 
-from ray.ml.predictors.tensorflow import TensorflowPredictor
+from ray.ml.predictors.integrations.tensorflow import TensorflowPredictor
 from ray.train import Trainer, save_checkpoint, CheckpointStrategy
 
 __author__ = 'Nicolas de Montigny'
@@ -37,7 +37,7 @@ class ModelsUtils(ABC):
     '''
     Utilities for both types of framework
     '''
-    def __init__(classifier, outdir, batch_size, k, verbose):
+    def __init__(self, classifier, outdir, batch_size, k, verbose):
         # Parameters
         self.classifier = classifier
         self.outdir = outdir
@@ -49,7 +49,7 @@ class ModelsUtils(ABC):
         self.labels_list = []
 
     # Data scaling
-    def _scaleX(df):
+    def _scaleX(self, df):
         kmers = list(df.limit(1).to_pandas().columns)
         kmers.remove('id')
         kmers.remove('classes')
@@ -86,15 +86,14 @@ class ModelsUtils(ABC):
             self._cv_score(y_test, y_pred)
 
     # Outputs scores for cross validation in a dictionnary
-    def _cv_score(y_true, y_pred, classifier, k, outdir):
+    def _cv_score(self, y_true, y_pred):
 
-        if classifier in ['onesvm','linearsvm', 'attention','lstm','deeplstm']:
+        if self.classifier in ['onesvm','linearsvm', 'attention','lstm','deeplstm']:
             average = 'binary'
-        elif classifier in ['sgd','svm','mlr','mnb','lstm_attention','cnn','widecnn']:
+        elif self.classifier in ['sgd','svm','mlr','mnb','lstm_attention','cnn','widecnn']:
             average = 'macro'
 
             support = precision_recall_fscore_support(y_true, y_pred , average = average)
-
 
             scores = pd.DataFrame({'Classifier':self.classifier,'Precision':support[0],'Recall':support[1],'F-score':support[2]})
 
@@ -125,8 +124,8 @@ class SklearnModel(ModelsUtils):
     '''
     Class to be used to build, train and predict models using Ray with Scikit-learn backend
     '''
-    def __init__(classifier, dataset, outdir_model, outdir_results, batch_size, k, verbose):
-        super().__init__(classifier, dataset, outdir_results, batch_size, k, verbose)
+    def __init__(self, classifier, dataset, outdir_model, outdir_results, batch_size, k, verbose):
+        super().__init__(classifier, outdir_results, batch_size, k, verbose)
         # Parameters
         self.clf_file = '{}bacteria_binary_classifier_K{}_{}_{}_model.jb'.format(outdir_model, k, classifier, dataset)
         # Computes
@@ -160,7 +159,7 @@ class SklearnModel(ModelsUtils):
             self.clf = MultinomialNB()
 
     def _fit_model(self, X, y):
-        X = self.scaleX(X)
+        X = self._scaleX(X)
         y = _label_encode(y)
         with parallel_backend('ray'):
             if self.classifier == 'onesvm':
@@ -204,8 +203,8 @@ class KerasTFModel(ModelsUtils):
     '''
     Class to be used to build, train and predict models using Ray with Keras Tensorflow backend
     '''
-    def __init__(classifier, dataset, outdir_model, outdir_results, batch_size, k, verbose):
-        super().__init__(classifier, dataset, outdir_model, outdir_results, batch_size, k, verbose)
+    def __init__(self, classifier, dataset, outdir_model, outdir_results, batch_size, k, verbose):
+        super().__init__(classifier, outdir_results, batch_size, k, verbose)
         # Parameters
         self.clf_file = '{}bacteria_binary_classifier_K{}_{}_{}_model'.format(outdir_model, k, classifier, dataset)
         # # Initialize empty
@@ -248,7 +247,7 @@ class KerasTFModel(ModelsUtils):
                 self.clf = build_wideCNN(self.k, self.batch_size, self.nb_classes)
 
     def _fit_model(self, X, y):
-        X = self.scaleX(X)
+        X = self._scaleX(X)
         y = _label_encode(y)
         self.nb_classes = len(self.labels_list)
         self.multi_worker_dataset = self._join_shuffle_data(X, y, self.global_batch_size)
@@ -272,7 +271,7 @@ class KerasTFModel(ModelsUtils):
 
         save_checkpoint(model_weights = self.clf.get_weights())
 
-    def _join_shuffle_data(X_train, y_train, batch_size):
+    def _join_shuffle_data(self, X_train, y_train, batch_size):
         # Join
         X_train = X_train.to_modin()
         y_train = y_train.to_modin()

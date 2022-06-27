@@ -16,88 +16,94 @@ __author__ = 'Nicolas de Montigny'
 
 __all__ = ['to_user','get_abundances','out_abundances','abundance_table','out_summary','out_kronagram','create_krona_file','out_report','out_fasta']
 
-def to_user(database_kmers, results_dir, k, classifier, dataset, host, classified_data, seq_file, input_fasta_file, abundance_stats = True, kronagram = True, full_report = True, extract_fasta = True):
-    abund_file = '{}abundance_K{}_{}_{}.csv'.format(results_dir, k, classifier, dataset)
-    summary_file = '{}summary_K{}_{}_{}.csv'.format(results_dir, k, classifier, dataset)
-    krona_file = '{}kronagram_K{}_{}_{}.csv'.format(results_dir, k, classifier, dataset)
-    krona_out = '{}kronagram_K{}_{}_{}.html'.format(results_dir, k, classifier, dataset)
-    report_file = '{}full_report_K{}_{}_{}.csv'.format(results_dir, k, classifier, dataset)
-    tree_file = '{}Taxonomic_tree_K{}_{}_{}.nwk'.format(results_dir, k, classifier, dataset)
-    fasta_outdir = '{}fasta_by_taxa_k{}_{}_{}'.format(results_dir, k, classifier, dataset)
+class Outputs():
+    def __init__(database_kmers, results_dir, k, classifier, dataset, host, classified_data, seq_file, abundance_stats = True, kronagram = True, full_report = True, extract_fasta = True):
+        # Variables
+        self.database = database_kmers
+        self.dataset = dataset
+        self.host = host
+        self.classified_data = classified_data
+        self.order = classified_data['order'].copy()
+        with open(seq_file, 'rb') as handle:
+            self.data_labels = pickle.load(handle).labels # seq_data.labels
+        # File names
+        self.abund_file = '{}abundance_K{}_{}_{}.csv'.format(results_dir, k, classifier, dataset)
+        self.summary_file = '{}summary_K{}_{}_{}.csv'.format(results_dir, k, classifier, dataset)
+        self.krona_file = '{}kronagram_K{}_{}_{}.csv'.format(results_dir, k, classifier, dataset)
+        self.krona_out = '{}kronagram_K{}_{}_{}.html'.format(results_dir, k, classifier, dataset)
+        self.report_file = '{}full_report_K{}_{}_{}.csv'.format(results_dir, k, classifier, dataset)
+        self.tree_file = '{}Taxonomic_tree_K{}_{}_{}.nwk'.format(results_dir, k, classifier, dataset)
+        self.fasta_outdir = '{}fasta_by_taxa_k{}_{}_{}'.format(results_dir, k, classifier, dataset)
+        # Initialize empty
+        self.abundances = {}
+        self.summary = {}
+        # Get abundances used for other outputs
+        self._get_abundances()
+        # Output desired files according to parameters
+        if abundance_stats is True:
+            self._abundances()
+        if kronagram is True:
+            self._kronagram()
+        if full_report is True:
+            self._report()
+        if extract_fasta is True:
+            self._fasta()
 
-    os.mkdir(fasta_outdir)
+    def _get_abundances(self):
+        for taxa in self.order:
+            df = pd.read_parquet(self.classified_data[taxa]['profile'])
+            if taxa in ['bacteria','host','unclassified']:
+                self.abundances[taxa] = len(df)
+            else:
+                self.abundances[taxa] = {}
+                for cls in np.unique(df['classes']):
+                    if cls in self.abundances[taxa]:
+                        self.abundances[taxa][cls] += 1
+                    else:
+                        self.abundances[taxa][cls] = 1
 
-    with open(seq_file, 'rb') as handle:
-        seq_data = pickle.load(handle)
+    def _abundances(self):
+        self._abundance_table()
+        self.summary['initial'] = len(self.data_labels)
+        self._summary()
 
-    abundances, order = get_abundances(classified_data)
+    def _abundance_table(self):
+        # Abundance tables / relative abundance
+        self.summary['total'] = 0
+        cols = ['Taxonomic classification','Number of reads','Relative Abundance (%)']
+        nrows = 0
+        for taxa in self.abundances:
+            if taxa not in ['bacteria','host','unclassified']:
+                nrows += 1
 
-    if abundance_stats is True:
-        out_abundances(abundances, order, abund_file, summary_file, host, seq_data)
-    if kronagram is True:
-        out_kronagram(abundances, order, krona_file, krona_out, seq_data, database_kmers, dataset)
-    if full_report is True:
-        out_report(classified_data, order, report_file, database_kmers, seq_data)
-    if extract_fasta is True:
-        out_fasta(classified_data, order, fasta_file, fasta_outdir)
+        df = pd.DataFrame(np.zeros((nrows,len(cols)), dtype = int), index = np.arange(nrows), columns = cols)
 
-def get_abundances(data):
-    abundances = {}
-    order = data['order'].copy()
+        index = 0
+        total_abund = 0
 
-    for taxa in order:
-        df = ray.data.read_parquet(data[taxa]['profile']).to_modin()
-        if taxa in ['bacteria','host','unclassified']:
-            abundances[taxa] = len(df)
-        else:
-            abundances[taxa] = {}
-            for cls in np.unique(df['classes']):
-                if cls in abundances[taxa]:
-                    abundances[taxa][cls] += 1
-                else:
-                    abundances[taxa][cls] = 1
-
-    return abundances, order
-
-def out_abundances(abundances, order, abund_file, summary_file, host, seq_data):
-    summary = abundance_table(abundances, order, abund_file)
-    summary['initial'] = len(seq_data.labels)
-    out_summary(abundances, order, summary, host, summary_file)
-
-def abundance_table(abundances, order, abund_file):
-    # Abundance tables / relative abundance
-    summary = {'total':0}
-    cols = ['Taxonomic classification','Number of reads','Relative Abundance (%)']
-    nrows = 0
-    for taxa in abundances:
-        if taxa not in ['bacteria','host','unclassified']:
-            nrows += 1
-
-    df = pd.DataFrame(np.zeros((nrows,len(cols)), dtype = int), index = np.arange(nrows), columns = cols)
-
-    index = 0
-    total_abund = 0
-    for taxa in order:
-        if taxa in ['bacteria','host','unclassified']:
-            summary[taxa] = copy(abundances[taxa])
-        else:
-            df.loc[index, 'Taxonomic classification'] = taxa
-            taxa_ind = copy(index)
-            taxa_abund = 0
-            index += 1
-            for k, v in abundances[taxa].items():
-                df.loc[index, 'Taxonomic classification'] = k
-                df.loc[index, 'Number of reads'] = v
-                taxa_abund += v
-                total_abund += v
+        for taxa in self.order:
+            if taxa in ['bacteria','host','unclassified']:
+                self.summary[taxa] = self.abundances[taxa]
+            else:
+                df.loc[index, 'Taxonomic classification'] = taxa
+                taxa_ind = copy(index)
+                taxa_abund = 0
                 index += 1
-            df.loc[taxa_ind, 'Number of reads'] = taxa_abund
-            summary[taxa] = taxa_abund
-    df['Relative Abundance (%)'] = (df['Number of reads']/total_abund)*100
-    summary['total'] = total_abund
-    df.to_csv(abund_file, na_rep = '', header = True, index = False)
+                for k, v in self.abundances[taxa].items():
+                    df.loc[index, 'Taxonomic classification'] = k
+                    df.loc[index, 'Number of reads'] = v
+                    taxa_abund += v
+                    total_abund += v
+                    index += 1
+                df.loc[taxa_ind, 'Number of reads'] = taxa_abund
+                self.summary[taxa] = taxa_abund
+        df['Relative Abundance (%)'] = (df['Number of reads']/total_abund)*100
+        self.summary['total'] = total_abund
+        df.to_csv(abund_file, na_rep = '', header = True, index = False)
 
-    return summary
+    def _summary(self):
+        print('to do')
+
 
 def out_summary(abundances, order, summary, host, summary_file):
     # Summary file of operations / counts & proportions of reads at each steps
@@ -196,6 +202,7 @@ def out_report(classified_data, order, report_file, database_kmers, seq_data):
     df.to_csv(report_file, na_rep = '', header = True, index = False)
 
 def out_fasta(classified_data, order, fasta_file, fasta_outdir):
+    os.mkdir(fasta_outdir)
     path, ext = os.path.splitext(fasta_file)
     if ext == '.gz':
         with gzip.open(fasta_file, 'rt') as handle:

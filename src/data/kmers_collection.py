@@ -122,6 +122,9 @@ class KmersCollection():
         self._fasta_list = glob(os.path.join(self._tmp_dir,'*.fa'))
         # Extract kmers in parallel using KMC3
         self._parallel_extraction()
+        # Delete tmp fasta files
+        for file in self._fasta_list:
+            os.remove(file)
         # build kmers matrix
         self._construct_data()
 
@@ -189,13 +192,12 @@ class KmersCollection():
         self._csv_list = glob(os.path.join(self._tmp_dir,'*.csv'))
         # Read/concatenate files with Ray by batches
         nb_batch = 0
-        nb_cpu = os.cpu_count()
-        while len(self._csv_list) > nb_cpu:
-            batches_list = np.array_split(self._csv_list, len(self._csv_list)/nb_cpu)
+        while len(self._csv_list) > 200:
+            batches_list = np.array_split(self._csv_list, len(self._csv_list)/200)
             batch_dir = os.path.join(self._tmp_dir, 'batch_{}'.format(nb_batch))
             os.mkdir(batch_dir)
             for batch in batches_list:
-                self._batch_read_write(list(batch), batch_dir, nb_cpu)
+                self._batch_read_write(list(batch), batch_dir)
             self._csv_list = glob(os.path.join(batch_dir,'*.csv'))
             nb_batch += 1
         # Read/concatenate batches with Ray
@@ -205,8 +207,8 @@ class KmersCollection():
         # Save dataset
         self.df.write_parquet(self.Xy_file)
 
-    def _batch_read_write(self, batch, dir, nb_cpu):
-        df = ray.data.read_csv(batch, parallelism = nb_cpu)
+    def _batch_read_write(self, batch, dir):
+        df = ray.data.read_csv(batch)
         df.write_csv(dir)
         for file in batch:
             os.remove(file)

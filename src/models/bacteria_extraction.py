@@ -23,9 +23,9 @@ def bacteria_extraction(metagenome_k_mers, database_k_mers, k, outdirs, dataset,
     bacteria_data_file = '{}Xy_bacteria_database_K{}_{}_{}_data.npz'.format(outdirs['data_dir'], k, classifier, dataset)
 
     if classifier in ['onesvm','linearsvm']:
-        model = Sklearn_model(classifier, clf_file, outdirs['results_dir'], batch_size, k, verbose)
+        model = SklearnModel(classifier, dataset, outdirs['models_dir'], outdirs['results_dir'], batch_size, k, verbose)
     elif classifier in ['attention','lstm','deeplstm']:
-        model = Keras_TF_model(classifier, clf_file, outdirs['results_dir'], nb_classes, batch_size, k, verbose)
+        model = KerasTFModel(classifier, dataset, outdirs['models_dir'], outdirs['results_dir'], batch_size, k, verbose)
     else:
         print('Bacteria extractor unknown !!!\n\tModels implemented at this moment are :\n\tBacteria isolator :  One Class SVM (onesvm)\n\tBacteria/host classifiers : Linear SVM (linearsvm)\n\tNeural networks : Attention (attention), Shallow LSTM (lstm) and Deep LSTM (deeplstm)')
         sys.exit()
