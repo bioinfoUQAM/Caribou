@@ -190,7 +190,7 @@ class KmersCollection():
         # Read/concatenate files with Ray by batches
         nb_batch = 0
         while len(self._csv_list) > 1000:
-            batches_list = np.array_split(len(self._csv_list)/1000)
+            batches_list = np.array_split(self._csv_list, len(self._csv_list)/1000)
             batch_dir = os.path.join(self._tmp_dir, 'batch_{}'.format(nb_batch))
             os.mkdir(batch_dir)
             for ind, batch in enumarate(batches_list):
