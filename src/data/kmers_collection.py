@@ -194,8 +194,8 @@ class KmersCollection():
         nb_batch = 0
         while len(self._csv_list) > 200:
             print(len(self._csv_list))
-            print(len(self._csv_list)/1000)
-            batches_list = np.array_split(self._csv_list, int(len(self._csv_list)/1000))
+            print(np.ceil(self._csv_list)/1000)
+            batches_list = np.array_split(self._csv_list, np.ceil(len(self._csv_list)/1000))
             batch_dir = os.path.join(self._tmp_dir, 'batch_{}'.format(nb_batch))
             os.mkdir(batch_dir)
             for batch in batches_list:
