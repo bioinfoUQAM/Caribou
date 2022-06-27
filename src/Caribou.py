@@ -3,7 +3,7 @@
 from data.build_data import build_load_save_data
 from models.bacteria_extraction import bacteria_extraction
 from models.classification import bacterial_classification
-from outputs.out import to_user
+from outputs.out import Outputs
 
 from tensorflow.compat.v1 import ConfigProto, Session
 from tensorflow.compat.v1.keras.backend import set_session

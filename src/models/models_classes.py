@@ -52,7 +52,6 @@ class ModelsUtils(ABC):
     def _scaleX(self, df):
         kmers = list(df.limit(1).to_pandas().columns)
         kmers.remove('id')
-        kmers.remove('classes')
         df = df.to_modin()
         with parallel_backend('ray'):
             scaler = StandardScaler()
@@ -79,13 +78,14 @@ class ModelsUtils(ABC):
     def _cross_validation(self, X_train, y_train):
         X_train = X_train.to_modin()
         y_train = y_train.to_modin()
+
         with parallel_backend('ray'):
             X_train, X_test, y_train, y_test = train_test_split(X_train, y_train, train_size = 0.8, random_state=42)
 
-            X_train = ray.data.from_modin(X_train)
-            y_train = ray.data.from_modin(y_train)
-            X_test = ray.data.from_modin(X_test)
-            y_test = ray.data.from_modin(y_test)
+        X_train = ray.data.from_modin(X_train)
+        y_train = ray.data.from_modin(y_train)
+        X_test = ray.data.from_modin(X_test)
+        y_test = ray.data.from_modin(y_test)
 
         self._fit_model(X_train, y_train)
 
@@ -167,7 +167,7 @@ class SklearnModel(ModelsUtils):
 
     def _fit_model(self, X, y):
         X = self._scaleX(X)
-        y = _label_encode(y)
+        y = self._label_encode(y)
         with parallel_backend('ray'):
             if self.classifier == 'onesvm':
                 for batch in X.iter_batches(batch_size = self.batch_size):
@@ -193,7 +193,7 @@ class SklearnModel(ModelsUtils):
             for i, row in enumerate(df.iter_rows()):
                 y_pred[i] = clf.predict(row)
 
-        return _label_decode(y_pred)
+        return self._label_decode(y_pred)
 
     def _predict_multi(self, df, threshold):
         y_pred = np.empty(df.count(), dtype=np.int32)
@@ -206,7 +206,7 @@ class SklearnModel(ModelsUtils):
                 else:
                     y_pred[i] = -1
 
-        return _label_decode(y_pred)
+        return self._label_decode(y_pred)
 
 class KerasTFModel(ModelsUtils):
     '''
@@ -257,7 +257,7 @@ class KerasTFModel(ModelsUtils):
 
     def _fit_model(self, X, y):
         X = self._scaleX(X)
-        y = _label_encode(y)
+        y = self._label_encode(y)
         self.nb_classes = len(self.labels_list)
         self.multi_worker_dataset = self._join_shuffle_data(X, y, self.global_batch_size)
 
@@ -310,7 +310,7 @@ class KerasTFModel(ModelsUtils):
 
         y_pred = np.around(predicted.reshape(1, predicted.size)[0]).astype(np.int64)
 
-        return _label_decode(y_pred)
+        return self._label_decode(y_pred)
 
     def _predict_multi(self, df, threshold):
         y_pred = np.empty(df.count(), dtype=np.int32)
@@ -324,4 +324,4 @@ class KerasTFModel(ModelsUtils):
             else:
                 y_pred[i] = -1
 
-        return _label_decode(y_pred)
+        return self._label_decode(y_pred)

@@ -14,10 +14,13 @@ from utils import load_Xy_data
 
 __author__ = 'Nicolas de Montigny'
 
-__all__ = ['to_user','get_abundances','out_abundances','abundance_table','out_summary','out_kronagram','create__krona_file','out_report','out_fasta']
+__all__ = ['Outputs']
 
 class Outputs():
     def __init__(database_kmers, results_dir, k, classifier, dataset, host, classified_data, seq_file, abundance_stats = True, kronagram = True, full_report = True, extract_fasta = True):
+        # Third-party path
+        self.krona_path = os.path.join(os.path.dirname(os.path.realpath(__file__)),'KronaTools','scripts','ImportText.pl')
+        self.perl_loc = run('which perl', shell = True, capture_output = True, text = True)
         # Variables
         self.database = database_kmers
         self.dataset = dataset
@@ -117,58 +120,54 @@ class Outputs():
         if self.host is not None:
             rows.append('Percentage of reads identified as {}'.format(self.host))
             values = np.append(values, self.summary['host']/self.summary['initial']*100)
+        for taxa in self.order:
+            if taxa not in ['bacteria','host','unclassified']:
+                rows.append('Percentage of reads classified at {} level'.format(taxa))
+                values = np.append(values, self.summary[taxa]/self.summary['initial']*100)
+        df = pd.DataFrame(values, index = rows, columns = cols)
+        df.to_csv(self._summary_file, na_rep = '', header = False, index = True)
+
+    def _kronagram(self):
+        # Kronagram / interactive tree
+        self._create_krona_file()
+        cmd = '{} {} {} -o {} -n {}'.format(self.perl_loc.stdout.strip('\n'), self.krona_path, self._krona_file, self._krona_out, self.dataset)
+        run(cmd, shell = True)
+
+    def _create_krona_file(self):
+        cols = ['Abundance']
+        [cols.append(self.database['taxas'][i]) for i in range(len(self.database['taxas'])-1, -1, -1)]
+        nrows = 0
+        for taxa in self.abundances:
+            if taxa not in ['bacteria','host','unclassified']:
+                nrows += len(self.abundances[taxa])
+
+        df = pd.DataFrame(np.zeros((nrows,len(cols)), dtype = int), index = np.arange(nrows), columns = cols)
+
+        unique_rows = np.vstack(list({tuple(row) for row in self.data_labels}))
+
+        index = 0
+        for taxa in self.order:
+            if taxa not in ['bacteria','host','unclassified']:
+                col_taxa = df.columns.get_loc(taxa)
+                for k, v in abundances[taxa].items():
+                    if k in df[taxa]:
+                        ind = df[df[taxa] == k].index.values
+                        df.loc[ind, taxa] = k
+                        df.loc[ind, 'Abundance'] += v
+                        if col_taxa != 1:
+                            for col in range(1, col_taxa+1):
+                                df.iloc[ind,col] = np.flip(unique_rows[np.where(unique_rows == k)[0]])[0][col-1]
+                    else:
+                        df.loc[index, taxa] = k
+                        df.loc[index, 'Abundance'] += v
+                        if col_taxa != 1:
+                            for col in range(1, col_taxa+1):
+                                df.iloc[index,col] = np.flip(unique_rows[np.where(unique_rows == k)[0]])[0][col-1]
+                        index += 1
+        df = df.fillna(0)
+        df.to_csv(self._krona_file, na_rep = '', header = False, index = False)
 
 
-    for taxa in order:
-        if taxa not in ['bacteria','host','unclassified']:
-            rows.append('Percentage of reads classified at {} level'.format(taxa))
-            values = np.append(values, summary[taxa]/summary['initial']*100)
-
-    df = pd.DataFrame(values, index = rows, columns = cols)
-    df.to_csv(_summary_file, na_rep = '', header = False, index = True)
-
-def out_kronagram(abundances, order, _krona_file, _krona_out, seq_data, database_kmers, dataset):
-    # Kronagram / interactive tree
-    krona_path = os.path.join(os.path.dirname(os.path.realpath(__file__)),'KronaTools','scripts','ImportText.pl')
-    create__krona_file(abundances, order, _krona_file, seq_data, database_kmers)
-    perl_loc = run('which perl', shell = True, capture_output = True, text = True)
-    cmd = '{} {} {} -o {} -n {}'.format(perl_loc.stdout.strip('\n'), krona_path, _krona_file, _krona_out, dataset)
-    run(cmd, shell = True)
-
-def create__krona_file(abundances, order, _krona_file, seq_data, database_kmers):
-    cols = ['Abundance']
-    [cols.append(database_kmers['taxas'][i]) for i in range(len(database_kmers['taxas'])-1, -1, -1)]
-
-    nrows = 0
-    for taxa in abundances:
-        if taxa not in ['bacteria','host','unclassified']:
-            nrows += len(abundances[taxa])
-
-    df = pd.DataFrame(np.zeros((nrows,len(cols)), dtype = int), index = np.arange(nrows), columns = cols)
-
-    unique_rows = np.vstack(list({tuple(row) for row in seq_data.labels}))
-
-    index = 0
-    for taxa in order:
-        if taxa not in ['bacteria','host','unclassified']:
-            col_taxa = df.columns.get_loc(taxa)
-            for k, v in abundances[taxa].items():
-                if k in df[taxa]:
-                    ind = df[df[taxa] == k].index.values
-                    df.loc[ind, taxa] = k
-                    df.loc[ind, 'Abundance'] += v
-                    if col_taxa != 1:
-                        for col in range(1, col_taxa+1):
-                            df.iloc[ind,col] = np.flip(unique_rows[np.where(unique_rows == k)[0]])[0][col-1]
-                else:
-                    df.loc[index, taxa] = k
-                    df.loc[index, 'Abundance'] += v
-                    if col_taxa != 1:
-                        for col in range(1, col_taxa+1):
-                            df.iloc[index,col] = np.flip(unique_rows[np.where(unique_rows == k)[0]])[0][col-1]
-                    index += 1
-    df = df.replace(0,np.NaN)
-    df.to_csv(_krona_file, na_rep = '', header = False, index = False)
 
 def out_report(classified_data, order, _report_file, database_kmers, seq_data):
     # Report file of classification of each id
