@@ -51,8 +51,10 @@ def bacterial_classification(classified_data, database_k_mers, k, outdirs, datas
                 # If classifier exists load it or train if not
                 if train is True:
                     # Get training dataset and assign to variables
+                    # Keep only classes of sequences that were not removed in kmers extraction
                     X_train = ray.data.read_parquet(database_k_mers['profile'])
-                    y_train = pd.DataFrame(database_k_mers['classes'], columns = database_k_mers['taxas']).loc[:,taxa]
+                    y_train = pd.DataFrame(database_k_mers['classes'], columns = database_k_mers['taxas']).loc[:,taxa].str.lower()
+                    y_train = ray.data.from_modin(y_train[y_train['id'].isin(list(X_train.to_modin()['id']))])
 
                     model.train(X_train, y_train, cv)
 
@@ -84,11 +86,13 @@ def classify(df_file, model, threshold = 0.8, verbose = True):
 
     pred = model.predict(df, threshold)
 
-    # Make sure classes are writen in lowercase
-    pred = pred.str.lower()
+    df = df.to_modin()
 
-    df_classified = df[pred.str.notequals('unknown')]
-    df_unclassified = df[pred.str.match('unknown')]
+    # Make sure classes are writen in lowercase
+    pred['class'] = pred['class'].str.lower()
+
+    df_classified = df[pred['class'].str.notequals('unknown')]
+    df_unclassified = df[pred['class'].str.match('unknown')]
 
     # Save / add to classified/unclassified data
     try:

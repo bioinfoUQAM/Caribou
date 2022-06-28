@@ -153,10 +153,10 @@ class KmersCollection():
         cmd_transform = os.path.join(self._kmc_path,"kmc_tools transform {} dump {}".format(os.path.join(tmp_folder, str(ind)), os.path.join(self._tmp_dir, "{}.txt".format(ind))))
         run(cmd_transform, shell = True, capture_output=True)
         # Transpose kmers profile
-        profile = pd.read_table(os.path.join(self._tmp_dir,"{}.txt".format(ind)), sep = '\t', header = None, names = ['id', str(id)])
+        profile = pd.read_table(os.path.join(self._tmp_dir,"{}.txt".format(ind)), sep = '\t', header = None, names = ['id', str(id)]).T
         # Save seen kmers profile to csv file
         if len(profile.columns) > 1:
-            profile.T.to_csv(os.path.join(self._tmp_dir,"{}.csv".format(ind)), header = False)
+            profile.to_csv(os.path.join(self._tmp_dir,"{}.csv".format(ind)), header = False)
         # Delete tmp dir and file
         rmtree(tmp_folder)
         os.remove(os.path.join(self._tmp_dir,"{}.txt".format(ind)))
