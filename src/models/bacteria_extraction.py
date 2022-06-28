@@ -12,7 +12,7 @@ __author__ = 'Nicolas de Montigny'
 
 __all__ = ['bacteria_extraction','extract_bacteria_sequences']
 
-def bacteria_extraction(metagenome_k_mers, database_k_mers, k, outdirs, dataset, training_epochs, classifier = 'deeplstm', batch_size = 32, verbose = 1, cv = 1, n_jobs = 1):
+def bacteria_extraction(metagenome_k_mers, database_k_mers, k, outdirs, dataset, training_epochs, classifier = 'deeplstm', batch_size = 32, verbose = True, cv = True):
     # classified_data is a dictionnary containing data dictionnaries at each classified level:
     # {taxa:{'X':path to ray dataset in parquet format}}
     classified_data = {'order' : ['bacteria','host','unclassified']}

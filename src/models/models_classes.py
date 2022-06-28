@@ -15,7 +15,7 @@ from sklearn.preprocessing import StandardScaler, LabelEncoder
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.linear_model import SGDOneClassSVM, SGDClassifier
 
-from joblib import parallel_backend
+from joblib import parallel_backend, dump
 from ray.util.joblib import register_ray
 
 from keras.callbacks import EarlyStopping
@@ -34,9 +34,47 @@ warnings.filterwarnings('ignore')
 register_ray()
 
 class ModelsUtils(ABC):
-    '''
+    """
     Utilities for both types of framework
-    '''
+
+    ----------
+    Attributes
+    ----------
+
+    k : int
+        The length of K-mers extracted
+
+    classifier : string
+        The name of the classifier to be used
+
+    outdir : string
+        Path to a folder to output results
+
+    batch_size : int
+        Size of the batch used for online learning
+
+    taxa : string
+        The taxa for which the model is trained in classifying
+
+    labels_list : list of int
+        A list of the labels for multiclass learning / classifying
+
+    ----------
+    Methods
+    ----------
+
+    train : only train or cross-validate training of classifier
+        X : ray.data.Dataset
+            Dataset containing the K-mers profiles of sequences for learning
+        y : ray.data.Dataset
+            Dataset containing the classes of sequences for learning
+        cv : boolean
+            Should cross-validation be verified or not.
+            Defaults to True.
+
+    predict : abstract method to predict the classes of a dataset
+
+    """
     def __init__(self, classifier, outdir, batch_size, k, taxa, verbose):
         # Parameters
         self.classifier = classifier
@@ -46,17 +84,18 @@ class ModelsUtils(ABC):
         self.taxa = taxa
         self.verbose = verbose
         # Initialize empty
-        self.label_encoder = None
+        self._label_encoder = None
         self.labels_list = []
 
     # Data scaling
-    def _scaleX(self, df):
-        kmers = list(df.limit(1).to_pandas().columns)
-        kmers.remove('id')
+    def _preprocess(self, df):
         df = df.to_modin()
+        df = df.drop('id', 1)
+        df = df.fillna(0)
+        cols = df.columns
         with parallel_backend('ray'):
             scaler = StandardScaler()
-            df[kmers] = scaler.fit_transform(df[kmers])
+            df = pd.DataFrame(scaler.fit_transform(df), columns = cols)
 
         return ray.data.from_modin(df)
 
@@ -115,8 +154,8 @@ class ModelsUtils(ABC):
     def _label_encode(self, df):
         df = df.to_modin()
         with parallel_backend('ray'):
-            self.label_encoder = LabelEncoder()
-            df[self.taxa] = self.label_encoder.fit_transform(df[self.taxa])
+            self._label_encoder = LabelEncoder()
+            df[self.taxa] = self._label_encoder.fit_transform(df[self.taxa])
 
         self.labels_list = np.unique(df[self.taxa])
         return ray.data.from_modin(df)
@@ -124,14 +163,34 @@ class ModelsUtils(ABC):
     def _label_decode(self, df):
         df = df.to_modin()
         with parallel_backend('ray'):
-            df[self.taxa] = self.label_encoder.inverse_transform(df[self.taxa])
+            df[self.taxa] = self._label_encoder.inverse_transform(df[self.taxa])
 
         return ray.data.from_modin(df)
 
 class SklearnModel(ModelsUtils):
-    '''
-    Class to be used to build, train and predict models using Ray with Scikit-learn backend
-    '''
+    """
+    Class used to build, train and predict models using Ray with Scikit-learn backend
+
+    ----------
+    Attributes
+    ----------
+
+    clf_file : string
+        Path to a file containing the trained model for this object
+
+    ----------
+    Methods
+    ----------
+
+    predict : predict the classes of a dataset
+        df : ray.data.Dataset
+            Dataset containing K-mers profiles of sequences to be classified
+        threshold : float
+            Minimum percentage of probability to effectively classify.
+            Sequences will be classified as 'unknown' if the probability is under this threshold.
+            Defaults to 80%
+
+    """
     def __init__(self, classifier, dataset, outdir_model, outdir_results, batch_size, k, taxa, verbose):
         super().__init__(classifier, outdir_results, batch_size, k, taxa, verbose)
         # Parameters
@@ -167,7 +226,7 @@ class SklearnModel(ModelsUtils):
             self.clf = MultinomialNB()
 
     def _fit_model(self, X, y):
-        X = self._scaleX(X)
+        X = self._preprocess(X)
         y = self._label_encode(y)
         with parallel_backend('ray'):
             if self.classifier == 'onesvm':
@@ -181,9 +240,9 @@ class SklearnModel(ModelsUtils):
 
     def predict(self, df, threshold = 0.8):
         if self.classifier in ['onesvm','linearsvm']:
-            y_pred = _predict_binary(df)
+            y_pred = self._predict_binary(df)
         elif self.classifier in ['sgd','svm','mlr','mnb']:
-            y_pred = _predict_multi(df, threshold)
+            y_pred = self._predict_multi(df, threshold)
 
         return y_pred
 
@@ -210,9 +269,32 @@ class SklearnModel(ModelsUtils):
         return self._label_decode(y_pred)
 
 class KerasTFModel(ModelsUtils):
-    '''
-    Class to be used to build, train and predict models using Ray with Keras Tensorflow backend
-    '''
+    """
+    Class used to build, train and predict models using Ray with Keras Tensorflow backend
+
+    ----------
+    Attributes
+    ----------
+
+    clf_file : string
+        Path to a file containing the trained model for this object
+
+    nb_classes : int
+        Number of classes for learning
+
+    ----------
+    Methods
+    ----------
+
+    predict : predict the classes of a dataset
+        df : ray.data.Dataset
+            Dataset containing K-mers profiles of sequences to be classified
+        threshold : float
+            Minimum percentage of probability to effectively classify.
+            Sequences will be classified as 'unknown' if the probability is under this threshold.
+            Defaults to 80%
+
+    """
     def __init__(self, classifier, dataset, outdir_model, outdir_results, batch_size, k, taxa, verbose):
         super().__init__(classifier, outdir_results, batch_size, k, taxa, verbose)
         # Parameters
@@ -220,17 +302,17 @@ class KerasTFModel(ModelsUtils):
         # # Initialize empty
         self.nb_classes = None
         # Variables for training with Ray
-        self.tf_config = json.loads(os.environ['TF_CONFIG'])
-        self.num_workers = len(self.tf_config['cluster']['worker'])
-        self.global_batch_size = self.batch_size * self.num_workers
-        self.strategy = tf.distribute.MultiWorkerMirroredStrategy()
-        if len(self.tf_config['GPU']) > 0:
-            self.trainer = Trainer(backend = 'tensorflow', num_workers = self.num_workers, use_gpu = True)
+        self._tf_config = json.loads(os.environ['TF_CONFIG'])
+        self._num_workers = len(self._tf_config['cluster']['worker'])
+        self._global_batch_size = self.batch_size * self._num_workers
+        self._strategy = tf.distribute.MultiWorkerMirroredStrategy()
+        if len(self._tf_config['GPU']) > 0:
+            self._trainer = Trainer(backend = 'tensorflow', num_workers = self._num_workers, use_gpu = True)
         else:
-            self.trainer = Trainer(backend = 'tensorflow', num_workers = self.num_workers)
+            self._trainer = Trainer(backend = 'tensorflow', num_workers = self._num_workers)
 
     def _build(self):
-        with self.strategy.scope():
+        with self._strategy.scope():
             if self.classifier == 'attention':
                 if self.verbose:
                     print('Training bacterial / host classifier based on Attention Weighted Neural Network')
@@ -257,19 +339,19 @@ class KerasTFModel(ModelsUtils):
                 self.clf = build_wideCNN(self.k, self.batch_size, self.nb_classes)
 
     def _fit_model(self, X, y):
-        X = self._scaleX(X)
+        X = self._preprocess(X)
         y = self._label_encode(y)
         self.nb_classes = len(self.labels_list)
-        self.multi_worker_dataset = self._join_shuffle_data(X, y, self.global_batch_size)
+        self.multi_worker_dataset = self._join_shuffle_data(X, y, self._global_batch_size)
 
-        checkpoint_strategy = CheckpointStrategy(num_to_keep = 1,
+        checkpoint__strategy = CheckpointStrategy(num_to_keep = 1,
                                     checkpoint_score_attribute='val_accuracy',
                                     checkpoint_score_order='max')
 
-        self.trainer.start()
-        self.trainer.run(self._fit_ray, checkpoint_strategy = checkpoint_strategy)
-        self.checkpoint = self.trainer.best_checkpoint
-        self.trainer.shutdown()
+        self._trainer.start()
+        self._trainer.run(self._fit_ray, checkpoint__strategy = checkpoint__strategy)
+        self.checkpoint = self._trainer.best_checkpoint
+        self._trainer.shutdown()
 
     def _fit_ray(self):
 
@@ -298,9 +380,9 @@ class KerasTFModel(ModelsUtils):
 
     def predict(self, df, threshold = 0.8):
         if self.classifier in ['attention','lstm','deeplstm']:
-            y_pred = _predict_binary(df)
+            y_pred = self._predict_binary(df)
         elif self.classifier in ['lstm_attention','cnn','widecnn']:
-            y_pred = _predict_multi(df, threshold)
+            y_pred = self._predict_multi(df, threshold)
 
         return y_pred
 

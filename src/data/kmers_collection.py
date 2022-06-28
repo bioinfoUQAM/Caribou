@@ -27,6 +27,7 @@ warnings.filterwarnings("ignore")
 
 class KmersCollection():
     """
+    ----------
     Attributes
     ----------
 
@@ -203,17 +204,20 @@ class KmersCollection():
         # Read/concatenate batches with Ray
         self.df = ray.data.read_csv(self._csv_list)
         # Fill NAs with 0
-        self.df = self.df.map_batches(self._na_2_zero, batch_format = 'pandas')
+        self.df = self._na_2_zero(self.df)
         # Save dataset
         self.df.write_parquet(self.Xy_file)
 
     def _batch_read_write(self, batch, dir):
         df = ray.data.read_csv(batch)
-        df = df.map_batches(self._na_2_zero, batch_format = 'pandas')
+        df = self._na_2_zero(df)
         df.write_csv(dir)
         for file in batch:
             os.remove(file)
 
     def _na_2_zero(self, df):
+        df = ray.data.to_modin(df)
         df = df.fillna(0)
+        df = df.astype(np.int32)
+        df = ray.data.from_modin(df)
         return df

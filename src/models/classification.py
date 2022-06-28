@@ -13,7 +13,7 @@ __author__ = 'Nicolas de Montigny'
 __all__ = ['bacterial_classification','classify']
 
 # TODO: FINISH CONVERTING TO CLASSES FOR MODELS
-def bacterial_classification(classified_data, database_k_mers, k, outdirs, dataset, training_epochs, classifier = 'lstm_attention', batch_size = 32, threshold = 0.8, verbose = 1, cv = 1, n_jobs = 1):
+def bacterial_classification(classified_data, database_k_mers, k, outdirs, dataset, training_epochs, classifier = 'lstm_attention', batch_size = 32, threshold = 0.8, verbose = True, cv = True:
     previous_taxa_unclassified = None
 
     taxas = database_k_mers['taxas'].copy()

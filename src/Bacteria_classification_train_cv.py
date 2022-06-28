@@ -93,7 +93,7 @@ def bacteria_classification_train_cv(opt):
         cv = True
         )
 
-    print("Caribou finished training and cross-validating the {} model without faults").format(opt['model_type'])
+    print("Caribou finished training and cross-validating the {} model without faults".format(opt['model_type']))
 
 # Argument parsing from CLI
 ################################################################################

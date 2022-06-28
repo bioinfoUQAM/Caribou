@@ -241,7 +241,7 @@ def caribou(opt):
         k_profile_database,
         k_length,
         outdirs,
-        database,
+        metagenome,
         training_epochs,
         classifier = multi_classifier,
         batch_size = training_batch_size,
@@ -253,19 +253,23 @@ def caribou(opt):
 # Part 4 - Outputs for biological analysis of bacterial population
 ################################################################################
 
-    outputs(k_profile_database,
-            outdirs['results_dir'],
-            k_length,
-            multi_classifier,
-            database,
-            host,
-            classified_data,
-            '{}_seqdata_db_{}.txt'.format(outdirs['data_dir'], database),
-            metagenome_seq_file,
-            abundance_stats = abundance_stats,
-            kronagram = kronagram,
-            full_report = full_report,
-            extract_fasta = extract_fasta)
+    outputs = Outputs(k_profile_database,
+                      results_dir,
+                      k_length,
+                      multi_classifier,
+                      metagenome,
+                      host,
+                      classified_data)
+
+    # Output desired files according to parameters
+    if abundance_stats is True:
+        outputs.abundances()
+    if kronagram is True:
+        outputs.kronagram()
+    if full_report is True:
+        outputs.report()
+    if extract_fasta is True:
+        outputs.fasta()
 
     print('Caribou finished executing without faults and all results were outputed in the designated folders')
 
