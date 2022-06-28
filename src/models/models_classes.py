@@ -75,10 +75,10 @@ class ModelsUtils(ABC):
     predict : abstract method to predict the classes of a dataset
 
     """
-    def __init__(self, classifier, outdir, batch_size, k, taxa, verbose):
+    def __init__(self, classifier, outdir_results, batch_size, k, taxa, verbose):
         # Parameters
         self.classifier = classifier
-        self.outdir = outdir
+        self.outdir_results = outdir_results
         self.batch_size = batch_size
         self.k = k
         self.taxa = taxa
@@ -86,6 +86,8 @@ class ModelsUtils(ABC):
         # Initialize empty
         self._label_encoder = None
         self.labels_list = []
+        # Files
+        self._cv_csv = os.path.join(self.outdir_results,'{}_K{}_cv_scores.csv'.format(self.classifier, self.k))
 
     # Data scaling
     def _preprocess(self, df):
@@ -144,7 +146,7 @@ class ModelsUtils(ABC):
 
             scores = pd.DataFrame({'Classifier':self.classifier,'Precision':support[0],'Recall':support[1],'F-score':support[2]})
 
-            scores.to_csv(os.join(self.outdir,'{}_K{}_cv_scores.csv'.format(self.classifier, self.k)))
+            scores.to_csv(self._cv_csv)
 
     @abstractmethod
     def predict(self):
@@ -251,7 +253,7 @@ class SklearnModel(ModelsUtils):
 
         with parallel_backend('ray'):
             for i, row in enumerate(df.iter_rows()):
-                y_pred[i] = clf.predict(row)
+                y_pred[i] = self.clf.predict(row)
 
         return self._label_decode(y_pred)
 

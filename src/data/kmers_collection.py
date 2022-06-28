@@ -216,7 +216,7 @@ class KmersCollection():
             os.remove(file)
 
     def _na_2_zero(self, df):
-        df = ray.data.to_modin(df)
+        df = df.to_modin()
         df = df.fillna(0)
         df = df.astype(np.int32)
         df = ray.data.from_modin(df)

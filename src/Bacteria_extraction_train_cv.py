@@ -98,6 +98,7 @@ def bacteria_extraction_train_cv(opt):
     outdirs["results_dir"] = os.path.join(outdirs["main_outdir"], "results/")
     os.makedirs(outdirs["main_outdir"], mode=0o700, exist_ok=True)
     os.makedirs(outdirs["models_dir"], mode=0o700, exist_ok=True)
+    os.makedirs(outdirs["results_dir"], mode=0o700, exist_ok=True)
 
 # Training and cross-validation of models for bacteria extraction / host removal
 ################################################################################
