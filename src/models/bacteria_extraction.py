@@ -81,12 +81,14 @@ def extract_bacteria_sequences(df_file, model, verbose = True):
 
     pred = model.predict(df)
 
-    # Make sure classes are writen in lowercase
-    pred = pred.str.lower()
+    df = df.to_modin()
 
-    df_bacteria = df[pred.str.match('bacteria')]
-    df_host = df[pred.str.match('host')]
-    df_unclassified = df[pred.str.match('unknown')]
+    # Make sure classes are writen in lowercase
+    pred['class'] = pred['class'].str.lower()
+
+    df_bacteria = df[pred['class'].str.match('bacteria')]
+    df_host = df[pred['class'].str.match('host')]
+    df_unclassified = df[pred['class'].str.match('unknown')]
 
     # Save / add to classified data
     try:

@@ -155,7 +155,8 @@ class KmersCollection():
         # Transpose kmers profile
         profile = pd.read_table(os.path.join(self._tmp_dir,"{}.txt".format(ind)), sep = '\t', header = None, names = ['id', str(id)])
         # Save seen kmers profile to csv file
-        profile.T.to_csv(os.path.join(self._tmp_dir,"{}.csv".format(ind)), header = False)
+        if len(profile.columns) > 1:
+            profile.T.to_csv(os.path.join(self._tmp_dir,"{}.csv".format(ind)), header = False)
         # Delete tmp dir and file
         rmtree(tmp_folder)
         os.remove(os.path.join(self._tmp_dir,"{}.txt".format(ind)))
@@ -175,16 +176,18 @@ class KmersCollection():
         seen_profile = pd.read_table(os.path.join(self._tmp_dir,"{}.txt".format(ind)), sep = '\t', header = None, names = ['id', str(id)]).T
         # List of seen kmers
         seen_kmers = list(seen_profile.columns)
-        # Tmp df to write given kmers to file
-        given_profile = pd.DataFrame(np.zeros((1,len(self.kmers_list))), columns = self.kmers_list, index = [id])
-        # Keep only given kmers that were found
-        for kmer in self.kmers_list:
-            if kmer in seen_kmers:
-                given_profile.at[id,kmer] = seen_profile.loc[id,kmer]
-            else:
-                given_profile.at[id,kmer] = 0
-        # Save given kmers profile to csv file
-        given_profile.to_csv(os.path.join(self._tmp_dir,"{}.csv".format(ind)), header = False, index_label = 'id')
+        seen_kmers.pop('id')
+        if len(seen_kmers) > 1:
+            # Tmp df to write given kmers to file
+            given_profile = pd.DataFrame(np.zeros((1,len(self.kmers_list))), columns = self.kmers_list, index = [id])
+            # Keep only given kmers that were found
+            for kmer in self.kmers_list:
+                if kmer in seen_kmers:
+                    given_profile.at[id,kmer] = seen_profile.loc[id,kmer]
+                else:
+                    given_profile.at[id,kmer] = 0
+            # Save given kmers profile to csv file
+            given_profile.to_csv(os.path.join(self._tmp_dir,"{}.csv".format(ind)), header = False, index_label = 'id')
         # Delete temp dir and file
         rmtree(tmp_folder)
         os.remove(os.path.join(self._tmp_dir,"{}.txt".format(ind)))
@@ -204,20 +207,18 @@ class KmersCollection():
         # Read/concatenate batches with Ray
         self.df = ray.data.read_csv(self._csv_list)
         # Fill NAs with 0
-        self.df = self._na_2_zero(self.df)
+        self.df.map_batches(self._na_2_zero, batch_format = 'pandas')
         # Save dataset
         self.df.write_parquet(self.Xy_file)
 
     def _batch_read_write(self, batch, dir):
         df = ray.data.read_csv(batch)
-        df = self._na_2_zero(df)
+        df.map_batches(self._na_2_zero, batch_format = 'pandas')
         df.write_csv(dir)
         for file in batch:
             os.remove(file)
 
     def _na_2_zero(self, df):
-        df = df.to_modin()
         df = df.fillna(0)
         df = df.astype(np.int32)
-        df = ray.data.from_modin(df)
         return df
