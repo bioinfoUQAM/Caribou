@@ -1,4 +1,4 @@
-import numpy
+import numpy as np
 import modin.pandas as pd
 
 from abc import ABC, abstractmethod

@@ -209,6 +209,7 @@ class KmersCollection():
 
     def _batch_read_write(self, batch, dir):
         df = ray.data.read_csv(batch)
+        df = df.map_batches(self._na_2_zero, batch_format = 'pandas')
         df.write_csv(dir)
         for file in batch:
             os.remove(file)
