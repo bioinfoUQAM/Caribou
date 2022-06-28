@@ -86,12 +86,13 @@ class ModelsUtils(ABC):
         # Initialize empty
         self._label_encoder = None
         self.labels_list = []
-        self.predicted_ids = []
         # Files
         self._cv_csv = os.path.join(self.outdir_results,'{}_K{}_cv_scores.csv'.format(self.classifier, self.k))
+        print(self._cv_csv)
 
     # Data scaling
     def _preprocess(self, df):
+        print('_preprocess')
         df = df.to_modin()
         df = df.drop('id', 1)
         df = df.fillna(0)
@@ -109,6 +110,7 @@ class ModelsUtils(ABC):
         """
 
     def train(self, X, y, cv = True):
+        print('train')
         X = self._preprocess(X)
         y = self._label_encode(y)
         if cv:
@@ -122,6 +124,7 @@ class ModelsUtils(ABC):
         """
 
     def _cross_validation(self, X_train, y_train):
+        print('_cross_validation')
         X_train = X_train.to_modin()
         y_train = y_train.to_modin()
 
@@ -140,6 +143,7 @@ class ModelsUtils(ABC):
 
     # Outputs scores for cross validation in a dictionnary
     def _cv_score(self, y_true, y_pred):
+        print('_cv_score')
 
         if self.classifier in ['onesvm','linearsvm', 'attention','lstm','deeplstm']:
             average = 'binary'
@@ -158,6 +162,7 @@ class ModelsUtils(ABC):
         """
 
     def _label_encode(self, df):
+        print('_label_encode')
         df = df.to_modin()
         with parallel_backend('ray'):
             self._label_encoder = LabelEncoder()
@@ -167,6 +172,7 @@ class ModelsUtils(ABC):
         return ray.data.from_modin(df)
 
     def _label_decode(self, df):
+        print('_label_decode')
         df = df.to_modin()
         with parallel_backend('ray'):
             df[self.taxa] = self._label_encoder.inverse_transform(df[self.taxa])
@@ -232,6 +238,7 @@ class SklearnModel(ModelsUtils):
             self.clf = MultinomialNB()
 
     def _fit_model(self, X, y):
+        print('_fit_model')
         with parallel_backend('ray'):
             if self.classifier == 'onesvm':
                 for batch in X.iter_batches(batch_size = self.batch_size):
@@ -243,6 +250,7 @@ class SklearnModel(ModelsUtils):
         dump(self.clf, self.clf_file)
 
     def predict(self, df, threshold = 0.8):
+        print('predict')
         y_pred = df.to_modin()['ids']
         df = self._preprocess(df)
         if self.classifier in ['onesvm','linearsvm']:
