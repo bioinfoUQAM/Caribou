@@ -207,34 +207,32 @@ class KmersCollection():
             batch_dir = os.path.join(self._tmp_dir, 'batch_{}'.format(nb_batch))
             os.mkdir(batch_dir)
             for batch in batches_list:
-                self._batch_read_write(list(batch), batch_dir)
+                self._batch_read_write(list(batch), batch_dir, nb_batch)
             self._csv_list = glob(os.path.join(batch_dir,'*.csv'))
             nb_batch += 1
         # Read/concatenate batches with Ray
-        if self._schema is None:
+        if nb_batch == 0:
             self.df = ray.data.read_csv(self._csv_list)
         else:
-            self.df = ray.data.read_csv(self._csv_list, convert_options = csv.ConvertOptions(column_types = self._schema))
+            self.df = ray.data.read_parquet(self._csv_list)
         # Fill NAs with 0
-        #self.df.map_batches(self._na_2_zero, batch_format = 'pandas')
+        self.df = self.df.map_batches(self._na_2_zero, batch_format = 'pandas')
         # Save dataset
         self.df.write_parquet(self.Xy_file)
 
-    def _batch_read_write(self, batch, dir):
-        df = ray.data.read_csv(batch)
-        if self._schema is None:
-            self._schema = df.schema()
+    def _batch_read_write(self, batch, dir, nb_batch):
+        if nb_batch == 0:
+            df = ray.data.read_csv(batch)
         else:
-            self._schema = pa.unify_schemas([self._schema, df.schema()])
-        df.write_csv(dir)
+            df = ray.data.read_parquet(batch)
+        df = df.map_batches(self._na_2_zero, batch_format = 'pandas')
+        df.write_parquet(dir)
         for file in batch:
             os.remove(file)
 
     def _na_2_zero(self, df):
-        print(df)
         df = df.fillna(0)
         cols = list(df.columns)
         cols.remove('id')
         df[cols] = df[cols].astype(np.int32)
-        print(df)
         return df

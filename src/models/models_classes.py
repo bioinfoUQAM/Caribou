@@ -166,15 +166,15 @@ class ModelsUtils(ABC):
             df[self.taxa] = self._label_encoder.fit_transform(df[self.taxa])
 
         self.labels_list = np.unique(df[self.taxa])
+        print('labels : ',self.labels_list)
         return ray.data.from_modin(df)
 
-    def _label_decode(self, df):
+    def _label_decode(self, arr):
         print('_label_decode')
-        df = df.to_modin()
         with parallel_backend('ray'):
-            df[self.taxa] = self._label_encoder.inverse_transform(df[self.taxa])
+            arr = self._label_encoder.inverse_transform(arr)
 
-        return ray.data.from_modin(df)
+        return arr
 
 class SklearnModel(ModelsUtils):
     """
@@ -266,7 +266,10 @@ class SklearnModel(ModelsUtils):
             for i, row in enumerate(df.iter_batches(batch_size = 1)):
                 y_pred[i] = self.clf.predict(row)
 
-        return self._label_decode(y_pred)
+        if self.classifier == 'onesvm':
+            return self._label_decode_onesvm(y_pred)
+        else:
+            return self._label_decode(y_pred)
 
     def _predict_multi(self, df, threshold):
         y_pred = np.empty(df.count(), dtype=np.int32)
@@ -280,6 +283,10 @@ class SklearnModel(ModelsUtils):
                     y_pred[i] = -1
 
         return self._label_decode(y_pred)
+
+    def _label_decode_onesvm(self, y):
+        print('_label_decode_onesvm')
+
 
 class KerasTFModel(ModelsUtils):
     """
