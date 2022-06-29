@@ -225,7 +225,8 @@ class KmersCollection():
         if self._schema is None:
             self._schema = df.schema
         else:
-            self._schema = pa.unify_schemas([self._schema, df.schema])
+            sch = df.schema
+            self._schema = pa.unify_schemas([self._schema, sch])
         df.write_csv(dir)
         for file in batch:
             os.remove(file)

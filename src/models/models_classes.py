@@ -101,7 +101,6 @@ class ModelsUtils(ABC):
             scaler = StandardScaler()
             df = pd.DataFrame(scaler.fit_transform(df), columns = cols)
 
-        self._preprocessed = True
         return ray.data.from_modin(df)
 
     @abstractmethod
@@ -111,8 +110,6 @@ class ModelsUtils(ABC):
 
     def train(self, X, y, cv = True):
         print('train')
-        X = self._preprocess(X)
-        y = self._label_encode(y)
         if cv:
             self._cross_validation(X, y)
         else:
@@ -150,7 +147,7 @@ class ModelsUtils(ABC):
         elif self.classifier in ['sgd','svm','mlr','mnb','lstm_attention','cnn','widecnn']:
             average = 'macro'
 
-            support = precision_recall_fscore_support(y_true, y_pred['class'] , average = average)
+            support = precision_recall_fscore_support(y_true, y_pred['classes'] , average = average)
 
             scores = pd.DataFrame({'Classifier':self.classifier,'Precision':support[0],'Recall':support[1],'F-score':support[2]})
 
@@ -239,6 +236,8 @@ class SklearnModel(ModelsUtils):
 
     def _fit_model(self, X, y):
         print('_fit_model')
+        X = self._preprocess(X)
+        y = self._label_encode(y)
         with parallel_backend('ray'):
             if self.classifier == 'onesvm':
                 for batch in X.iter_batches(batch_size = self.batch_size):
@@ -251,13 +250,12 @@ class SklearnModel(ModelsUtils):
 
     def predict(self, df, threshold = 0.8):
         print('predict')
-        print(df.to_modin())
         y_pred = df.to_modin()['id']
         df = self._preprocess(df)
         if self.classifier in ['onesvm','linearsvm']:
-            y_pred = self._predict_binary(df)
+            y_pred['classes'] = self._predict_binary(df)
         elif self.classifier in ['sgd','svm','mlr','mnb']:
-            y_pred = self._predict_multi(df, threshold)
+            y_pred['classes'] = self._predict_multi(df, threshold)
 
         return y_pred
 
@@ -354,6 +352,8 @@ class KerasTFModel(ModelsUtils):
                 self.clf = build_wideCNN(self.k, self.batch_size, self.nb_classes)
 
     def _fit_model(self, X, y):
+        X = self._preprocess(X)
+        y = self._label_encode(y)
         self.nb_classes = len(self.labels_list)
         self.multi_worker_dataset = self._join_shuffle_data(X, y, self._global_batch_size)
 
@@ -367,13 +367,9 @@ class KerasTFModel(ModelsUtils):
         self._trainer.shutdown()
 
     def _fit_ray(self):
-
         self._build()
-
         early = EarlyStopping(monitor='val_accuracy', mode='max', verbose=1, patience=10)
-
         self.clf.fit(self.multi_worker_dataset, epochs = self.training_epochs)
-
         save_checkpoint(model_weights = self.clf.get_weights())
 
     def _join_shuffle_data(self, X_train, y_train, batch_size):
@@ -395,9 +391,9 @@ class KerasTFModel(ModelsUtils):
         y_pred = df.to_modin()['id']
         df = self._preprocess(df)
         if self.classifier in ['attention','lstm','deeplstm']:
-            y_pred['class'] = self._predict_binary(df)
+            y_pred['classes'] = self._predict_binary(df)
         elif self.classifier in ['lstm_attention','cnn','widecnn']:
-            y_pred['class'] = self._predict_multi(df, threshold)
+            y_pred['classes'] = self._predict_multi(df, threshold)
 
         return y_pred
 
