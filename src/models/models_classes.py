@@ -142,16 +142,15 @@ class ModelsUtils(ABC):
     def _cv_score(self, y_true, y_pred):
         print('_cv_score')
 
+        support = []
         if self.classifier in ['onesvm','linearsvm', 'attention','lstm','deeplstm']:
-            average = 'binary'
+            support = precision_recall_fscore_support(y_true.to_modin(), y_pred['classes'], pos_label = 'bacteria', average = 'binary')
         elif self.classifier in ['sgd','svm','mlr','mnb','lstm_attention','cnn','widecnn']:
-            average = 'macro'
+            support = precision_recall_fscore_support(y_true.to_modin(), y_pred['classes'], average = macro)
 
-            support = precision_recall_fscore_support(y_true, y_pred['classes'] , average = average)
+        scores = pd.DataFrame({'Classifier':self.classifier,'Precision':support[0],'Recall':support[1],'F-score':support[2]})
 
-            scores = pd.DataFrame({'Classifier':self.classifier,'Precision':support[0],'Recall':support[1],'F-score':support[2]})
-
-            scores.to_csv(self._cv_csv)
+        scores.to_csv(self._cv_csv)
 
     @abstractmethod
     def predict(self):
@@ -166,7 +165,6 @@ class ModelsUtils(ABC):
             df[self.taxa] = self._label_encoder.fit_transform(df[self.taxa])
 
         self.labels_list = np.unique(df[self.taxa])
-        print('labels : ',self.labels_list)
         return ray.data.from_modin(df)
 
     def _label_decode(self, arr):
@@ -250,7 +248,8 @@ class SklearnModel(ModelsUtils):
 
     def predict(self, df, threshold = 0.8):
         print('predict')
-        y_pred = df.to_modin()['id']
+        y_pred = pd.DataFrame(columns = ['id','classes'])
+        y_pred['id'] = df.to_modin()['id']
         df = self._preprocess(df)
         if self.classifier in ['onesvm','linearsvm']:
             y_pred['classes'] = self._predict_binary(df)
@@ -283,13 +282,14 @@ class SklearnModel(ModelsUtils):
                     y_pred[i] = -1
 
         return self._label_decode(y_pred)
-        
+
     def _label_decode_onesvm(self, arr):
         print('_label_decode_onesvm')
-        arr[arr == 1] = 'bacteria'
-        arr[arr == -1] = 'unknown'
+        decoded = np.empty(len(arr), dtype = object)
+        decoded[arr == 1] = 'bacteria'
+        decoded[arr == -1] = 'unknown'
 
-        return arr
+        return decoded
 
 
 class KerasTFModel(ModelsUtils):
@@ -399,7 +399,8 @@ class KerasTFModel(ModelsUtils):
         return df
 
     def predict(self, df, threshold = 0.8):
-        y_pred = df.to_modin()['id']
+        y_pred = pd.DataFrame(columns = ['id','classes'])
+        y_pred['id'] = df.to_modin()['id']
         df = self._preprocess(df)
         if self.classifier in ['attention','lstm','deeplstm']:
             y_pred['classes'] = self._predict_binary(df)
