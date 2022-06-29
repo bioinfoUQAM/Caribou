@@ -263,7 +263,7 @@ class SklearnModel(ModelsUtils):
         y_pred = np.empty(df.count(), dtype=np.int32)
 
         with parallel_backend('ray'):
-            for i, row in enumerate(df.iter_rows()):
+            for i, row in enumerate(df.iter_batches(batch_size = 1)):
                 y_pred[i] = self.clf.predict(row)
 
         return self._label_decode(y_pred)
@@ -272,7 +272,7 @@ class SklearnModel(ModelsUtils):
         y_pred = np.empty(df.count(), dtype=np.int32)
 
         with parallel_backend('ray'):
-            for i, row in enumerate(df.iter_rows()):
+            for i, row in enumerate(df.iter_batches(batch_size = 1)):
                 predicted = clf.predict_proba(row)
                 if predicted[0,np.argmax(predict[0])] >= threshold:
                     y_pred[i] = self.labels_list[np.argmax(predicted[0])]

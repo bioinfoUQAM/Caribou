@@ -223,10 +223,9 @@ class KmersCollection():
     def _batch_read_write(self, batch, dir):
         df = ray.data.read_csv(batch)
         if self._schema is None:
-            self._schema = df.schema
+            self._schema = df.schema()
         else:
-            sch = df.schema
-            self._schema = pa.unify_schemas([self._schema, sch])
+            self._schema = pa.unify_schemas([self._schema, df.schema()])
         df.write_csv(dir)
         for file in batch:
             os.remove(file)
