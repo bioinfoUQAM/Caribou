@@ -210,11 +210,9 @@ class KmersCollection():
         self.df.map_batches(self._na_2_zero, batch_format = 'pandas')
         # Save dataset
         self.df.write_parquet(self.Xy_file)
-# pyarrow.lib.ArrowInvalid: CSV parse error: Empty CSV file or block: cannot infer number of columns
-# pyarrow.lib.ArrowInvalid: In CSV column #37894: Row #5: CSV conversion error to null: invalid value '7'
+
     def _batch_read_write(self, batch, dir):
         df = ray.data.read_csv(batch)
-        df.map_batches(self._na_2_zero, batch_format = 'pandas')
         df.write_csv(dir)
         for file in batch:
             os.remove(file)
