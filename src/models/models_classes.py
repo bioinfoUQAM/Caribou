@@ -283,9 +283,13 @@ class SklearnModel(ModelsUtils):
                     y_pred[i] = -1
 
         return self._label_decode(y_pred)
-
-    def _label_decode_onesvm(self, y):
+        
+    def _label_decode_onesvm(self, arr):
         print('_label_decode_onesvm')
+        arr[arr == 1] = 'bacteria'
+        arr[arr == -1] = 'unknown'
+
+        return arr
 
 
 class KerasTFModel(ModelsUtils):
