@@ -52,7 +52,8 @@ def bacteria_extraction(metagenome_k_mers, database_k_mers, k, outdirs, dataset,
             sys.exit()
         elif classifier == 'onesvm' and not isinstance(database_k_mers, tuple):
             X_train = ray.data.read_parquet(database_k_mers['profile'])
-            y_train = pd.DataFrame(database_k_mers['classes'], columns = database_k_mers['taxas']).loc['id','domain'].str.lower()
+            y_train = pd.DataFrame(database_k_mers['classes'], columns = database_k_mers['taxas']).loc[:,'domain'].str.lower()
+# TODO: FIGURE OUT HOW TO GET ONLY SEQUENCES KEPT IN KMERS EXTRACT
             print(y_train)
             print('list')
             print(list(X_train.to_modin()['id']))
