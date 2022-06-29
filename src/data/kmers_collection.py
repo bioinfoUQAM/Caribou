@@ -80,9 +80,7 @@ class KmersCollection():
         self.classes = []
         self.method = None
         self.kmers_list = None
-        # Get informations from seq_data if not empty
-        if len(seq_data.labels) > 0:
-            self.classes = np.array(seq_data.labels)
+        # Get taxas from seq_data if not empty
         if len(seq_data.taxas) > 0:
             self.taxas = seq_data.taxas
         # Infer method from presence of already extracted kmers or not
@@ -112,6 +110,11 @@ class KmersCollection():
         if self.kmers_list is None:
             self.kmers_list = list(self.df.limit(1).to_pandas().columns)
             self.kmers_list.remove('id')
+        # Get labels that match K-mers extracted sequences
+        if len(seq_data.labels) > 0:
+            ids = list(self.df.to_modin()['id'])
+            msk = np.array([True if id in ids else False for id in seq_data.ids])
+            self.classes = seq_data.labels[msk]
         # Delete global tmp dir
         rmtree(self._tmp_dir)
 
