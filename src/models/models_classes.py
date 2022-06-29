@@ -251,6 +251,7 @@ class SklearnModel(ModelsUtils):
 
     def predict(self, df, threshold = 0.8):
         print('predict')
+        print(df.to_modin())
         y_pred = df.to_modin()['id']
         df = self._preprocess(df)
         if self.classifier in ['onesvm','linearsvm']:

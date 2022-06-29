@@ -46,16 +46,16 @@ class Outputs():
     ----------
 
     abundances : Generates an abundances table in csv format
-        No parameters to be passed
+        No parameters required
 
     kronagram : Generates a Kronagram (interactive tree) in html format
-        No parameters to be passed
+        No parameters required
 
     report : Generates a full report on identification of classified sequences
-        No parameters to be passed
+        No parameters required
 
     fasta : Generates a fasta file containing each sequences assigned to a taxonomy for classification made
-        No parameters to be passed
+        No parameters required
 
     """
     def __init__(database_kmers, results_dir, k, classifier, dataset, host, classified_data):
@@ -98,8 +98,10 @@ class Outputs():
 
     def abundances(self):
         self._abundance_table()
+        print('Abundance table saved to {}'.format(self._abund_file))
         self._summary['initial'] = len(self.data_labels)
         self._summary_table()
+        print('Summary table saved to {}'.format(self._summary_file))
 
     def _abundance_table(self):
         # Abundance tables / relative abundance

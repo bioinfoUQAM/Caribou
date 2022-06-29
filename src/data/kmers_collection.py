@@ -3,6 +3,8 @@ import ray
 import warnings
 
 import numpy as np
+import pyarrow as pa
+import pyarrow.csv as csv
 import modin.pandas as pd
 
 from glob import glob
@@ -80,6 +82,7 @@ class KmersCollection():
         self.classes = []
         self.method = None
         self.kmers_list = None
+        self._schema = None
         # Get taxas from seq_data if not empty
         if len(seq_data.taxas) > 0:
             self.taxas = seq_data.taxas
@@ -208,7 +211,10 @@ class KmersCollection():
             self._csv_list = glob(os.path.join(batch_dir,'*.csv'))
             nb_batch += 1
         # Read/concatenate batches with Ray
-        self.df = ray.data.read_csv(self._csv_list)
+        if self._schema is None:
+            self.df = ray.data.read_csv(self._csv_list)
+        else:
+            self.df = ray.data.read_csv(self._csv_list, convert_options = csv.ConvertOptions(column_types = self._schema))
         # Fill NAs with 0
         #self.df.map_batches(self._na_2_zero, batch_format = 'pandas')
         # Save dataset
@@ -216,6 +222,10 @@ class KmersCollection():
 
     def _batch_read_write(self, batch, dir):
         df = ray.data.read_csv(batch)
+        if self._schema is None:
+            self._schema = df.schema
+        else:
+            self._schema = pa.unify_schemas([self._schema, df.schema])
         df.write_csv(dir)
         for file in batch:
             os.remove(file)
