@@ -210,7 +210,7 @@ class KmersCollection():
         # Read/concatenate batches with Ray
         self.df = ray.data.read_csv(self._csv_list)
         # Fill NAs with 0
-        self.df.map_batches(self._na_2_zero, batch_format = 'pandas')
+        #self.df.map_batches(self._na_2_zero, batch_format = 'pandas')
         # Save dataset
         self.df.write_parquet(self.Xy_file)
 
@@ -221,6 +221,7 @@ class KmersCollection():
             os.remove(file)
 
     def _na_2_zero(self, df):
+        print(df)
         df = df.fillna(0)
         cols = list(df.columns)
         cols.remove('id')
