@@ -64,9 +64,10 @@ class DatasetKmers():
         np.savez(self._Xy_file, data = self.data)
 
 
-class MergedDatabaseHostKmers():
+class MergedDatabaseHostKmers(DatasetKmers):
     def __init__(db_dataset, host_dataset):
 
+# TODO: REARRANGE FOR CLASS
     def merge_database_host(database_data, host_data):
         merged_data = {}
 
@@ -83,8 +84,8 @@ class MergedDatabaseHostKmers():
         df_merged.write_parquet(merged_file)
 
         return merged_data
-        
-class MetagenomeKmers():
+
+class MetagenomeKmers(DatasetKmers):
     def __init__(file, prefix, dataset, host, kmers_list, k):
         super().__init__(file, prefix, dataset, k):
 
