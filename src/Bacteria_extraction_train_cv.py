@@ -62,13 +62,11 @@ def bacteria_extraction_train_cv(opt):
                 if not os.path.isdir(data_host['profile']):
                     print("Cannot find file {} ! Exiting".format(data_host['profile']))
                     sys.exit()
-    else:
-        host = None
 
     # Verify that model type is valid / choose default depending on host presence
-    if host is None:
+    if opt['host_name'] is None:
         opt['model_type'] = 'onesvm'
-    elif opt['model_type'] is None and host is not None:
+    elif opt['model_type'] is None and opt['host_name'] is not None:
         opt['model_type'] = 'attention'
 
     # Validate batch size
@@ -103,7 +101,7 @@ def bacteria_extraction_train_cv(opt):
 # Training and cross-validation of models for bacteria extraction / host removal
 ################################################################################
 
-    if host is None:
+    if opt['host_name'] is None:
         bacteria_extraction(None,
             data_bacteria,
             k_length,
@@ -138,6 +136,7 @@ if __name__ == "__main__":
     parser.add_argument('-db','--data_bacteria', required=True, type=Path, help='PATH to a npz file containing the data corresponding to the k-mers profile for the bacteria database')
     parser.add_argument('-dh','--data_host', default=None, type=Path, help='PATH to a npz file containing the data corresponding to the k-mers profile for the host')
     parser.add_argument('-dt','--database_name', required=True, help='Name of the bacteria database used to name files')
+    parser.add_argument('-ds','--host_name', default=None, help='Name of the host database used to name files')
     parser.add_argument('-model','--model_type', default=None, choices=[None,'linearsvm','attention','lstm','deeplstm'], help='The type of model to train')
     parser.add_argument('-bs','--batch_size', default=32, type=int, help='Size of the batch size to use, defaults to 32')
     parser.add_argument('-e','--training_epochs', default=100, type=int, help='The number of training iterations for the neural networks models if one ise chosen, defaults to 100')

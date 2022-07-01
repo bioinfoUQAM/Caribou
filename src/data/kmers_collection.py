@@ -182,7 +182,6 @@ class KmersCollection():
         seen_profile = pd.read_table(os.path.join(self._tmp_dir,"{}.txt".format(ind)), sep = '\t', header = None, names = ['id', str(id)]).T
         # List of seen kmers
         seen_kmers = list(seen_profile.columns)
-        seen_kmers.remove('id')
         if len(seen_kmers) > 1:
             # Tmp df to write given kmers to file
             given_profile = pd.DataFrame(np.zeros((1,len(self.kmers_list))), columns = self.kmers_list, index = [id])
@@ -208,10 +207,6 @@ class KmersCollection():
             os.mkdir(batch_dir)
             for batch in batches_list:
                 self._batch_read_write(list(batch), batch_dir, nb_batch)
-            print(batch_dir)
-            print(os.path.join(batch_dir,'*.parquet'))
-            print(len(glob(os.path.join(batch_dir,'*.parquet'))))
-            print(len(glob(os.path.join(batch_dir,'*'))))
             self._csv_list = glob(os.path.join(batch_dir,'*.parquet'))
             nb_batch += 1
         # Read/concatenate batches with Ray

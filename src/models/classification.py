@@ -13,7 +13,7 @@ __author__ = 'Nicolas de Montigny'
 __all__ = ['bacterial_classification','classify']
 
 # TODO: FINISH CONVERTING TO CLASSES FOR MODELS
-def bacterial_classification(classified_data, database_k_mers, k, outdirs, dataset, training_epochs, classifier = 'lstm_attention', batch_size = 32, threshold = 0.8, verbose = True, cv = True:
+def bacterial_classification(classified_data, database_k_mers, k, outdirs, dataset, training_epochs = 100, classifier = 'lstm_attention', batch_size = 32, threshold = 0.8, verbose = True, cv = True:
     previous_taxa_unclassified = None
 
     taxas = database_k_mers['taxas'].copy()
@@ -30,7 +30,7 @@ def bacterial_classification(classified_data, database_k_mers, k, outdirs, datas
             if classifier in ['sgd','svm','mlr','mnb']:
                 model = SklearnModel(classifier, dataset, outdirs['models_dir'], outdirs['results_dir'], batch_size, k, taxa, verbose)
             elif classifier in ['lstm_attention','cnn','widecnn']:
-                model = KerasTFModel(classifier, dataset, outdirs['models_dir'], outdirs['results_dir'], batch_size, k, taxa, verbose)
+                model = KerasTFModel(classifier, dataset, outdirs['models_dir'], outdirs['results_dir'], batch_size, training_epochs, k, taxa, verbose)
             else:
                 print('Bacteria classifier type unknown !!!\n\tModels implemented at this moment are :\n\tLinear models :  Ridge regressor (sgd), Linear SVM (svm), Multiple Logistic Regression (mlr)\n\tProbability classifier : Multinomial Bayes (mnb)\n\tNeural networks : Deep hybrid between LSTM and Attention (lstm_attention), CNN (cnn) and Wide CNN (widecnn)')
                 sys.exit()

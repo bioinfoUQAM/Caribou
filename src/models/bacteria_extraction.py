@@ -12,7 +12,7 @@ __author__ = 'Nicolas de Montigny'
 
 __all__ = ['bacteria_extraction','extract_bacteria_sequences']
 
-def bacteria_extraction(metagenome_k_mers, database_k_mers, k, outdirs, dataset, training_epochs, classifier = 'deeplstm', batch_size = 32, verbose = True, cv = True):
+def bacteria_extraction(metagenome_k_mers, database_k_mers, k, outdirs, dataset, training_epochs = 100, classifier = 'deeplstm', batch_size = 32, verbose = True, cv = True):
     # classified_data is a dictionnary containing data dictionnaries at each classified level:
     # {taxa:{'X':path to ray dataset in parquet format}}
     classified_data = {'order' : ['bacteria','host','unclassified']}
@@ -26,7 +26,7 @@ def bacteria_extraction(metagenome_k_mers, database_k_mers, k, outdirs, dataset,
     if classifier in ['onesvm','linearsvm']:
         model = SklearnModel(classifier, dataset, outdirs['models_dir'], outdirs['results_dir'], batch_size, k, 'domain', verbose)
     elif classifier in ['attention','lstm','deeplstm']:
-        model = KerasTFModel(classifier, dataset, outdirs['models_dir'], outdirs['results_dir'], batch_size, k, 'domain', verbose)
+        model = KerasTFModel(classifier, dataset, outdirs['models_dir'], outdirs['results_dir'], batch_size, training_epochs, k, 'domain', verbose)
     else:
         print('Bacteria extractor unknown !!!\n\tModels implemented at this moment are :\n\tBacteria isolator :  One Class SVM (onesvm)\n\tBacteria/host classifiers : Linear SVM (linearsvm)\n\tNeural networks : Attention (attention), Shallow LSTM (lstm) and Deep LSTM (deeplstm)')
         sys.exit()
