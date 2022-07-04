@@ -1,6 +1,6 @@
 #!/usr/bin python3
 
-from data.build_data import build_load_save_data
+from data.dataset_kmers import build_load_save_data
 from models.bacteria_extraction import bacteria_extraction
 from models.classification import bacterial_classification
 from outputs.out import Outputs
