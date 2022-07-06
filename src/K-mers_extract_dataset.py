@@ -1,6 +1,6 @@
 #!/usr/bin python3
 
-from data.build_data import build_load_save_data
+from data.dataset_kmers import build_load_save_data
 
 from tensorflow.compat.v1 import ConfigProto, Session
 from tensorflow.compat.v1.keras.backend import set_session
