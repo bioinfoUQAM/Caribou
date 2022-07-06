@@ -1,22 +1,22 @@
 #!/usr/bin python3
-
-from data.build_data import build_load_save_data
-from models.bacteria_extraction import bacteria_extraction
-from models.classification import bacterial_classification
-from outputs.out import Outputs
-
-from tensorflow.compat.v1 import ConfigProto, Session
-from tensorflow.compat.v1.keras.backend import set_session
-from tensorflow.config import list_physical_devices
-
 import os
 import sys
 import ray
 import argparse
 import configparser
 
-import modin.pandas as pd
 from pathlib import Path
+import modin.pandas as pd
+
+from data.build_data import build_load_save_data
+from models.extraction import bacteria_extraction
+from models.classification import bacteria_classification
+from outputs.out import Outputs
+
+from tensorflow.compat.v1 import ConfigProto, Session
+from tensorflow.compat.v1.keras.backend import set_session
+from tensorflow.config import list_physical_devices
+
 
 __author__ = 'Nicolas de Montigny'
 

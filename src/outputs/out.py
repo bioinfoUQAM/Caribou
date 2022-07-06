@@ -10,7 +10,6 @@ import gzip
 import pickle
 
 from subprocess import run
-from utils import load_Xy_data
 
 __author__ = 'Nicolas de Montigny'
 

@@ -1,16 +1,16 @@
-import numpy as np
-import modin.pandas as pd
-
 import os
 import sys
 import ray
 
-from utils import *
+import numpy as np
+import modin.pandas as pd
+
 from models.models_classes import SklearnModel, KerasTFModel
+from utils import load_Xy_data, save_Xy_data, merge_database_host
 
 __author__ = 'Nicolas de Montigny'
 
-__all__ = ['bacteria_extraction','extract_bacteria_sequences']
+__all__ = ['bacteria_extraction','extract']
 
 def bacteria_extraction(metagenome_k_mers, database_k_mers, k, outdirs, dataset, training_epochs = 100, classifier = 'deeplstm', batch_size = 32, verbose = True, cv = True):
     # classified_data is a dictionnary containing data dictionnaries at each classified level:
@@ -67,12 +67,12 @@ def bacteria_extraction(metagenome_k_mers, database_k_mers, k, outdirs, dataset,
 
         # Classify sequences into bacteria / unclassified / host and build k-mers profiles for bacteria
         if metagenome_k_mers is not None:
-            classified_data['bacteria'] = extract_bacteria_sequences(metagenome_k_mers['profile'], model, verbose)
+            classified_data['bacteria'] = extract(metagenome_k_mers['profile'], model, verbose)
             save_Xy_data(classified_data['bacteria'], bacteria_data_file)
 
     return classified_data
 
-def extract_bacteria_sequences(df_file, model, verbose = True):
+def extract(df_file, model, verbose = True):
     if verbose:
         print('Extracting predicted bacteria sequences')
 

@@ -1,19 +1,19 @@
-import modin.pandas as pd
-import numpy as np
-
 import os
 import sys
 import ray
 
-from utils import *
+import numpy as np
+import modin.pandas as pd
+
+from utils import load_Xy_data, save_Xy_data
 from models_classes import SklearnModel, KerasTFModel
 
 __author__ = 'Nicolas de Montigny'
 
-__all__ = ['bacterial_classification','classify']
+__all__ = ['bacteria_classification','classify']
 
 # TODO: FINISH CONVERTING TO CLASSES FOR MODELS
-def bacterial_classification(classified_data, database_k_mers, k, outdirs, dataset, training_epochs = 100, classifier = 'lstm_attention', batch_size = 32, threshold = 0.8, verbose = True, cv = True:
+def bacteria_classification(classified_data, database_k_mers, k, outdirs, dataset, training_epochs = 100, classifier = 'lstm_attention', batch_size = 32, threshold = 0.8, verbose = True, cv = True:
     previous_taxa_unclassified = None
 
     taxas = database_k_mers['taxas'].copy()

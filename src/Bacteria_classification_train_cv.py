@@ -1,7 +1,6 @@
 #!/usr/bin python3
 
-from models.classification import bacterial_classification
-from utils import load_Xy_data
+from models.classification import bacteria_classification
 
 from tensorflow.compat.v1 import ConfigProto, Session
 from tensorflow.compat.v1.keras.backend import set_session
@@ -13,6 +12,7 @@ import ray
 import argparse
 
 from pathlib import Path
+from utils import load_Xy_data
 
 __author__ = "Nicolas de Montigny"
 

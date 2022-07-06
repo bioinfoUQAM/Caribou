@@ -93,7 +93,6 @@ class ModelsUtils(ABC):
         self.labels_list = []
         # Files
         self._cv_csv = os.path.join(self.outdir_results,'{}_K{}_cv_scores.csv'.format(self.classifier, self.k))
-        print(self._cv_csv)
 
     # Data scaling
     def _preprocess(self, df):
@@ -238,7 +237,6 @@ class SklearnModel(ModelsUtils):
             self.clf = MultinomialNB()
 
     def _fit_model(self, X, y):
-        print('_fit_model')
         X = self._preprocess(X)
         y = self._label_encode(y)
         with parallel_backend('ray'):
@@ -252,7 +250,6 @@ class SklearnModel(ModelsUtils):
         dump(self.clf, self.clf_file)
 
     def predict(self, df, threshold = 0.8):
-        print('predict')
         y_pred = pd.DataFrame(columns = ['id','classes'])
         y_pred['id'] = df.to_modin()['id']
         df = self._preprocess(df)
@@ -289,7 +286,6 @@ class SklearnModel(ModelsUtils):
         return self._label_decode(y_pred)
 
     def _label_decode_onesvm(self, arr):
-        print('_label_decode_onesvm')
         decoded = np.empty(len(arr), dtype = object)
         decoded[arr == 1] = 'bacteria'
         decoded[arr == -1] = 'unknown'
@@ -327,13 +323,12 @@ class KerasTFModel(ModelsUtils):
     def __init__(self, classifier, dataset, outdir_model, outdir_results, batch_size, training_epochs, k, taxa, verbose):
         super().__init__(classifier, outdir_results, batch_size, k, taxa, verbose)
         # Parameters
+        self.dataset = dataset
+        self.outdir_model = outdir_model
         self.clf_file = '{}bacteria_binary_classifier_K{}_{}_{}_model'.format(outdir_model, k, classifier, dataset)
         # # Initialize empty
         self.nb_classes = None
         # Variables for training with Ray
-        self._tf_config = []
-        self._num_workers = None
-        self._global_batch_size = None
         self._training_epochs = training_epochs
         self._strategy = distribute.MultiWorkerMirroredStrategy()
         if len(list_physical_devices('GPU')) > 0:
@@ -342,6 +337,7 @@ class KerasTFModel(ModelsUtils):
             self._trainer = Trainer(backend = 'tensorflow', num_workers = os.cpu_count())
 
     def _build(self):
+        print('_build')
         with self._strategy.scope():
             if self.classifier == 'attention':
                 if self.verbose:
@@ -369,6 +365,7 @@ class KerasTFModel(ModelsUtils):
                 self.clf = build_wideCNN(self.k, self.batch_size, self.nb_classes)
 
     def _fit_model(self, X, y):
+        print('_fit_model')
         X = self._preprocess(X)
         y = self._label_encode(y)
         self.nb_classes = len(self.labels_list)
@@ -378,22 +375,23 @@ class KerasTFModel(ModelsUtils):
                                     checkpoint_score_order='max')
 
         self._trainer.start()
-        self._trainer.run(self._fit_ray, config = {'X':X,'y':y}, checkpoint_strategy = checkpoint_strategy)
+        self._trainer.run(self._train_func, config = {'X':X,'y':y,'batch_size':self.batch_size,'epochs':self._training_epochs}, checkpoint_strategy = checkpoint_strategy)
         self.checkpoint = self._trainer.best_checkpoint
         self._trainer.shutdown()
 
-    def _fit_ray(self, config):
-        self._tf_config = json.loads(os.environ['TF_CONFIG'])
-        self._num_workers = len(self._tf_config['cluster']['worker'])
-        self._global_batch_size = self.batch_size * self._num_workers
-        self._multi_worker_dataset = self._join_shuffle_data(config['X'], config['y'], self._global_batch_size)
-
+    def _train_func(self, config):
+        print('_train_func')
+        tf_config = json.loads(os.environ['TF_CONFIG'])
+        num_workers = len(tf_config['cluster']['worker'])
+        global_batch_size = config['batch_size'] * num_workers
+        multi_worker_dataset = self._join_shuffle_data(config['X'], config['y'], global_batch_size)
         self._build()
         early = EarlyStopping(monitor='val_accuracy', mode='max', verbose=1, patience=10)
-        self.clf.fit(self._multi_worker_dataset, epochs = self._training_epochs)
+        self.clf.fit(multi_worker_dataset, epochs = config['epochs'])
         save_checkpoint(model_weights = self.clf.get_weights())
 
     def _join_shuffle_data(self, X_train, y_train, batch_size):
+        print('_join_shuffle_data')
         # Join
         X_train = X_train.to_modin()
         y_train = y_train.to_modin()
@@ -409,6 +407,7 @@ class KerasTFModel(ModelsUtils):
         return df
 
     def predict(self, df, threshold = 0.8):
+        print('predict')
         y_pred = pd.DataFrame(columns = ['id','classes'])
         y_pred['id'] = df.to_modin()['id']
         df = self._preprocess(df)
@@ -441,3 +440,10 @@ class KerasTFModel(ModelsUtils):
                 y_pred[i] = -1
 
         return self._label_decode(y_pred)
+
+# TODO: CONFIRM SERIALISATION OK IN INTERACTIVE JOB
+    def __reduce__(self):
+        deserializer = self.__class__
+        serialized_data = (self.classifier, self.dataset, self.outdir_model, self.outdir_results, self.batch_size, self._training_epochs, self.k, self.taxa, self.verbose)
+
+        return deserializer, serialized_data
