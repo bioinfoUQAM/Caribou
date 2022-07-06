@@ -15,6 +15,7 @@ def build_attention(kmers_length):
     """
     Function extracted from module virnet/NNClassifier.py of
     VirNet package [Abdelkareem et al. 2018]
+    https://github.com/alyosama/virnet/blob/master/NNClassifier.py
     """
 
     inputs = Input(shape = (kmers_length,))
@@ -38,6 +39,7 @@ def build_LSTM(kmers_length, batch_size):
     """
     Function extracted from module seeker/train_model/train_model.py of
     Seeker package [Auslander et al. 2020]
+    https://github.com/gussow/seeker/blob/master/train_model/train_model.py
     """
 
     model = Sequential()
@@ -52,6 +54,7 @@ def build_deepLSTM(kmers_length, batch_size):
     """
     Function adapted from module deeplasmid/classifier/dl/DL_Model.py of
     Deeplasmid package [Andreopoulos et al. 2021]
+    https://github.com/wandreopoulos/deeplasmid/blob/docker/classifier/dl/DL_Model.py
     """
 
     inputA = Input(shape=(batch_size, kmers_length))
@@ -82,6 +85,7 @@ def build_LSTM_attention(kmers_length, nb_classes, batch_size):
     Function adapted in keras from module DeepMicrobes/models/embed_lstm_attention.py and
     default values for layers in script DeepMicrobes/models/define_flags.py of
     DeepMicrobes package [Liang et al. 2020]
+    https://github.com/MicrobeLab/DeepMicrobes/blob/master/models/embed_lstm_attention.py
     """
 
     inputs = Input(shape = (kmers_length,))
@@ -106,6 +110,7 @@ def build_CNN(kmers_length, batch_size, nb_classes):
     """
     Function extracted from module MetagenomicDC/models/CNN.py of
     MetagenomicDC package [Fiannaca et al. 2018]
+    https://github.com/IcarPA-TBlab/MetagenomicDC/blob/master/models/CNN.py
     """
 
     model = Sequential()
@@ -133,6 +138,7 @@ def build_wideCNN(kmers_length, batch_size, nb_classes):
     """
     Function adapted in keras from module CHEER/Classifier/model/Wcnn.py of
     CHEER package [Shang et al. 2021]
+    https://github.com/KennthShang/CHEER/blob/master/Classifier/model/Wcnn.py
     """
 
     inputs = Input(shape = (batch_size, kmers_length))

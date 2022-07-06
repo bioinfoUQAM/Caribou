@@ -8,18 +8,12 @@ import configparser
 from pathlib import Path
 import modin.pandas as pd
 
-<<<<<<< HEAD
 from data.build_data import build_load_save_data
 from models.extraction import bacteria_extraction
 from models.classification import bacteria_classification
-=======
-from data.dataset_kmers import build_load_save_data
-from models.bacteria_extraction import bacteria_extraction
-from models.classification import bacterial_classification
->>>>>>> 6d9585d3dd6dc1e7d71a3a9d91b0f474f0432ca6
 from outputs.out import Outputs
 
-from tensorflow.compat.v1 import ConfigProto, Session
+from tensorflow.compat.v1 import ConfigProto, Session, logging
 from tensorflow.compat.v1.keras.backend import set_session
 from tensorflow.config import list_physical_devices
 
@@ -27,6 +21,10 @@ from tensorflow.config import list_physical_devices
 __author__ = 'Nicolas de Montigny'
 
 __all__ = ['caribou']
+
+# Suppress Tensorflow warnings
+################################################################################
+logging.set_verbosity(logging.ERROR)
 
 # GPU & CPU setup
 ################################################################################
@@ -36,7 +34,7 @@ if gpus:
     sess = Session(config=config)
     set_session(sess);
 
-ray.init(num_cpus = os.cpu_count())
+ray.init(num_cpus = os.cpu_count(), num_gpus = len(gpus))
 
 # Part 0 - Initialisation / extraction of parameters from config file
 ################################################################################

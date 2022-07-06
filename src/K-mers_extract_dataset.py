@@ -2,7 +2,7 @@
 
 from data.dataset_kmers import build_load_save_data
 
-from tensorflow.compat.v1 import ConfigProto, Session
+from tensorflow.compat.v1 import ConfigProto, Session, logging
 from tensorflow.compat.v1.keras.backend import set_session
 from tensorflow.config import list_physical_devices
 
@@ -22,6 +22,10 @@ __all__ = ['kmers_dataset']
 This script extracts K-mers of the given dataset using the available ressources on the computer before saving it to drive.
 """
 
+# Suppress Tensorflow warnings
+################################################################################
+logging.set_verbosity(logging.ERROR)
+
 # GPU & CPU setup
 ################################################################################
 gpus = list_physical_devices('GPU')
@@ -30,7 +34,7 @@ if gpus:
     sess = Session(config=config)
     set_session(sess);
 
-ray.init(num_cpus = os.cpu_count())
+ray.init(num_cpus = os.cpu_count(), num_gpus = len(gpus))
 
 # Initialisation / validation of parameters from CLI
 ################################################################################

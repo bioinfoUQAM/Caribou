@@ -2,7 +2,7 @@
 
 from models.extraction import bacteria_extraction
 
-from tensorflow.compat.v1 import ConfigProto, Session
+from tensorflow.compat.v1 import ConfigProto, Session, logging
 from tensorflow.compat.v1.keras.backend import set_session
 from tensorflow.config import list_physical_devices
 
@@ -18,6 +18,10 @@ __author__ = "Nicolas de Montigny"
 
 __all__ = ['bacteria_extraction_train_cv']
 
+# Suppress Tensorflow warnings
+################################################################################
+logging.set_verbosity(logging.ERROR)
+
 # GPU & CPU setup
 ################################################################################
 gpus = list_physical_devices('GPU')
@@ -26,7 +30,7 @@ if gpus:
     sess = Session(config=config)
     set_session(sess);
 
-ray.init(num_cpus = os.cpu_count())
+ray.init(num_cpus = os.cpu_count(), num_gpus = len(gpus))
 
 # Initialisation / validation of parameters from CLI
 ################################################################################

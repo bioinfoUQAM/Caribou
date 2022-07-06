@@ -5,6 +5,8 @@ import modin.pandas as pd
 
 from abc import ABC, abstractmethod
 
+from models.build_neural_networks import *
+
 import os
 import ray
 import json
@@ -91,6 +93,7 @@ class ModelsUtils(ABC):
         # Initialize empty
         self._label_encoder = None
         self.labels_list = []
+        self._ids_list = []
         # Files
         self._cv_csv = os.path.join(self.outdir_results,'{}_K{}_cv_scores.csv'.format(self.classifier, self.k))
 
@@ -98,6 +101,7 @@ class ModelsUtils(ABC):
     def _preprocess(self, df):
         print('_preprocess')
         df = df.to_modin()
+        self._ids_list = list(df['id'])
         df = df.drop('id', 1)
         df = df.fillna(0)
         cols = df.columns
@@ -332,7 +336,7 @@ class KerasTFModel(ModelsUtils):
         self._training_epochs = training_epochs
         self._strategy = distribute.MultiWorkerMirroredStrategy()
         if len(list_physical_devices('GPU')) > 0:
-            self._trainer = Trainer(backend = 'tensorflow', num_workers = os.cpu_count(), use_gpu = True)
+            self._trainer = Trainer(backend = 'tensorflow', num_workers = len(list_physical_devices('GPU')), use_gpu = True)
         else:
             self._trainer = Trainer(backend = 'tensorflow', num_workers = os.cpu_count())
 
@@ -375,7 +379,7 @@ class KerasTFModel(ModelsUtils):
                                     checkpoint_score_order='max')
 
         self._trainer.start()
-        self._trainer.run(self._train_func, config = {'X':X,'y':y,'batch_size':self.batch_size,'epochs':self._training_epochs}, checkpoint_strategy = checkpoint_strategy)
+        self._trainer.run(self._train_func, config = {'X':X,'y':y,'batch_size':self.batch_size,'epochs':self._training_epochs,'ids':self._ids_list}, checkpoint_strategy = checkpoint_strategy)
         self.checkpoint = self._trainer.best_checkpoint
         self._trainer.shutdown()
 
@@ -384,18 +388,23 @@ class KerasTFModel(ModelsUtils):
         tf_config = json.loads(os.environ['TF_CONFIG'])
         num_workers = len(tf_config['cluster']['worker'])
         global_batch_size = config['batch_size'] * num_workers
-        multi_worker_dataset = self._join_shuffle_data(config['X'], config['y'], global_batch_size)
+        multi_worker_dataset = self._join_shuffle_data(config['X'], config['y'], global_batch_size, config['ids'])
         self._build()
         early = EarlyStopping(monitor='val_accuracy', mode='max', verbose=1, patience=10)
-        self.clf.fit(multi_worker_dataset, epochs = config['epochs'])
+        history = self.clf.fit(multi_worker_dataset, epochs = config['epochs'])
+        print(history.history)
         save_checkpoint(model_weights = self.clf.get_weights())
 
-    def _join_shuffle_data(self, X_train, y_train, batch_size):
+    def _join_shuffle_data(self, X_train, y_train, batch_size, ids_list):
         print('_join_shuffle_data')
         # Join
         X_train = X_train.to_modin()
         y_train = y_train.to_modin()
-        df = ray.data.from_modin(X_train.merge(y_train, on = 'id', how = 'left'))
+        X_train['id'] = ids_list
+        y_train['id'] = ids_list
+        df = X_train.merge(y_train, on = 'id', how = 'left')
+        df = df.drop('id', 1)
+        df = ray.data.from_modin(df)
         df = df.random_shuffle()
         df = df.to_tf(
         label_column = self.taxa,
