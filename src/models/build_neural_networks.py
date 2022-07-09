@@ -1,4 +1,6 @@
 import tensorflow as tf
+
+from math import ceil
 from tensorflow import cast
 from tensorflow.keras.initializers import GlorotNormal
 from keras.models import Model, Sequential
@@ -11,15 +13,30 @@ __author__ = "Nicolas de Montigny"
 __all__ = ['build_attention','build_LSTM','build_deepLSTM','build_LSTM_attention','build_CNN','build_wideCNN']
 
 # Host extraction
-def build_attention(kmers_length):
+def build_attention(batch_size, kmers_length, nb_kmers):
     """
     Function extracted from module virnet/NNClassifier.py of
     VirNet package [Abdelkareem et al. 2018]
     https://github.com/alyosama/virnet/blob/master/NNClassifier.py
     """
-
-    inputs = Input(shape = (kmers_length,))
-    x = Embedding(kmers_length, 128)(inputs)
+# File "/home/nicolas/miniconda3/envs/caribou/lib/python3.8/site-packages/tensorflow/python/ops/script_ops.py", line 270, in __call__
+#     ret = func(*args)
+#
+#   File "/home/nicolas/miniconda3/envs/caribou/lib/python3.8/site-packages/tensorflow/python/autograph/impl/api.py", line 642, in wrapper
+#     return func(*args, **kwargs)
+#
+#   File "/home/nicolas/miniconda3/envs/caribou/lib/python3.8/site-packages/tensorflow/python/data/ops/dataset_ops.py", line 1073, in generator_py_func
+#     raise TypeError(
+#
+# TypeError: `generator` yielded an element of shape (3, 136) where an element of shape (None, 3) was expected.
+#
+#
+#          [[{{node PyFunc}}]]
+#          [[MultiDeviceIteratorGetNextFromShard]]
+#          [[RemoteCall]]
+#          [[IteratorGetNextAsOptional]]
+    inputs = Input(shape = (batch_size,))
+    x = Embedding(nb_kmers, 128)(inputs)
 
     x = LSTM(128, return_sequences = True, dropout = 0.1, recurrent_dropout = 0.1 )(x)
     x = LSTM(128, return_sequences = True, dropout = 0.1, recurrent_dropout = 0.1 )(x)

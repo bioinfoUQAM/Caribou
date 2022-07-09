@@ -94,6 +94,7 @@ class ModelsUtils(ABC):
         self._label_encoder = None
         self.labels_list = []
         self._ids_list = []
+        self._nb_kmers = 0
         # Files
         self._cv_csv = os.path.join(self.outdir_results,'{}_K{}_cv_scores.csv'.format(self.classifier, self.k))
 
@@ -105,6 +106,7 @@ class ModelsUtils(ABC):
         df = df.drop('id', 1)
         df = df.fillna(0)
         cols = df.columns
+        self._nb_kmers = len(cols)
         with parallel_backend('ray'):
             scaler = StandardScaler()
             df = pd.DataFrame(scaler.fit_transform(df), columns = cols)
@@ -340,13 +342,13 @@ class KerasTFModel(ModelsUtils):
         else:
             self._trainer = Trainer(backend = 'tensorflow', num_workers = os.cpu_count())
 
-    def _build(self):
+    def _build(self, nb_kmers):
         print('_build')
         with self._strategy.scope():
             if self.classifier == 'attention':
                 if self.verbose:
                     print('Training bacterial / host classifier based on Attention Weighted Neural Network')
-                self.clf = build_attention(self.k)
+                self.clf = build_attention(self.batch_size, self.k, nb_kmers)
             elif self.classifier == 'lstm':
                 if self.verbose:
                     print('Training bacterial / host classifier based on Shallow LSTM Neural Network')
@@ -379,7 +381,7 @@ class KerasTFModel(ModelsUtils):
                                     checkpoint_score_order='max')
 
         self._trainer.start()
-        self._trainer.run(self._train_func, config = {'X':X,'y':y,'batch_size':self.batch_size,'epochs':self._training_epochs,'ids':self._ids_list}, checkpoint_strategy = checkpoint_strategy)
+        self._trainer.run(self._train_func, config = {'X':X,'y':y,'batch_size':self.batch_size,'epochs':self._training_epochs,'ids':self._ids_list,'nb_kmers':self._nb_kmers}, checkpoint_strategy = checkpoint_strategy)
         self.checkpoint = self._trainer.best_checkpoint
         self._trainer.shutdown()
 
@@ -389,7 +391,7 @@ class KerasTFModel(ModelsUtils):
         num_workers = len(tf_config['cluster']['worker'])
         global_batch_size = config['batch_size'] * num_workers
         multi_worker_dataset = self._join_shuffle_data(config['X'], config['y'], global_batch_size, config['ids'])
-        self._build()
+        self._build(config['nb_kmers'])
         early = EarlyStopping(monitor='val_accuracy', mode='max', verbose=1, patience=10)
         history = self.clf.fit(multi_worker_dataset, epochs = config['epochs'])
         print(history.history)
