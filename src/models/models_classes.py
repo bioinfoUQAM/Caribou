@@ -4,6 +4,7 @@ import ray.train as train
 import modin.pandas as pd
 
 from abc import ABC, abstractmethod
+from math import ceil
 
 from models.build_neural_networks import *
 
@@ -13,6 +14,7 @@ import json
 import warnings
 
 from sklearn.model_selection import train_test_split
+from sklearn.calibration import CalibratedClassifierCV
 from sklearn.metrics import precision_recall_fscore_support
 from sklearn.preprocessing import StandardScaler, LabelEncoder
 
@@ -107,9 +109,10 @@ class ModelsUtils(ABC):
         df = df.fillna(0)
         cols = df.columns
         self._nb_kmers = len(cols)
-        with parallel_backend('ray'):
-            scaler = StandardScaler()
-            df = pd.DataFrame(scaler.fit_transform(df), columns = cols)
+        if self.classifier != 'mnb':
+            with parallel_backend('ray'):
+                scaler = StandardScaler()
+                df = pd.DataFrame(scaler.fit_transform(df), columns = cols)
 
         return ray.data.from_modin(df)
 
@@ -156,7 +159,7 @@ class ModelsUtils(ABC):
         if self.classifier in ['onesvm','linearsvm', 'attention','lstm','deeplstm']:
             support = precision_recall_fscore_support(y_true.to_modin(), y_pred['classes'], pos_label = 'bacteria', average = 'binary')
         elif self.classifier in ['sgd','svm','mlr','mnb','lstm_attention','cnn','widecnn']:
-            support = precision_recall_fscore_support(y_true.to_modin(), y_pred['classes'], average = macro)
+            support = precision_recall_fscore_support(y_true.to_modin(), y_pred['classes'], average = 'macro')
 
         scores = pd.DataFrame({'Classifier':self.classifier,'Precision':support[0],'Recall':support[1],'F-score':support[2]}, index = [1]).T
 
@@ -179,10 +182,15 @@ class ModelsUtils(ABC):
 
     def _label_decode(self, arr):
         print('_label_decode')
-        with parallel_backend('ray'):
-            arr = self._label_encoder.inverse_transform(arr)
+        decoded = np.empty(len(arr), dtype = object)
+        for pos in np.arange(len(arr)):
+            if arr[pos] == -1:
+                decoded[pos] = 'unknown'
+            else:
+                with parallel_backend('ray'):
+                    decoded[pos] = self._label_encoder.inverse_transform(arr[pos])
 
-        return arr
+        return decoded
 
 class SklearnModel(ModelsUtils):
     """
@@ -212,50 +220,67 @@ class SklearnModel(ModelsUtils):
         super().__init__(classifier, outdir_results, batch_size, k, taxa, verbose)
         # Parameters
         self.clf_file = '{}bacteria_binary_classifier_K{}_{}_{}_model.jb'.format(outdir_model, k, classifier, dataset)
+        # Empty initialization
+        self._base_clf = None
         # Computes
         self._build()
 
 
     def _build(self):
+        print('_build')
         if self.classifier == 'onesvm':
             if self.verbose:
                 print('Training bacterial extractor with One Class SVM')
-            self.clf = SGDOneClassSVM(nu = 0.05, tol = 1e-4)
+            self._base_clf = SGDOneClassSVM(nu = 0.05, tol = 1e-4)
+            self._clf = SGDOneClassSVM(nu = 0.05, tol = 1e-4)
         elif self.classifier == 'linearsvm':
             if self.verbose:
                 print('Training bacterial / host classifier with Linear SVM')
-            self.clf = SGDClassifier(early_stopping = False, n_jobs = -1)
+            self._base_clf = SGDClassifier(early_stopping = False, n_jobs = -1)
+            self._clf = SGDClassifier(early_stopping = False, n_jobs = -1)
         elif self.classifier == 'sgd':
             if self.verbose:
                 print('Training multiclass classifier with SGD and squared loss function')
-            self.clf = SGDClassifier(loss = 'squared_error', n_jobs = -1, random_state = 42)
+            self._base_clf = SGDClassifier(loss = 'squared_error', n_jobs = -1, random_state = 42)
+            self._clf = SGDClassifier(loss = 'squared_error', n_jobs = -1, random_state = 42)
         elif self.classifier == 'svm':
             if self.verbose:
                 print('Training multiclass classifier with Linear SVM and SGD hinge loss')
-            self.clf = SGDClassifier(loss = 'hinge', n_jobs = -1, random_state = 42)
+            self._base_clf = SGDClassifier(loss = 'hinge', n_jobs = -1, random_state = 42)
+            self._clf = SGDClassifier(loss = 'hinge', n_jobs = -1, random_state = 42)
         elif self.classifier == 'mlr':
             if self.verbose:
                 print('Training multiclass classifier with Multinomial Logistic Regression')
-            self.clf = SGDClassifier(loss = 'log', n_jobs = -1, random_state = 42)
+            self._base_clf = SGDClassifier(loss = 'log_loss', n_jobs = -1, random_state = 42)
+            self._clf = SGDClassifier(loss = 'log_loss', n_jobs = -1, random_state = 42)
         elif self.classifier == 'mnb':
             if self.verbose:
                 print('Training multiclass classifier with Multinomial Naive Bayes')
-            self.clf = MultinomialNB()
+            self._base_clf = MultinomialNB()
+            self._clf = MultinomialNB()
 
     def _fit_model(self, X, y):
+        print('_fit_model')
         X = self._preprocess(X)
         y = self._label_encode(y)
+
         with parallel_backend('ray'):
             if self.classifier == 'onesvm':
                 for batch in X.iter_batches(batch_size = self.batch_size):
-                    self.clf.partial_fit(batch)
+                        self._clf.partial_fit(batch)
             else:
-                for batch_X, batch_y in zip(X.iter_batches(batch_size = self.batch_size), y.iter_batches(batch_size = self.batch_size)):
-                    self.clf.partial_fit(batch_X, batch_y, classes = self.labels_list)
+                nb_batches = ceil(len(self._ids_list)/self.batch_size) - 1
+                for iter, (batch_X, batch_y) in enumerate(zip(X.iter_batches(batch_size = self.batch_size), y.iter_batches(batch_size = self.batch_size))):
+                    if iter != nb_batches:
+                        self._clf.partial_fit(batch_X, batch_y, classes = self.labels_list)
+                    else:
+                        self._clf = CalibratedClassifierCV(base_estimator = self._clf, cv = 'prefit')
+                        self._clf.fit(batch_X, batch_y)
 
-        dump(self.clf, self.clf_file)
+        dump(self._clf, self.clf_file)
 
     def predict(self, df, threshold = 0.8):
+        print('predict')
         y_pred = pd.DataFrame(columns = ['id','classes'])
         y_pred['id'] = df.to_modin()['id']
         df = self._preprocess(df)
@@ -271,7 +296,7 @@ class SklearnModel(ModelsUtils):
 
         with parallel_backend('ray'):
             for i, row in enumerate(df.iter_batches(batch_size = 1)):
-                y_pred[i] = self.clf.predict(row)
+                y_pred[i] = self._clf.predict(row)
 
         if self.classifier == 'onesvm':
             return self._label_decode_onesvm(y_pred)
@@ -279,12 +304,13 @@ class SklearnModel(ModelsUtils):
             return self._label_decode(y_pred)
 
     def _predict_multi(self, df, threshold):
+        print('_predict_multi')
         y_pred = np.empty(df.count(), dtype=np.int32)
 
         with parallel_backend('ray'):
             for i, row in enumerate(df.iter_batches(batch_size = 1)):
-                predicted = clf.predict_proba(row)
-                if predicted[0,np.argmax(predict[0])] >= threshold:
+                predicted = self._clf.predict_proba(row)
+                if predicted[0,np.argmax(predicted[0])] >= threshold:
                     y_pred[i] = self.labels_list[np.argmax(predicted[0])]
                 else:
                     y_pred[i] = -1
@@ -342,33 +368,33 @@ class KerasTFModel(ModelsUtils):
         else:
             self._trainer = Trainer(backend = 'tensorflow', num_workers = os.cpu_count())
 
-    def _build(self, nb_kmers):
+    def _build(self, nb_kmers, nb_classes):
         print('_build')
         with self._strategy.scope():
             if self.classifier == 'attention':
                 if self.verbose:
                     print('Training bacterial / host classifier based on Attention Weighted Neural Network')
-                self.clf = build_attention(self.batch_size, self.k, nb_kmers)
+                self._clf = build_attention(self.batch_size, self.k, nb_kmers)
             elif self.classifier == 'lstm':
                 if self.verbose:
                     print('Training bacterial / host classifier based on Shallow LSTM Neural Network')
-                self.clf = build_LSTM(self.k, self.batch_size)
+                self._clf = build_LSTM(self.k, self.batch_size)
             elif self.classifier == 'deeplstm':
                 if self.verbose:
                     print('Training bacterial / host classifier based on Deep LSTM Neural Network')
-                self.clf = build_deepLSTM(self.k, self.batch_size)
+                self._clf = build_deepLSTM(self.k, self.batch_size)
             elif self.classifier == 'lstm_attention':
                 if self.verbose:
                     print('Training multiclass classifier based on Deep Neural Network hybrid between LSTM and Attention')
-                self.clf = build_LSTM_attention(self.k, self.nb_classes, self.batch_size)
+                self._clf = build_LSTM_attention(self.k, nb_classes, self.batch_size)
             elif self.classifier == 'cnn':
                 if self.verbose:
                     print('Training multiclass classifier based on CNN Neural Network')
-                self.clf = build_CNN(self.k, self.batch_size, self.nb_classes)
+                self._clf = build_CNN(self.k, self.batch_size, self.nb_classes)
             elif self.classifier == 'widecnn':
                 if self.verbose:
                     print('Training multiclass classifier based on Wide CNN Network')
-                self.clf = build_wideCNN(self.k, self.batch_size, self.nb_classes)
+                self._clf = build_wideCNN(self.k, self.batch_size, self.nb_classes)
 
     def _fit_model(self, X, y):
         print('_fit_model')
@@ -381,7 +407,7 @@ class KerasTFModel(ModelsUtils):
                                     checkpoint_score_order='max')
 
         self._trainer.start()
-        self._trainer.run(self._train_func, config = {'X':X,'y':y,'batch_size':self.batch_size,'epochs':self._training_epochs,'ids':self._ids_list,'nb_kmers':self._nb_kmers}, checkpoint_strategy = checkpoint_strategy)
+        self._trainer.run(self._train_func, config = {'X':X,'y':y,'batch_size':self.batch_size,'epochs':self._training_epochs,'ids':self._ids_list,'nb_kmers':self._nb_kmers,'nb_classes':self.nb_classes}, checkpoint_strategy = checkpoint_strategy)
         self.checkpoint = self._trainer.best_checkpoint
         self._trainer.shutdown()
 
@@ -391,11 +417,11 @@ class KerasTFModel(ModelsUtils):
         num_workers = len(tf_config['cluster']['worker'])
         global_batch_size = config['batch_size'] * num_workers
         multi_worker_dataset = self._join_shuffle_data(config['X'], config['y'], global_batch_size, config['ids'])
-        self._build(config['nb_kmers'])
+        self._build(config['nb_kmers'], config['nb_classes'])
         early = EarlyStopping(monitor='val_accuracy', mode='max', verbose=1, patience=10)
-        history = self.clf.fit(multi_worker_dataset, epochs = config['epochs'])
+        history = self._clf.fit(multi_worker_dataset, epochs = config['epochs'])
         print(history.history)
-        save_checkpoint(model_weights = self.clf.get_weights())
+        save_checkpoint(model_weights = self._clf.get_weights())
 
     def _join_shuffle_data(self, X_train, y_train, batch_size, ids_list):
         print('_join_shuffle_data')

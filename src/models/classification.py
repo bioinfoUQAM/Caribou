@@ -6,14 +6,16 @@ import numpy as np
 import modin.pandas as pd
 
 from utils import load_Xy_data, save_Xy_data
-from models_classes import SklearnModel, KerasTFModel
+from models.models_classes import SklearnModel, KerasTFModel
 
 __author__ = 'Nicolas de Montigny'
 
 __all__ = ['bacteria_classification','classify']
 
-# TODO: FINISH CONVERTING TO CLASSES FOR MODELS
-def bacteria_classification(classified_data, database_k_mers, k, outdirs, dataset, training_epochs = 100, classifier = 'lstm_attention', batch_size = 32, threshold = 0.8, verbose = True, cv = True):
+def bacteria_classification(classified_data, database_k_mers, k, outdirs, dataset, training_epochs = 100, classifier = 'lstm_attention', batch_size = 32, threshold = 0.8, verbose = True, cv = True, classifying = False):
+    if classified_data is None:
+        classified_data = {}
+        classified_data['order'] = []
     previous_taxa_unclassified = None
 
     taxas = database_k_mers['taxas'].copy()
@@ -35,15 +37,14 @@ def bacteria_classification(classified_data, database_k_mers, k, outdirs, datase
                 print('Bacteria classifier type unknown !!!\n\tModels implemented at this moment are :\n\tLinear models :  Ridge regressor (sgd), Linear SVM (svm), Multiple Logistic Regression (mlr)\n\tProbability classifier : Multinomial Bayes (mnb)\n\tNeural networks : Deep hybrid between LSTM and Attention (lstm_attention), CNN (cnn) and Wide CNN (widecnn)')
                 sys.exit()
 
-            if not os.path.isfile(model.clf_file):
+            if not os.path.isfile(model.clf_file) or not os.path.isdir(model.clf_file):
                 train = True
 
             # Load extracted data if already exists or train and classify bacteria depending on chosen method and taxonomic rank
-            if os.path.isfile(classified_kmers_file) and os.path.isfile(unclassified_kmers_file):
+            if os.path.isdir(classified_kmers_file) and os.path.isdir(unclassified_kmers_file):
                 if verbose:
                     print('Bacteria sequences at {} level already classified'.format(taxa))
-                classified_data[taxa] = load_Xy_data(classified_kmers_file)
-                previous_taxa_unclassified = load_Xy_data(unclassified_kmers_file)
+                previous_taxa_unclassified = ray.data.read_parquet(unclassified_kmers_file)
                 classified_data['order'].append(taxa)
             else:
                 if verbose:
@@ -53,26 +54,26 @@ def bacteria_classification(classified_data, database_k_mers, k, outdirs, datase
                     # Get training dataset and assign to variables
                     # Keep only classes of sequences that were not removed in kmers extraction
                     X_train = ray.data.read_parquet(database_k_mers['profile'])
-                    y_train = pd.DataFrame(database_k_mers['classes'], columns = database_k_mers['taxas']).loc[:,taxa].str.lower()
-                    y_train = ray.data.from_modin(y_train[y_train['id'].isin(list(X_train.to_modin()['id']))])
+                    y_train = ray.data.from_modin(pd.DataFrame(database_k_mers['classes'], columns = database_k_mers['taxas']).loc[:,taxa].str.lower())
 
                     model.train(X_train, y_train, cv)
 
                 # Classify sequences into taxa and build k-mers profiles for classified and unclassified data
                 # Keep previous taxa to reclassify only unclassified reads at a higher taxonomic level
-                if previous_taxa_unclassified is None:
-                    if verbose:
-                        print('Classifying bacteria sequences at {} level'.format(taxa))
-                    df = ray.data.read_parquet(classified_data['bacteria']['profile'])
-                    classified_data[taxa], previous_taxa_unclassified = classify(df, clf_file, label_encoder, taxa, classified_kmers_file, unclassified_kmers_file, threshold = threshold, verbose = verbose)
-                else:
-                    if verbose:
-                        print('Classifying bacteria sequences at {} level'.format(taxa))
-                    classified_data[taxa], previous_taxa_unclassified = classify(previous_taxa_unclassified['profile'], model, threshold, verbose)
+                if classifying is True:
+                    if previous_taxa_unclassified is None:
+                        if verbose:
+                            print('Classifying bacteria sequences at {} level'.format(taxa))
+                        df = ray.data.read_parquet(classified_data['bacteria']['profile'])
+                        classified_data[taxa], previous_taxa_unclassified = classify(df, clf_file, label_encoder, taxa, classified_kmers_file, unclassified_kmers_file, threshold = threshold, verbose = verbose)
+                    else:
+                        if verbose:
+                            print('Classifying bacteria sequences at {} level'.format(taxa))
+                        classified_data[taxa], previous_taxa_unclassified = classify(previous_taxa_unclassified['profile'], model, threshold, verbose)
 
-                save_Xy_data(classified_data[taxa], classified_kmers_file)
-                save_Xy_data(previous_taxa_unclassified, unclassified_kmers_file)
-                classified_data['order'].append(taxa)
+                    save_Xy_data(classified_data[taxa], classified_kmers_file)
+                    save_Xy_data(previous_taxa_unclassified, unclassified_kmers_file)
+                    classified_data['order'].append(taxa)
 
     return classified_data
 

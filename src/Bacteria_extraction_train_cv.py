@@ -64,7 +64,7 @@ def bacteria_extraction_train_cv(opt):
             else:
                 # Verify that kmers profile file exists
                 if not os.path.isdir(data_host['profile']):
-                    print("Cannot find file {} ! Exiting".format(data_host['profile']))
+                    print("Cannot find data folder {} ! Exiting".format(data_host['profile']))
                     sys.exit()
 
     # Verify that model type is valid / choose default depending on host presence

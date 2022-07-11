@@ -103,7 +103,7 @@ class KmersCollection():
         self._kmc_path = os.path.join(os.path.dirname(os.path.realpath(__file__)),"KMC","bin")
         self._faSplit = os.path.join(os.path.dirname(os.path.realpath(__file__)),"faSplit")
         # Initialize empty
-        self._csv_list = None
+        self._pq_list = None
         self._fasta_list = None
 
         ## Extraction
@@ -162,7 +162,7 @@ class KmersCollection():
         profile = pd.read_table(os.path.join(self._tmp_dir,"{}.txt".format(ind)), sep = '\t', header = None, names = ['id', str(id)]).T
         # Save seen kmers profile to csv file
         if len(profile.columns) > 1:
-            profile.to_csv(os.path.join(self._tmp_dir,"{}.csv".format(ind)), header = False)
+            profile.to_parquet(os.path.join(self._tmp_dir,"{}_pq".format(ind)))
         # Delete tmp dir and file
         rmtree(tmp_folder)
         os.remove(os.path.join(self._tmp_dir,"{}.txt".format(ind)))
@@ -192,38 +192,32 @@ class KmersCollection():
                 else:
                     given_profile.at[id,kmer] = 0
             # Save given kmers profile to csv file
-            given_profile.to_csv(os.path.join(self._tmp_dir,"{}.csv".format(ind)), header = False, index_label = 'id')
+            given_profile.to_csv(os.path.join(self._tmp_dir,"{}_pq".format(ind)))
         # Delete temp dir and file
         rmtree(tmp_folder)
         os.remove(os.path.join(self._tmp_dir,"{}.txt".format(ind)))
 
     def _construct_data(self):
-        self._csv_list = glob(os.path.join(self._tmp_dir,'*.csv'))
+        self._pq_list = glob(os.path.join(self._tmp_dir,'*_pq/*'))
         # Read/concatenate files with Ray by batches
         nb_batch = 0
-        while np.ceil(len(self._csv_list)/1000) > 1:
-            batches_list = np.array_split(self._csv_list, np.ceil(len(self._csv_list)/1000))
+        while np.ceil(len(self._pq_list)/1000) > 1:
+            batches_list = np.array_split(self._pq_list, np.ceil(len(self._pq_list)/1000))
             batch_dir = os.path.join(self._tmp_dir, 'batch_{}'.format(nb_batch))
             os.mkdir(batch_dir)
             for batch in batches_list:
-                self._batch_read_write(list(batch), batch_dir, nb_batch)
-            self._csv_list = glob(os.path.join(batch_dir,'*.parquet'))
+                self._batch_read_write(list(batch), batch_dir)
+            self._pq_list = glob(os.path.join(batch_dir,'*.parquet'))
             nb_batch += 1
         # Read/concatenate batches with Ray
-        if nb_batch == 0:
-            self.df = ray.data.read_csv(self._csv_list)
-        else:
-            self.df = ray.data.read_parquet(self._csv_list)
+        self.df = ray.data.read_parquet(self._pq_list)
         # Fill NAs with 0
         self.df = self.df.map_batches(self._na_2_zero, batch_format = 'pandas')
         # Save dataset
         self.df.write_parquet(self.Xy_file)
 
-    def _batch_read_write(self, batch, dir, nb_batch):
-        if nb_batch == 0:
-            df = ray.data.read_csv(batch)
-        else:
-            df = ray.data.read_parquet(batch)
+    def _batch_read_write(self, batch, dir):
+        df = ray.data.read_parquet(batch)
         df = df.map_batches(self._na_2_zero, batch_format = 'pandas')
         df.write_parquet(dir)
         for file in batch:

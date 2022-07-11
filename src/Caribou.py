@@ -252,7 +252,8 @@ def caribou(opt):
         threshold = classifThreshold,
         verbose = verbose,
         cv = cv,
-        n_jobs = n_cvJobs)
+        n_jobs = n_cvJobs,
+        classifying = True)
 
 # Part 4 - Outputs for biological analysis of bacterial population
 ################################################################################

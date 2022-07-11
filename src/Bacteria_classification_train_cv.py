@@ -45,8 +45,8 @@ def bacteria_classification_train_cv(opt):
         # Infer k-mers length from the extracted bacteria profile
         k_length = len(data_bacteria['kmers'][0])
         # Verify that kmers profile file exists
-        if not os.path.isfile(data_bacteria['profile']):
-            print("Cannot find file {} ! Exiting".format(data_bacteria['profile']))
+        if not os.path.isdir(data_bacteria['profile']):
+            print("Cannot find data folder {} ! Exiting".format(data_bacteria['profile']))
             sys.exit()
 
     # Verify that model type is valid / choose default depending on host presence
@@ -86,7 +86,7 @@ def bacteria_classification_train_cv(opt):
 # Training and cross-validation of models for classification of bacterias
 ################################################################################
 
-    bacterial_classification(None,
+    classification = bacteria_classification(None,
         data_bacteria,
         k_length,
         outdirs,
