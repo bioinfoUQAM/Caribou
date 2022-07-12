@@ -1,0 +1,12 @@
+setuptools
+wheel
+Bio
+h5py
+matplotlib
+numpy
+sklearn
+scipy
+tensorflow
+keras
+ray
+modin[ray]
