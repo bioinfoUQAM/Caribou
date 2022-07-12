@@ -168,7 +168,7 @@ class KmersCollection():
             # Convert first row to column names
             profile.columns = list(profile.iloc[0].astype('str'))
             profile = profile.iloc[1:]
-            profile.to_parquet(os.path.join(self._tmp_dir,"{}_pq".format(ind)))
+            profile.to_parquet(os.path.join(self._tmp_dir,"{}.parquet".format(ind)))
         # Delete tmp dir and file
         rmtree(tmp_folder)
         os.remove(os.path.join(self._tmp_dir,"{}.txt".format(ind)))
@@ -199,13 +199,13 @@ class KmersCollection():
                     given_profile.at[id,kmer] = 0
             # Save given kmers profile to csv file
             if len(given_profile.columns) > 0:
-                given_profile.to_parquet(os.path.join(self._tmp_dir,"{}_pq".format(ind)))
+                given_profile.to_parquet(os.path.join(self._tmp_dir,"{}.parquet".format(ind)))
         # Delete temp dir and file
         rmtree(tmp_folder)
         os.remove(os.path.join(self._tmp_dir,"{}.txt".format(ind)))
 
     def _construct_data(self):
-        self._pq_list = glob(os.path.join(self._tmp_dir,'*_pq/*'))
+        self._pq_list = glob(os.path.join(self._tmp_dir,'*.parquet'))
         # Read/concatenate files with Ray by batches
         nb_batch = 0
         while np.ceil(len(self._pq_list)/1000) > 1:
