@@ -39,6 +39,7 @@ ray.init(num_cpus = os.cpu_count(), num_gpus = len(gpus))
 # Initialisation / validation of parameters from CLI
 ################################################################################
 def kmers_dataset(opt):
+    kmers_list = None
 
     # Verify there are files to analyse
     if opt['seq_file'] is None and opt['seq_file_host'] is None:
@@ -93,73 +94,73 @@ def kmers_dataset(opt):
 # K-mers profile extraction
 ################################################################################
 
-    # Reference Database Only
-    if opt['seq_file'] is not None and opt['cls_file'] is not None and opt['seq_file_host'] is None:
-        k_profile_database = build_load_save_data((opt['seq_file'],opt['cls_file']),
-            None,
-            outdirs["data_dir"],
-            opt['dataset_name'],
-            opt['host_name'],
-            k = opt['k_length'],
-            kmers_list = None
-        )
+    if kmers_list is None:
+        # Reference Database Only
+        if opt['seq_file'] is not None and opt['cls_file'] is not None:
+            k_profile_database = build_load_save_data((opt['seq_file'],opt['cls_file']),
+                None,
+                outdirs["data_dir"],
+                opt['dataset_name'],
+                opt['host_name'],
+                k = opt['k_length'],
+                kmers_list = None
+            )
 
-        # Save kmers list to file for further extractions
-        kmers_list = k_profile_database['kmers']
-        with open(os.path.join(outdirs["data_dir"],'kmers_list.txt'),'w') as handle:
-            handle.writelines("%s\n" % item for item in kmers_list)
+            # Save kmers list to file for further extractions
+            kmers_list = k_profile_database['kmers']
+            with open(os.path.join(outdirs["data_dir"],'kmers_list.txt'),'w') as handle:
+                handle.writelines("%s\n" % item for item in kmers_list)
 
-        print("Caribou finished extracting k-mers of {}".format(opt['dataset_name']))
+            print("Caribou finished extracting k-mers of {}".format(opt['dataset_name']))
 
-    # Reference Host only
-    elif opt['seq_file'] is None and opt['seq_file_host'] is not None and opt['cls_file_host'] is not None and opt['kmers_list'] is not None:
+        # Reference database and host
+        elif opt['seq_file'] is not None and opt['cls_file'] is not None and opt['seq_file_host'] is not None and opt['cls_file_host'] is not None:
 
-        k_profile_host = build_load_save_data(None,
-            (opt['seq_file_host'],opt['cls_file_host']),
-            outdirs["data_dir"],
-            opt['dataset_name'],
-            opt['host_name'],
-            k = opt['k_length'],
-            kmers_list = kmers_list
-        )
-        print("Caribou finished extracting k-mers of {}".format(opt['host_name']))
+            k_profile_database, k_profile_host  = build_load_save_data((opt['seq_file'],opt['cls_file']),
+                (opt['seq_file_host'],opt['cls_file_host']),
+                outdirs["data_dir"],
+                opt['dataset_name'],
+                opt['host_name'],
+                k = opt['k_length'],
+                kmers_list = None
+            )
 
-    # Reference database and host
-    elif opt['seq_file'] is not None and opt['cls_file'] is not None and opt['seq_file_host'] is not None and opt['cls_file_host'] is not None and opt['kmers_list'] is None:
+            # Save kmers list to file for further extractions
+            kmers_list = k_profile_database['kmers']
+            with open(os.path.join(outdirs["data_dir"],'kmers_list.txt'),'w') as handle:
+                handle.writelines("%s\n" % item for item in kmers_list)
 
-        k_profile_database, k_profile_host  = build_load_save_data((opt['seq_file'],opt['cls_file']),
-            (opt['seq_file_host'],opt['cls_file_host']),
-            outdirs["data_dir"],
-            opt['dataset_name'],
-            opt['host_name'],
-            k = opt['k_length'],
-            kmers_list = None
-        )
-
-        # Save kmers list to file for further extractions
-        kmers_list = k_profile_database['kmers']
-        with open(os.path.join(outdirs["data_dir"],'kmers_list.txt'),'w') as handle:
-            handle.writelines("%s\n" % item for item in kmers_list)
-
-        print("Caribou finished extracting k-mers of {} and {}".format(opt['dataset_name'],opt['host_name']))
-
-    # Dataset to analyse only
-    elif opt['cls_file'] is None and opt['kmers_list'] is not None:
-
-        k_profile_metagenome = build_load_save_data(opt['seq_file'],
-            None,
-            outdirs["data_dir"],
-            opt['dataset_name'],
-            None,
-            k = opt['k_length'],
-            kmers_list = kmers_list
-        )
-        print("Caribou finished extracting k-mers of {}".format(opt['dataset_name']))
-
+            print("Caribou finished extracting k-mers of {} and {}".format(opt['dataset_name'],opt['host_name']))
     else:
-        print("Caribou cannot extract k-mers because there are missing parameters !")
-        print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
+        # Reference Host only
+        if opt['seq_file'] is not None and opt['cls_file'] is not None:
 
+            k_profile_host = build_load_save_data(None,
+            (opt['seq_file_host'],opt['cls_file_host']),
+            outdirs["data_dir"],
+            opt['dataset_name'],
+            opt['host_name'],
+            k = opt['k_length'],
+            kmers_list = kmers_list
+            )
+            print("Caribou finished extracting k-mers of {}".format(opt['host_name']))
+
+        # Dataset to analyse only
+        elif opt['seq_file'] is not None and opt['cls_file'] is None:
+
+            k_profile_metagenome = build_load_save_data(opt['seq_file'],
+            None,
+            outdirs["data_dir"],
+            opt['dataset_name'],
+            None,
+            k = opt['k_length'],
+            kmers_list = kmers_list
+            )
+            print("Caribou finished extracting k-mers of {}".format(opt['dataset_name']))
+
+        else:
+            print("Caribou cannot extract k-mers because there are missing parameters !")
+            print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
 
 # Argument parsing from CLI
 ################################################################################
