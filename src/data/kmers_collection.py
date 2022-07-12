@@ -163,12 +163,14 @@ class KmersCollection():
         # Save seen kmers profile to parquet file
         if len(profile.columns) > 0:
             try:
-                profile.to_parquet(os.path.join(self._tmp_dir,"{}_pq".format(ind)))
+                profile = ray.data.from_modin(profile)
+                profile.write_parquet(os.path.join(self._tmp_dir,"{}_pq".format(ind)))
             except ValueError:
                 # Convert first row to column names
                 profile.columns = list(profile.iloc[0].astype('str'))
                 profile = profile.iloc[1:]
-                profile.to_parquet(os.path.join(self._tmp_dir,"{}_pq".format(ind)))
+                profile = ray.data.from_modin(profile)
+                profile.write_parquet(os.path.join(self._tmp_dir,"{}_pq".format(ind)))
         # Delete tmp dir and file
         rmtree(tmp_folder)
         os.remove(os.path.join(self._tmp_dir,"{}.txt".format(ind)))
@@ -188,7 +190,7 @@ class KmersCollection():
         seen_profile = pd.read_table(os.path.join(self._tmp_dir,"{}.txt".format(ind)), sep = '\t', header = None, names = ['id', str(id)]).T
         # List of seen kmers
         seen_kmers = list(seen_profile.columns)
-        if len(seen_kmers) > 1:
+        if len(seen_kmers) > 0:
             # Tmp df to write given kmers to file
             given_profile = pd.DataFrame(np.zeros((1,len(self.kmers_list))), columns = self.kmers_list, index = [id])
             # Keep only given kmers that were found
