@@ -233,6 +233,5 @@ class KmersCollection():
     def _na_2_zero(self, df):
         df = df.fillna(0)
         cols = list(df.columns)
-        cols.remove('id')
         df[cols] = df[cols].astype(np.int32)
         return df
