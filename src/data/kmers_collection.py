@@ -138,11 +138,13 @@ class KmersCollection():
 
     def _parallel_extraction(self):
         if self.method == 'seen':
+            print('seen_kmers')
             with parallel_backend('threading'):
                 Parallel(n_jobs = -1, prefer = 'threads', verbose = 100)(
                 delayed(self._extract_seen_kmers)
                 (i, file) for i, file in enumerate(self._fasta_list))
         elif self.method == 'given':
+            print('given_kmers')
             with parallel_backend('threading'):
                 Parallel(n_jobs = -1, prefer = 'threads', verbose = 100)(
                 delayed(self._extract_given_kmers)
