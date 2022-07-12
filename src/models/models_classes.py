@@ -386,7 +386,7 @@ class KerasTFModel(ModelsUtils):
             elif self.classifier == 'lstm_attention':
                 if self.verbose:
                     print('Training multiclass classifier based on Deep Neural Network hybrid between LSTM and Attention')
-                self._clf = build_LSTM_attention(self.k, nb_classes, self.batch_size)
+                self._clf = build_LSTM_attention(nb_kmers, nb_classes, self.batch_size)
             elif self.classifier == 'cnn':
                 if self.verbose:
                     print('Training multiclass classifier based on CNN Neural Network')
@@ -416,14 +416,14 @@ class KerasTFModel(ModelsUtils):
         tf_config = json.loads(os.environ['TF_CONFIG'])
         num_workers = len(tf_config['cluster']['worker'])
         global_batch_size = config['batch_size'] * num_workers
-        multi_worker_dataset = self._join_shuffle_data(config['X'], config['y'], global_batch_size, config['ids'])
+        multi_worker_dataset = self._join_shuffle_data(config['X'], config['y'], global_batch_size, config['ids'], config['nb_kmers'])
         self._build(config['nb_kmers'], config['nb_classes'])
         early = EarlyStopping(monitor='val_accuracy', mode='max', verbose=1, patience=10)
         history = self._clf.fit(multi_worker_dataset, epochs = config['epochs'])
         print(history.history)
         save_checkpoint(model_weights = self._clf.get_weights())
 
-    def _join_shuffle_data(self, X_train, y_train, batch_size, ids_list):
+    def _join_shuffle_data(self, X_train, y_train, batch_size, ids_list, nb_kmers):
         print('_join_shuffle_data')
         # Join
         X_train = X_train.to_modin()
@@ -438,7 +438,7 @@ class KerasTFModel(ModelsUtils):
         label_column = self.taxa,
         batch_size = batch_size,
         output_signature = (
-            TensorSpec(shape=(None, batch_size), dtype=tf.int64),
+            TensorSpec(shape=(None, nb_kmers), dtype=tf.int64),
             TensorSpec(shape=(None,), dtype=tf.int64),))
 
         return df

@@ -97,7 +97,7 @@ def build_deepLSTM(kmers_length, batch_size):
 
     return model
 
-def build_LSTM_attention(kmers_length, nb_classes, batch_size):
+def build_LSTM_attention(nb_kmers, nb_classes, batch_size):
     """
     Function adapted in keras from module DeepMicrobes/models/embed_lstm_attention.py and
     default values for layers in script DeepMicrobes/models/define_flags.py of
@@ -105,8 +105,8 @@ def build_LSTM_attention(kmers_length, nb_classes, batch_size):
     https://github.com/MicrobeLab/DeepMicrobes/blob/master/models/embed_lstm_attention.py
     """
 
-    inputs = Input(shape = (kmers_length,))
-    net = Embedding(kmers_length, 100)(inputs)
+    inputs = Input(shape = (nb_kmers,))
+    net = Embedding(nb_kmers, 100)(inputs)
 
     net = Bidirectional(LSTM(300, return_sequences=True))(net)
     net = Attention()([net,net])
