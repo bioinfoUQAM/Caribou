@@ -162,12 +162,13 @@ class KmersCollection():
         profile = pd.read_table(os.path.join(self._tmp_dir,"{}.txt".format(ind)), sep = '\t', header = None, names = ['id', str(id)]).T
         # Save seen kmers profile to parquet file
         if len(profile.columns) > 0:
-            #df = pd.DataFrame({0:['AACATGAGCCTCGTCGAGCG','5'],1:['CAACATGAGCCTCGTCGAGC','5'],2:['CCAACATGAGCCTCGTCGAG','5']}, index = ['id','NEWN01003207.1'])
-            # Convert first row to column names
-            profile.columns = list(profile.iloc[0].astype('str'))
-            profile = profile.iloc[1:]
-            profile = ray.data.from_modin(profile)
-            profile.write_parquet(os.path.join(self._tmp_dir,"{}_pq".format(ind)))
+            try:
+                profile.to_parquet(os.path.join(self._tmp_dir,"{}_pq".format(ind)))
+            except ValueError:
+                # Convert first row to column names
+                profile.columns = list(profile.iloc[0].astype('str'))
+                profile = profile.iloc[1:]
+                profile.to_parquet(os.path.join(self._tmp_dir,"{}_pq".format(ind)))
         # Delete tmp dir and file
         rmtree(tmp_folder)
         os.remove(os.path.join(self._tmp_dir,"{}.txt".format(ind)))
@@ -198,8 +199,7 @@ class KmersCollection():
                     given_profile.at[id,kmer] = 0
             # Save given kmers profile to csv file
             if len(given_profile.columns) > 0:
-                given_profile = ray.data.from_modin(given_profile)
-                given_profile.write_parquet(os.path.join(self._tmp_dir,"{}_pq".format(ind)))
+                given_profile.to_parquet(os.path.join(self._tmp_dir,"{}_pq".format(ind)))
         # Delete temp dir and file
         rmtree(tmp_folder)
         os.remove(os.path.join(self._tmp_dir,"{}.txt".format(ind)))
