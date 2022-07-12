@@ -133,7 +133,7 @@ def kmers_dataset(opt):
             print("Caribou finished extracting k-mers of {} and {}".format(opt['dataset_name'],opt['host_name']))
     else:
         # Reference Host only
-        if opt['seq_file'] is not None and opt['cls_file'] is not None:
+        if opt['seq_file_host'] is not None and opt['cls_file_host'] is not None:
 
             k_profile_host = build_load_save_data(None,
             (opt['seq_file_host'],opt['cls_file_host']),
