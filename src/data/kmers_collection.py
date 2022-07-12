@@ -160,15 +160,13 @@ class KmersCollection():
         run(cmd_transform, shell = True, capture_output=True)
         # Transpose kmers profile
         profile = pd.read_table(os.path.join(self._tmp_dir,"{}.txt".format(ind)), sep = '\t', header = None, names = ['id', str(id)]).T
-        # Save seen kmers profile to csv file
-        print(profile.columns)
-        if len(profile.columns) > 1:
+        # Save seen kmers profile to parquet file
+        print(len(profile.columns))
+        if len(profile.columns) > 0:
             #df = pd.DataFrame({0:['AACATGAGCCTCGTCGAGCG','5'],1:['CAACATGAGCCTCGTCGAGC','5'],2:['CCAACATGAGCCTCGTCGAG','5']}, index = ['id','NEWN01003207.1'])
             # Convert first row to column names
-            profile.columns = profile.iloc[0]
+            profile.columns = list(profile.iloc[0].astype('str'))
             profile = profile.iloc[1:]
-            print(profile.columns)
-            print(type(profile.columns[0]))
             profile.to_parquet(os.path.join(self._tmp_dir,"{}_pq".format(ind)))
         # Delete tmp dir and file
         rmtree(tmp_folder)
