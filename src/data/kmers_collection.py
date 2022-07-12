@@ -163,9 +163,11 @@ class KmersCollection():
         # Save seen kmers profile to parquet file
         if len(profile.columns) > 0:
             try:
+                print('try')
                 profile = ray.data.from_modin(profile)
                 profile.write_parquet(os.path.join(self._tmp_dir,"{}_pq".format(ind)))
             except ValueError:
+                print('except')
                 # Convert first row to column names
                 profile.columns = list(profile.iloc[0].astype('str'))
                 profile = profile.iloc[1:]
