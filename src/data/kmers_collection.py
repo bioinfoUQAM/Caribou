@@ -3,14 +3,14 @@ import ray
 import warnings
 
 import numpy as np
+import pandas as pd
 import pyarrow as pa
 import pyarrow.csv as csv
-import modin.pandas as pd
 
 from glob import glob
 from shutil import rmtree
 from subprocess import run
-import copy import deepcopy
+from copy import deepcopy
 from joblib import Parallel, delayed, parallel_backend
 
 __author__ = ['Amine Remita', 'Nicolas de Montigny']
@@ -162,13 +162,11 @@ class KmersCollection():
         # Transpose kmers profile
         profile = pd.read_table(os.path.join(self._tmp_dir,"{}.txt".format(ind)), sep = '\t', header = None, names = ['id', str(id)]).T
         # Save seen kmers profile to parquet file
-        print(profile)
         if len(profile.columns) > 0:
             # Convert first row to column names
-            profile.columns = list(deepcopy(profile.iloc[0].astype('str')))
+            profile.columns = list(profile.iloc[0].astype('str'))
             profile = profile.iloc[1:]
-            profile = ray.data.from_modin(profile)
-            profile.write_parquet(os.path.join(self._tmp_dir,"{}_pq".format(ind)))
+            profile.to_parquet(os.path.join(self._tmp_dir,"{}_pq".format(ind)))
         # Delete tmp dir and file
         rmtree(tmp_folder)
         os.remove(os.path.join(self._tmp_dir,"{}.txt".format(ind)))
