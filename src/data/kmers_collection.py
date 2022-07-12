@@ -160,6 +160,8 @@ class KmersCollection():
         run(cmd_transform, shell = True, capture_output=True)
         # Transpose kmers profile
         profile = pd.read_table(os.path.join(self._tmp_dir,"{}.txt".format(ind)), sep = '\t', header = None, names = ['id', str(id)]).T
+        #
+        print(profile)
         # Save seen kmers profile to csv file
         if len(profile.columns) > 1:
             profile.to_parquet(os.path.join(self._tmp_dir,"{}_pq".format(ind)))
