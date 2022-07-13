@@ -63,8 +63,6 @@ def kmers_dataset(opt):
         kmers_list = []
         with open(opt['kmers_list'], 'r') as handle:
             kmers_list = [kmer.rstrip() for kmer in handle.readlines()]
-            print('kmers_list')
-            print(kmers_list)
         if opt['k_length'] != len(kmers_list[0]):
             print("K-mers length is different than length in the K-mers list file given ! Setting K-mers length to correspond to previously extracted length !")
             opt['k_length'] = len(kmers_list[0])

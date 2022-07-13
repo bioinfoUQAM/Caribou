@@ -4,7 +4,7 @@ Bio
 h5py
 matplotlib
 numpy
-sklearn
+scikit-learn >= 1.0
 scipy
 tensorflow
 keras
