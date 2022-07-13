@@ -53,6 +53,7 @@ def bacteria_extraction(metagenome_k_mers, database_k_mers, k, outdirs, dataset,
         elif classifier == 'onesvm' and not isinstance(database_k_mers, tuple):
             X_train = ray.data.read_parquet(database_k_mers['profile'])
             y_train = ray.data.from_pandas(pd.DataFrame(database_k_mers['classes'], columns = database_k_mers['taxas']).loc[:,'domain'].str.lower())
+            print('data read : OK ')
         elif classifier != 'onesvm' and isinstance(database_k_mers, tuple):
             database_k_mers = merge_database_host(database_k_mers[0], database_k_mers[1])
             X_train = ray.data.read_parquet(database_k_mers['profile'])
@@ -61,8 +62,8 @@ def bacteria_extraction(metagenome_k_mers, database_k_mers, k, outdirs, dataset,
             print('Only classifier One Class SVM can be used without host data!\nEither add host data in config file or choose classifier One Class SVM.')
             sys.exit()
 
-        # If classifier exists load it or train if not
         if train is True:
+            print('train == True')
             model.train(X_train, y_train, cv)
 
         # Classify sequences into bacteria / unclassified / host and build k-mers profiles for bacteria
