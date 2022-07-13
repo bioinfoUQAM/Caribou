@@ -3,7 +3,7 @@ import ray
 import warnings
 
 import numpy as np
-import pandas as pd
+import modin.pandas as pd
 import pyarrow as pa
 import pyarrow.csv as csv
 
