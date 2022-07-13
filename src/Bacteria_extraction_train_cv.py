@@ -141,7 +141,7 @@ if __name__ == "__main__":
     parser.add_argument('-dh','--data_host', default=None, type=Path, help='PATH to a npz file containing the data corresponding to the k-mers profile for the host')
     parser.add_argument('-dt','--database_name', required=True, help='Name of the bacteria database used to name files')
     parser.add_argument('-ds','--host_name', default=None, help='Name of the host database used to name files')
-    parser.add_argument('-model','--model_type', default=None, choices=[None,'linearsvm','attention','lstm','deeplstm'], help='The type of model to train')
+    parser.add_argument('-model','--model_type', default=None, choices=[None,'onesvm','linearsvm','attention','lstm','deeplstm'], help='The type of model to train')
     parser.add_argument('-bs','--batch_size', default=32, type=int, help='Size of the batch size to use, defaults to 32')
     parser.add_argument('-e','--training_epochs', default=100, type=int, help='The number of training iterations for the neural networks models if one ise chosen, defaults to 100')
     parser.add_argument('-v','--verbose', action='store_true', help='Should the program be verbose')
