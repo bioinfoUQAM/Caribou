@@ -225,7 +225,6 @@ class SklearnModel(ModelsUtils):
         # Computes
         self._build()
 
-
     def _build(self):
         print('_build')
         if self.classifier == 'onesvm':
