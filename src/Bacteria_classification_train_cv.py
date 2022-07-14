@@ -22,7 +22,7 @@ logging.set_verbosity(logging.ERROR)
 # Initialisation / validation of parameters from CLI
 ################################################################################
 def bacteria_classification_train_cv(opt):
-
+    ray.init()
     # Verify existence of files and load data
     if not os.path.isfile(opt['data_bacteria']):
         print("Cannot find file {} ! Exiting".format(opt['data_bacteria']))

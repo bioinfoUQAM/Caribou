@@ -27,7 +27,7 @@ logging.set_verbosity(logging.ERROR)
 # Part 0 - Initialisation / extraction of parameters from config file
 ################################################################################
 def caribou(opt):
-
+    ray.init()
     # Get argument values from config file
     config_file = opt['config']
     config = configparser.ConfigParser(

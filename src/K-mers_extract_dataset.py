@@ -25,6 +25,7 @@ logging.set_verbosity(logging.ERROR)
 # Initialisation / validation of parameters from CLI
 ################################################################################
 def kmers_dataset(opt):
+    ray.init()
     kmers_list = None
 
     # Verify there are files to analyse
