@@ -12,7 +12,7 @@ __author__ = 'Nicolas de Montigny'
 __all__ = ['bacteria_classification','classify']
 
 def bacteria_classification(classified_data, database_k_mers, k, outdirs, dataset, training_epochs = 100, classifier = 'lstm_attention', batch_size = 32, threshold = 0.8, verbose = True, cv = True, classifying = False):
-    ray.init()
+    ray.init(ignore_reinit_error=True)
     if classified_data is None:
         classified_data = {}
         classified_data['order'] = []

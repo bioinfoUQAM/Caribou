@@ -82,7 +82,7 @@ class Outputs():
 
 
     def _get_abundances(self):
-        ray.init()
+        ray.init(ignore_reinit_error=True)
         for taxa in self.order:
             df = pd.read_parquet(self.classified_data[taxa]['profile'])
             if taxa in ['bacteria','host','unclassified']:
@@ -97,7 +97,7 @@ class Outputs():
         ray.shutdown()
 
     def abundances(self):
-        ray.init()
+        ray.init(ignore_reinit_error=True)
         self._abundance_table()
         print('Abundance table saved to {}'.format(self._abund_file))
         self._summary['initial'] = len(self.data_labels)
@@ -164,7 +164,7 @@ class Outputs():
         df.to_csv(self._summary_file, na_rep = '', header = False, index = True)
 
     def kronagram(self):
-        ray.init()
+        ray.init(ignore_reinit_error=True)
         # Kronagram / interactive tree
         self._create_krona_file()
         cmd = '{} {} {} -o {} -n {}'.format(self._perl_loc, self._krona_path, self._krona_file, self._krona_out, self.dataset)
@@ -206,7 +206,7 @@ class Outputs():
         df.to_csv(self._krona_file, na_rep = '', header = False, index = False)
 
     def report(self):
-        ray.init()
+        ray.init(ignore_reinit_error=True)
         # Report file of classification of each id
         cols = ['Sequence ID']
         [cols.append(self.taxas[i]) for i in range(len(self.taxas)-1, -1, -1)]
@@ -236,7 +236,7 @@ class Outputs():
         ray.shutdown()
 
     def fasta(self):
-        ray.init()
+        ray.init(ignore_reinit_error=True)
         os.mkdir(self._fasta_outdir)
         path, ext = os.path.splitext(self.fasta_file)
         if ext == '.gz':

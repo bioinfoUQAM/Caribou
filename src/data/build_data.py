@@ -11,7 +11,7 @@ __author__ = 'Nicolas de Montigny'
 __all__ = ['build_load_save_data', 'build_Xy_data', 'build_X_data']
 
 def build_load_save_data(file, hostfile, prefix, dataset, host, kmers_list=None, k=4):
-    ray.init()
+    ray.init(ignore_reinit_error=True)
     # Declare data variables as none
     data = None
     data_host = None
