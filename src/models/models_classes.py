@@ -477,7 +477,6 @@ class KerasTFModel(ModelsUtils):
 
         return self._label_decode(y_pred)
 
-# TODO: CONFIRM SERIALISATION OK IN INTERACTIVE JOB
     def __reduce__(self):
         deserializer = self.__class__
         serialized_data = (self.classifier, self.dataset, self.outdir_model, self.outdir_results, self.batch_size, self._training_epochs, self.k, self.taxa, self.verbose)
