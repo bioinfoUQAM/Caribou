@@ -1,6 +1,4 @@
 import numpy as np
-import tensorflow as tf
-import ray.train as train
 import modin.pandas as pd
 
 from abc import ABC, abstractmethod
@@ -26,8 +24,7 @@ from ray.util.joblib import register_ray
 
 from keras.callbacks import EarlyStopping
 
-from tensorflow import distribute
-from tensorflow import TensorSpec
+from tensorflow import distribute, int64, TensorSpec
 from tensorflow.config import list_physical_devices
 from ray.train import Trainer, save_checkpoint, CheckpointStrategy
 from ray.ml.predictors.integrations.tensorflow import TensorflowPredictor
@@ -220,8 +217,6 @@ class SklearnModel(ModelsUtils):
         super().__init__(classifier, outdir_results, batch_size, k, taxa, verbose)
         # Parameters
         self.clf_file = '{}bacteria_binary_classifier_K{}_{}_{}_model.jb'.format(outdir_model, k, classifier, dataset)
-        # Empty initialization
-        self._base_clf = None
         # Computes
         self._build()
 
@@ -230,32 +225,26 @@ class SklearnModel(ModelsUtils):
         if self.classifier == 'onesvm':
             if self.verbose:
                 print('Training bacterial extractor with One Class SVM')
-            self._base_clf = SGDOneClassSVM(nu = 0.05, tol = 1e-4)
             self._clf = SGDOneClassSVM(nu = 0.05, tol = 1e-4)
         elif self.classifier == 'linearsvm':
             if self.verbose:
                 print('Training bacterial / host classifier with Linear SVM')
-            self._base_clf = SGDClassifier(early_stopping = False, n_jobs = -1)
             self._clf = SGDClassifier(early_stopping = False, n_jobs = -1)
         elif self.classifier == 'sgd':
             if self.verbose:
                 print('Training multiclass classifier with SGD and squared loss function')
-            self._base_clf = SGDClassifier(loss = 'squared_error', n_jobs = -1, random_state = 42)
             self._clf = SGDClassifier(loss = 'squared_error', n_jobs = -1, random_state = 42)
         elif self.classifier == 'svm':
             if self.verbose:
                 print('Training multiclass classifier with Linear SVM and SGD hinge loss')
-            self._base_clf = SGDClassifier(loss = 'hinge', n_jobs = -1, random_state = 42)
             self._clf = SGDClassifier(loss = 'hinge', n_jobs = -1, random_state = 42)
         elif self.classifier == 'mlr':
             if self.verbose:
                 print('Training multiclass classifier with Multinomial Logistic Regression')
-            self._base_clf = SGDClassifier(loss = 'log_loss', n_jobs = -1, random_state = 42)
             self._clf = SGDClassifier(loss = 'log_loss', n_jobs = -1, random_state = 42)
         elif self.classifier == 'mnb':
             if self.verbose:
                 print('Training multiclass classifier with Multinomial Naive Bayes')
-            self._base_clf = MultinomialNB()
             self._clf = MultinomialNB()
 
     def _fit_model(self, X, y):
@@ -437,8 +426,8 @@ class KerasTFModel(ModelsUtils):
         label_column = self.taxa,
         batch_size = batch_size,
         output_signature = (
-            TensorSpec(shape=(None, nb_kmers), dtype=tf.int64),
-            TensorSpec(shape=(None,), dtype=tf.int64),))
+            TensorSpec(shape=(None, nb_kmers), dtype=int64),
+            TensorSpec(shape=(None,), dtype=int64),))
 
         return df
 
