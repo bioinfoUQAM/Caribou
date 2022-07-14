@@ -7,7 +7,6 @@ from copy import copy
 import os
 import ray
 import gzip
-import pickle
 
 from subprocess import run
 
@@ -83,6 +82,7 @@ class Outputs():
 
 
     def _get_abundances(self):
+        ray.init()
         for taxa in self.order:
             df = pd.read_parquet(self.classified_data[taxa]['profile'])
             if taxa in ['bacteria','host','unclassified']:
@@ -94,13 +94,16 @@ class Outputs():
                         self._abundances[taxa][cls] += 1
                     else:
                         self._abundances[taxa][cls] = 1
+        ray.shutdown()
 
     def abundances(self):
+        ray.init()
         self._abundance_table()
         print('Abundance table saved to {}'.format(self._abund_file))
         self._summary['initial'] = len(self.data_labels)
         self._summary_table()
         print('Summary table saved to {}'.format(self._summary_file))
+        ray.shutdown()
 
     def _abundance_table(self):
         # Abundance tables / relative abundance
@@ -161,10 +164,12 @@ class Outputs():
         df.to_csv(self._summary_file, na_rep = '', header = False, index = True)
 
     def kronagram(self):
+        ray.init()
         # Kronagram / interactive tree
         self._create_krona_file()
         cmd = '{} {} {} -o {} -n {}'.format(self._perl_loc, self._krona_path, self._krona_file, self._krona_out, self.dataset)
         run(cmd, shell = True)
+        ray.shutdown()
 
     def _create_krona_file(self):
         cols = ['Abundance']
@@ -201,6 +206,7 @@ class Outputs():
         df.to_csv(self._krona_file, na_rep = '', header = False, index = False)
 
     def report(self):
+        ray.init()
         # Report file of classification of each id
         cols = ['Sequence ID']
         [cols.append(self.taxas[i]) for i in range(len(self.taxas)-1, -1, -1)]
@@ -227,8 +233,10 @@ class Outputs():
 
         df = df.fillna(0)
         df.to_csv(self._report_file, na_rep = '', header = True, index = False)
+        ray.shutdown()
 
     def fasta(self):
+        ray.init()
         os.mkdir(self._fasta_outdir)
         path, ext = os.path.splitext(self.fasta_file)
         if ext == '.gz':
@@ -250,3 +258,4 @@ class Outputs():
                 with gzip.open(outfile_cls, 'w') as handle:
                     for id in ids:
                         SeqIO.write(records[id], handle, 'fasta')
+        ray.shutdown()

@@ -2,7 +2,6 @@ import os
 import sys
 import ray
 
-import numpy as np
 import modin.pandas as pd
 
 from models.models_classes import SklearnModel, KerasTFModel
@@ -13,6 +12,7 @@ __author__ = 'Nicolas de Montigny'
 __all__ = ['bacteria_extraction','extract']
 
 def bacteria_extraction(metagenome_k_mers, database_k_mers, k, outdirs, dataset, training_epochs = 100, classifier = 'deeplstm', batch_size = 32, verbose = True, cv = True):
+    ray.init()
     # classified_data is a dictionnary containing data dictionnaries at each classified level:
     # {taxa:{'X':path to ray dataset in parquet format}}
     classified_data = {'order' : ['bacteria','host','unclassified']}
@@ -74,6 +74,7 @@ def bacteria_extraction(metagenome_k_mers, database_k_mers, k, outdirs, dataset,
             classified_data['bacteria'] = extract(metagenome_k_mers['profile'], model, verbose)
             save_Xy_data(classified_data['bacteria'], bacteria_data_file)
 
+    ray.shutdown()
     return classified_data
 
 def extract(df_file, model, verbose = True):

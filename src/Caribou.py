@@ -1,12 +1,10 @@
 #!/usr/bin python3
 import os
 import sys
-import ray
 import argparse
 import configparser
 
 from pathlib import Path
-import modin.pandas as pd
 
 from data.build_data import build_load_save_data
 from models.extraction import bacteria_extraction
@@ -25,16 +23,6 @@ __all__ = ['caribou']
 # Suppress Tensorflow warnings
 ################################################################################
 logging.set_verbosity(logging.ERROR)
-
-# GPU & CPU setup
-################################################################################
-gpus = list_physical_devices('GPU')
-if gpus:
-    config = ConfigProto(device_count={'GPU': len(gpus), 'CPU': os.cpu_count()})
-    sess = Session(config=config)
-    set_session(sess);
-
-ray.init(num_cpus = os.cpu_count(), num_gpus = len(gpus))
 
 # Part 0 - Initialisation / extraction of parameters from config file
 ################################################################################

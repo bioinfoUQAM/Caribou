@@ -2,7 +2,6 @@ import os
 import sys
 import ray
 
-import numpy as np
 import modin.pandas as pd
 
 from utils import load_Xy_data, save_Xy_data
@@ -13,6 +12,7 @@ __author__ = 'Nicolas de Montigny'
 __all__ = ['bacteria_classification','classify']
 
 def bacteria_classification(classified_data, database_k_mers, k, outdirs, dataset, training_epochs = 100, classifier = 'lstm_attention', batch_size = 32, threshold = 0.8, verbose = True, cv = True, classifying = False):
+    ray.init()
     if classified_data is None:
         classified_data = {}
         classified_data['order'] = []
@@ -75,6 +75,7 @@ def bacteria_classification(classified_data, database_k_mers, k, outdirs, datase
                     save_Xy_data(previous_taxa_unclassified, unclassified_kmers_file)
                     classified_data['order'].append(taxa)
 
+    ray.shutdown()
     return classified_data
 
 def classify(df_file, model, threshold = 0.8, verbose = True):
