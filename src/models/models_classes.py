@@ -233,19 +233,19 @@ class SklearnModel(ModelsUtils):
             self._clf = SGDClassifier(early_stopping = False, n_jobs = -1)
         elif self.classifier == 'sgd':
             if self.verbose:
-                print('Training multiclass classifier with SGD and squared loss function')
+                print('Training multiclass SGD classifier with squared loss function (Ridge)')
             self._clf = SGDClassifier(loss = 'squared_error', n_jobs = -1, random_state = 42)
         elif self.classifier == 'svm':
             if self.verbose:
-                print('Training multiclass classifier with Linear SVM and SGD hinge loss')
+                print('Training multiclass SGD classifier with hinge loss (Linear SVM)')
             self._clf = SGDClassifier(loss = 'hinge', n_jobs = -1, random_state = 42)
         elif self.classifier == 'mlr':
             if self.verbose:
-                print('Training multiclass classifier with Multinomial Logistic Regression')
+                print('Training multiclass Multinomial Logistic Regression classifier')
             self._clf = SGDClassifier(loss = 'log_loss', n_jobs = -1, random_state = 42)
         elif self.classifier == 'mnb':
             if self.verbose:
-                print('Training multiclass classifier with Multinomial Naive Bayes')
+                print('Training multiclass Multinomial Naive Bayes classifier')
             self._clf = MultinomialNB()
 
     def _fit_model(self, X, y):
