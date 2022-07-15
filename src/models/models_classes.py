@@ -180,11 +180,13 @@ class ModelsUtils(ABC):
     def _label_decode(self, arr):
         print('_label_decode')
         decoded = np.empty(len(arr), dtype = object)
+        print(arr)
         for pos in np.arange(len(arr)):
             if arr[pos] == -1:
                 decoded[pos] = 'unknown'
             else:
                 with parallel_backend('ray'):
+                    # ValueError: y should be a 1d array, got an array of shape () instead.
                     decoded[pos] = self._label_encoder.inverse_transform(arr[pos])
 
         return decoded
