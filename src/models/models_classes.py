@@ -180,17 +180,26 @@ class ModelsUtils(ABC):
     def _label_decode(self, arr):
         print('_label_decode')
         decoded = np.empty(len(arr), dtype = object)
-        print(arr)
         for pos in np.arange(len(arr)):
             if arr[pos] == -1:
                 decoded[pos] = 'unknown'
             else:
                 with parallel_backend('ray'):
                     # ValueError: y should be a 1d array, got an array of shape () instead.
+                    print('type(arr[pos] :',type(arr[pos]))
+                    print('pos : ',pos)
+                    print('arr[pos] : ',arr[pos])
                     decoded[pos] = self._label_encoder.inverse_transform(arr[pos])
 
         return decoded
 
+
+def _label_decode_onesvm(self, arr):
+    decoded = np.empty(len(arr), dtype = object)
+    decoded[arr == 1] = 'bacteria'
+    decoded[arr == -1] = 'unknown'
+
+    return decoded
 class SklearnModel(ModelsUtils):
     """
     Class used to build, train and predict models using Ray with Scikit-learn backend
