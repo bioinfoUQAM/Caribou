@@ -6,6 +6,7 @@ from tensorflow.compat.v1 import logging
 
 import os
 import sys
+import ray
 import argparse
 
 from pathlib import Path
