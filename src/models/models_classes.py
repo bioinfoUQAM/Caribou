@@ -95,7 +95,7 @@ class ModelsUtils(ABC):
         self._ids_list = []
         self._nb_kmers = 0
         # Files
-        self._cv_csv = os.path.join(self.outdir_results,'{}_K{}_cv_scores.csv'.format(self.classifier, self.k))
+        self._cv_csv = os.path.join(self.outdir_results,'{}_{}_K{}_cv_scores.csv'.format(self.classifier, self.taxa, self.k))
 
     # Data scaling
     def _preprocess(self, df):
@@ -217,7 +217,10 @@ class SklearnModel(ModelsUtils):
     def __init__(self, classifier, dataset, outdir_model, outdir_results, batch_size, k, taxa, verbose):
         super().__init__(classifier, outdir_results, batch_size, k, taxa, verbose)
         # Parameters
-        self.clf_file = '{}bacteria_binary_classifier_K{}_{}_{}_model.jb'.format(outdir_model, k, classifier, dataset)
+        if classifier in ['onesvm','linearsvm']:
+            self.clf_file = '{}bacteria_binary_classifier_K{}_{}_{}_model.jb'.format(outdir_model, k, classifier, dataset)
+        else:
+            self.clf_file = '{}{}_multiclass_classifier_K{}_{}_{}_model.jb'.format(outdir_model, taxa, k, classifier, dataset)
         # Computes
         self._build()
 
@@ -346,7 +349,10 @@ class KerasTFModel(ModelsUtils):
         # Parameters
         self.dataset = dataset
         self.outdir_model = outdir_model
-        self.clf_file = '{}bacteria_binary_classifier_K{}_{}_{}_model'.format(outdir_model, k, classifier, dataset)
+        if classifier in ['attention','lstm','deeplstm']:
+            self.clf_file = '{}bacteria_binary_classifier_K{}_{}_{}_model'.format(outdir_model, k, classifier, dataset)
+        else:
+            self.clf_file = '{}{}_multiclass_classifier_K{}_{}_{}_model'.format(outdir_model, taxa, k, classifier, dataset)
         # # Initialize empty
         self.nb_classes = None
         # Variables for training with Ray
