@@ -299,16 +299,21 @@ class SklearnModel(ModelsUtils):
     def _predict_multi(self, df, threshold):
         print('_predict_multi')
         y_pred = np.empty(df.count(), dtype=np.int32)
-
         with parallel_backend('ray'):
             for i, row in enumerate(df.iter_batches(batch_size = 1)):
                 predicted = self._clf.predict_proba(row)
+                print('predicted', predicted)
+                print('np.argmax(predicted[0]) : ',np.argmax(predicted[0]))
+                print('predicted[0,np.argmax(predicted[0])] : ',predicted[0,np.argmax(predicted[0])])
                 if np.isnan(predicted[0,np.argmax(predicted[0])]):
                     y_pred[i] = -1
                 elif predicted[0,np.argmax(predicted[0])] >= threshold:
                     y_pred[i] = np.argmax(predicted[0])
                 else:
                     y_pred[i] = -1
+
+        print('y_pred :')
+        print(y_pred)
 
         return self._label_decode(y_pred)
 
