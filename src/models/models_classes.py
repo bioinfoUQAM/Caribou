@@ -208,10 +208,11 @@ class SklearnModel(ModelsUtils):
     predict : predict the classes of a dataset
         df : ray.data.Dataset
             Dataset containing K-mers profiles of sequences to be classified
-        threshold : float
-            Minimum percentage of probability to effectively classify.
-            Sequences will be classified as 'unknown' if the probability is under this threshold.
-            Defaults to 80%
+
+    threshold : float
+        Minimum percentage of probability to effectively classify.
+        Sequences will be classified as 'unknown' if the probability is under this threshold.
+        Defaults to 80%
 
     """
     def __init__(self, classifier, dataset, outdir_model, outdir_results, batch_size, k, taxa, verbose):
@@ -302,8 +303,10 @@ class SklearnModel(ModelsUtils):
         with parallel_backend('ray'):
             for i, row in enumerate(df.iter_batches(batch_size = 1)):
                 predicted = self._clf.predict_proba(row)
-                if predicted[0,np.argmax(predicted[0])] >= threshold:
-                    y_pred[i] = self.labels_list[np.argmax(predicted[0])]
+                if np.isnan(predicted[0,np.argmax(predicted[0])]):
+                    y_pred[i] = -1
+                elif predicted[0,np.argmax(predicted[0])] >= threshold:
+                    y_pred[i] = np.argmax(predicted[0])
                 else:
                     y_pred[i] = -1
 
@@ -338,10 +341,11 @@ class KerasTFModel(ModelsUtils):
     predict : predict the classes of a dataset
         df : ray.data.Dataset
             Dataset containing K-mers profiles of sequences to be classified
-        threshold : float
-            Minimum percentage of probability to effectively classify.
-            Sequences will be classified as 'unknown' if the probability is under this threshold.
-            Defaults to 80%
+
+    threshold : float
+        Minimum percentage of probability to effectively classify.
+        Sequences will be classified as 'unknown' if the probability is under this threshold.
+        Defaults to 80%
 
     """
     def __init__(self, classifier, dataset, outdir_model, outdir_results, batch_size, training_epochs, k, taxa, verbose):
@@ -466,8 +470,10 @@ class KerasTFModel(ModelsUtils):
         predicted = np.array(predictor.predict(df))
 
         for i in range(len(predicted)):
-            if np.argmax(predicted[i]) >= threshold:
-                y_pred[i] = self.labels_list[np.argmax(predicted[i])]
+            if np.isnan(predicted[i,np.argmax(predicted[i])]):
+                y_pred[i] = -1
+            elif predict[i,np.argmax(predicted[i])] >= threshold:
+                y_pred[i] = np.argmax(predicted[i])
             else:
                 y_pred[i] = -1
 
