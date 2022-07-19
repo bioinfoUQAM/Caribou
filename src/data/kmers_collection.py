@@ -164,7 +164,7 @@ class KmersCollection():
         profile = pd.read_table(os.path.join(self._tmp_dir,"{}.txt".format(ind)), sep = '\t', index_col = 0, header = None, names = ['id', str(id)]).T
         # Save seen kmers profile to parquet file
         if len(profile.columns) > 0:
-            profile.to_parquet(os.path.join(self._tmp_dir,"{}.parquet".format(ind)))
+            profile.to_parquet(os.path.join(self._tmp_dir,"{}_pq".format(ind)))
         # Delete tmp dir and file
         rmtree(tmp_folder)
         os.remove(os.path.join(self._tmp_dir,"{}.txt".format(ind)))
@@ -195,13 +195,13 @@ class KmersCollection():
                     given_profile.at[id,kmer] = 0
             # Save given kmers profile to csv file
             if len(given_profile.columns) > 0:
-                given_profile.to_parquet(os.path.join(self._tmp_dir,"{}.parquet".format(ind)))
+                given_profile.to_parquet(os.path.join(self._tmp_dir,"{}_pq".format(ind)))
         # Delete temp dir and file
         rmtree(tmp_folder)
         os.remove(os.path.join(self._tmp_dir,"{}.txt".format(ind)))
 
     def _construct_data(self):
-        self._pq_list = glob(os.path.join(self._tmp_dir,'*.parquet'))
+        self._pq_list = glob(os.path.join(self._tmp_dir,'*_pq/*'))
         # Read/concatenate files with Ray by batches
         nb_batch = 0
         while np.ceil(len(self._pq_list)/1000) > 1:
@@ -210,7 +210,7 @@ class KmersCollection():
             os.mkdir(batch_dir)
             for batch in batches_list:
                 self._batch_read_write(list(batch), batch_dir)
-            self._pq_list = glob(os.path.join(batch_dir,'*.parquet'))
+            self._pq_list = glob(os.path.join(batch_dir,'*_pq/*'))
             nb_batch += 1
         # Read/concatenate batches with Ray
         self.df = ray.data.read_parquet(self._pq_list)
