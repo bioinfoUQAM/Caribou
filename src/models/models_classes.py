@@ -245,7 +245,7 @@ class SklearnModel(ModelsUtils):
         elif self.classifier == 'svm':
             if self.verbose:
                 print('Training multiclass SGD classifier with hinge loss (Linear SVM)')
-            self._clf = SGDClassifier(loss = 'hinge', alpha = 0.01, n_jobs = -1, random_state = 42)
+            self._clf = SGDClassifier(loss = 'hinge', penalty = 'l1', alpha = 0.01, n_jobs = -1, random_state = 42)
         elif self.classifier == 'mlr':
             if self.verbose:
                 print('Training multiclass Multinomial Logistic Regression classifier')
