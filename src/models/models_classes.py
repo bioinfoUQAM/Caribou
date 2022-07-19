@@ -100,8 +100,7 @@ class ModelsUtils(ABC):
     def _preprocess(self, df):
         print('_preprocess')
         df = df.to_modin()
-        self._ids_list = list(df['id'])
-        df = df.drop('id', 1)
+        self._ids_list = list(df.index)
         df = df.fillna(0)
         cols = df.columns
         self._nb_kmers = len(cols)
