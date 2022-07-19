@@ -31,7 +31,7 @@ from ray.ml.predictors.integrations.tensorflow import TensorflowPredictor
 
 __author__ = 'Nicolas de Montigny'
 
-__all__ = ['ModelsUtils','SklearnModel','KerasTFModel']
+__all__ = ['ModelsUtils','SklearnModel','KerasTFModel','BatchInferModel']
 
 # Ignore warnings to have a more comprehensible output on stdout
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
@@ -97,7 +97,6 @@ class ModelsUtils(ABC):
         # Files
         self._cv_csv = os.path.join(self.outdir_results,'{}_{}_K{}_cv_scores.csv'.format(self.classifier, self.taxa, self.k))
 
-    # Data scaling
     def _preprocess(self, df):
         print('_preprocess')
         df = df.to_modin()
@@ -110,6 +109,11 @@ class ModelsUtils(ABC):
             with parallel_backend('ray'):
                 scaler = StandardScaler()
                 df = pd.DataFrame(scaler.fit_transform(df), columns = cols)
+        #with parallel_backend('ray'):
+            #select = VarianceThreshold(threshold=0.9)
+            #df = select.fit_transform(df)
+            #df = pd.DataFrame(df, columns = select.get_feature_names_out())
+
 
         return ray.data.from_modin(df)
 
