@@ -278,7 +278,7 @@ class SklearnModel(ModelsUtils):
     def predict(self, df, threshold = 0.8):
         print('predict')
         y_pred = pd.DataFrame(columns = ['id','classes'])
-        y_pred['id'] = df.to_modin()['id']
+        y_pred['id'] = df.to_modin().index
         df = self._preprocess(df)
         if self.classifier in ['onesvm','linearsvm']:
             y_pred['classes'] = self._predict_binary(df)
@@ -453,7 +453,7 @@ class KerasTFModel(ModelsUtils):
     def predict(self, df, threshold = 0.8):
         print('predict')
         y_pred = pd.DataFrame(columns = ['id','classes'])
-        y_pred['id'] = df.to_modin()['id']
+        y_pred['id'] = df.to_modin().index()
         df = self._preprocess(df)
         if self.classifier in ['attention','lstm','deeplstm']:
             y_pred['classes'] = self._predict_binary(df)
