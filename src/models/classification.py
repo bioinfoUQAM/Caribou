@@ -29,7 +29,7 @@ def bacteria_classification(classified_data, database_k_mers, k, outdirs, datase
             classified_data['order'].append(taxa)
         else:
             if classifier in ['sgd','svm','mlr','mnb']:
-                model = SklearnModel(classifier, dataset, outdirs['models_dir'], outdirs['results_dir'], batch_size, k, taxa, verbose)
+                model = SklearnModel(classifier, dataset, outdirs['models_dir'], outdirs['results_dir'], batch_size, training_epochs, k, taxa, verbose)
             elif classifier in ['lstm_attention','cnn','widecnn']:
                 model = KerasTFModel(classifier, dataset, outdirs['models_dir'], outdirs['results_dir'], batch_size, training_epochs, k, taxa, verbose)
             else:
