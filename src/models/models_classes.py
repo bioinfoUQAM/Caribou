@@ -241,7 +241,7 @@ class SklearnModel(ModelsUtils):
         elif self.classifier == 'svm':
             if self.verbose:
                 print('Training multiclass SGD classifier with hinge loss (Linear SVM)')
-            self._clf = SGDClassifier(loss = 'hinge', penalty = 'elasticnet', alpha = 0.1, warm_start = True, n_jobs = -1)
+            self._clf = SGDClassifier(loss = 'hinge', penalty = 'elasticnet', alpha = 0.1, warm_start = True, n_jobs = -1, random_state = 42)
         elif self.classifier == 'mlr':
             if self.verbose:
                 print('Training multiclass Multinomial Logistic Regression classifier')
@@ -270,7 +270,7 @@ class SklearnModel(ModelsUtils):
                         elif epoch == (self._training_epochs -1) and iter < nb_batches:
                             self._clf.partial_fit(batch_X, batch_y, classes = self.labels_list)
                         else:
-                            self._clf = CalibratedClassifierCV(base_estimator = self._clf, cv = 'prefit')
+                            self._clf = CalibratedClassifierCV(base_estimator = self._clf, method = 'isotonic', cv = 'prefit')
                             self._clf.fit(batch_X, batch_y)
 
         dump(self._clf, self.clf_file)
