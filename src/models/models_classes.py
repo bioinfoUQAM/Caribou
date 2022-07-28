@@ -81,7 +81,7 @@ class ModelsUtils(ABC):
     predict : abstract method to predict the classes of a dataset
 
     """
-    def __init__(self, classifier, outdir_results, batch_size, k, taxa, verbose):
+    def __init__(self, classifier, outdir_results, batch_size, training_epochs, k, taxa, verbose):
         # Parameters
         self.classifier = classifier
         self.outdir_results = outdir_results
@@ -89,6 +89,7 @@ class ModelsUtils(ABC):
         self.k = k
         self.taxa = taxa
         self.verbose = verbose
+        self._training_epochs = training_epochs
         # Initialize empty
         self._label_encoder = None
         self.labels_list = []
@@ -108,11 +109,6 @@ class ModelsUtils(ABC):
             with parallel_backend('ray'):
                 scaler = StandardScaler()
                 df = pd.DataFrame(scaler.fit_transform(df), columns = cols)
-        #with parallel_backend('ray'):
-            #select = VarianceThreshold(threshold=0.9)
-            #df = select.fit_transform(df)
-            #df = pd.DataFrame(df, columns = select.get_feature_names_out())
-
 
         return ray.data.from_modin(df)
 
@@ -218,8 +214,8 @@ class SklearnModel(ModelsUtils):
         Defaults to 80%
 
     """
-    def __init__(self, classifier, dataset, outdir_model, outdir_results, batch_size, k, taxa, verbose):
-        super().__init__(classifier, outdir_results, batch_size, k, taxa, verbose)
+    def __init__(self, classifier, dataset, outdir_model, outdir_results, batch_size, training_epochs, k, taxa, verbose):
+        super().__init__(classifier, outdir_results, batch_size, training_epochs, k, taxa, verbose)
         # Parameters
         if classifier in ['onesvm','linearsvm']:
             self.clf_file = '{}bacteria_binary_classifier_K{}_{}_{}_model.jb'.format(outdir_model, k, classifier, dataset)
@@ -245,7 +241,7 @@ class SklearnModel(ModelsUtils):
         elif self.classifier == 'svm':
             if self.verbose:
                 print('Training multiclass SGD classifier with hinge loss (Linear SVM)')
-            self._clf = SGDClassifier(loss = 'hinge', penalty = 'elasticnet', alpha = 0.1, warm_start = True, n_jobs = -1, random_state = 42)
+            self._clf = SGDClassifier(loss = 'hinge', penalty = 'elasticnet', l1_ratio = 0.5, alpha = 0.1, warm_start = True, n_jobs = -1, random_state = 42)
         elif self.classifier == 'mlr':
             if self.verbose:
                 print('Training multiclass Multinomial Logistic Regression classifier')
@@ -262,16 +258,18 @@ class SklearnModel(ModelsUtils):
 
         with parallel_backend('ray'):
             if self.classifier == 'onesvm':
-                for batch in X.iter_batches(batch_size = self.batch_size):
-                        self._clf.partial_fit(batch)
+                for epoch in np.arange(self._training_epochs):
+                    for batch in X.iter_batches(batch_size = self.batch_size):
+                            self._clf.partial_fit(batch)
             else:
-                nb_batches = ceil(len(self._ids_list)/self.batch_size) - 1
-                for iter, (batch_X, batch_y) in enumerate(zip(X.iter_batches(batch_size = self.batch_size), y.iter_batches(batch_size = self.batch_size))):
-                    if iter != nb_batches:
-                        self._clf.partial_fit(batch_X, batch_y, classes = self.labels_list)
-                    else:
-                        self._clf = CalibratedClassifierCV(base_estimator = self._clf, cv = 'prefit')
-                        self._clf.fit(batch_X, batch_y)
+                for epoch in np.arange(self._training_epochs):
+                    nb_batches = ceil(len(self._ids_list)/self.batch_size) - 1
+                    for iter, (batch_X, batch_y) in enumerate(zip(X.iter_batches(batch_size = self.batch_size), y.iter_batches(batch_size = self.batch_size))):
+                        if epoch != (self._training_epochs - 1) and iter != nb_batches:
+                            self._clf.partial_fit(batch_X, batch_y, classes = self.labels_list)
+                        else:
+                            self._clf = CalibratedClassifierCV(base_estimator = self._clf, cv = 'prefit')
+                            self._clf.fit(batch_X, batch_y)
 
         dump(self._clf, self.clf_file)
 
@@ -357,7 +355,7 @@ class KerasTFModel(ModelsUtils):
 
     """
     def __init__(self, classifier, dataset, outdir_model, outdir_results, batch_size, training_epochs, k, taxa, verbose):
-        super().__init__(classifier, outdir_results, batch_size, k, taxa, verbose)
+        super().__init__(classifier, outdir_results, batch_size, training_epochs, k, taxa, verbose)
         # Parameters
         self.dataset = dataset
         self.outdir_model = outdir_model
@@ -368,7 +366,6 @@ class KerasTFModel(ModelsUtils):
         # # Initialize empty
         self.nb_classes = None
         # Variables for training with Ray
-        self._training_epochs = training_epochs
         self._strategy = distribute.MultiWorkerMirroredStrategy()
         if len(list_physical_devices('GPU')) > 0:
             self._trainer = Trainer(backend = 'tensorflow', num_workers = len(list_physical_devices('GPU')), use_gpu = True)
