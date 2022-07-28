@@ -245,7 +245,7 @@ class SklearnModel(ModelsUtils):
         elif self.classifier == 'mlr':
             if self.verbose:
                 print('Training multiclass Multinomial Logistic Regression classifier')
-            self._clf = SGDClassifier(loss = 'log_loss', n_jobs = -1, random_state = 42)
+            self._clf = SGDClassifier(loss = 'log_loss', penalty = 'elasticnet', alpha = 0.1, warm_start = True, n_jobs = -1, random_state = 42)
         elif self.classifier == 'mnb':
             if self.verbose:
                 print('Training multiclass Multinomial Naive Bayes classifier')
