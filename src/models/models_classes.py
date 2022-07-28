@@ -265,7 +265,9 @@ class SklearnModel(ModelsUtils):
                 for epoch in np.arange(self._training_epochs):
                     nb_batches = ceil(len(self._ids_list)/self.batch_size) - 1
                     for iter, (batch_X, batch_y) in enumerate(zip(X.iter_batches(batch_size = self.batch_size), y.iter_batches(batch_size = self.batch_size))):
-                        if epoch != (self._training_epochs - 1) and iter != nb_batches:
+                        if epoch < (self._training_epochs -1):
+                            self._clf.partial_fit(batch_X, batch_y, classes = self.labels_list)
+                        elif epoch == (self._training_epochs -1) and iter < nb_batches:
                             self._clf.partial_fit(batch_X, batch_y, classes = self.labels_list)
                         else:
                             self._clf = CalibratedClassifierCV(base_estimator = self._clf, cv = 'prefit')
