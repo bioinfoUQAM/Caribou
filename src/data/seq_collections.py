@@ -32,7 +32,7 @@ class SeqCollection(UserList):
     data : string
         Path to a file containing sequences in fasta format
 
-    labels : list
+    labels : list of strings
         Collection of labels of the sequences
         The order of label needs to be the same as
         the sequences in data
