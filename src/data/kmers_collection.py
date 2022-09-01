@@ -3,9 +3,7 @@ import ray
 import warnings
 
 import numpy as np
-import modin.pandas as pd
-import pyarrow as pa
-import pyarrow.csv as csv
+import pandas as pd
 
 from glob import glob
 from shutil import rmtree
@@ -84,6 +82,10 @@ class KmersCollection():
         self.method = None
         self.kmers_list = None
         self._schema = None
+        self._labels = None
+        # Get labels from seq_data
+        if len(seq_data.labels) > 0:
+            self._labels = pd.DataFrame(seq_data.labels, columns = seq_data.taxas, index = seq_data.ids)
         # Get taxas from seq_data if not empty
         if len(seq_data.taxas) > 0:
             self.taxas = seq_data.taxas
@@ -115,7 +117,7 @@ class KmersCollection():
             self.kmers_list = list(self.df.limit(1).to_pandas().columns)
         # Get labels that match K-mers extracted sequences
         if len(seq_data.labels) > 0:
-            ids = list(self.df.to_modin().index)
+            ids = list(self.df.to_pandas().index)
             msk = np.array([True if id in ids else False for id in seq_data.ids])
             self.classes = seq_data.labels[msk]
         # Delete global tmp dir
@@ -201,7 +203,7 @@ class KmersCollection():
         os.remove(os.path.join(self._tmp_dir,"{}.txt".format(ind)))
 
     def _construct_data(self):
-        self._pq_list = glob(os.path.join(self._tmp_dir,'*_pq/*'))
+        self._pq_list = glob(os.path.join(self._tmp_dir,'*_pq'))
         # Read/concatenate files with Ray by batches
         nb_batch = 0
         while np.ceil(len(self._pq_list)/1000) > 1:
@@ -210,24 +212,15 @@ class KmersCollection():
             os.mkdir(batch_dir)
             for batch in batches_list:
                 self._batch_read_write(list(batch), batch_dir)
-            self._pq_list = glob(os.path.join(batch_dir,'*_pq/*'))
+            self._pq_list = glob(os.path.join(batch_dir,'*_pq'))
             nb_batch += 1
         # Read/concatenate batches with Ray
         self.df = ray.data.read_parquet(self._pq_list)
-        # Fill NAs with 0
-        self.df = self.df.map_batches(self._na_2_zero, batch_format = 'pandas')
         # Save dataset
         self.df.write_parquet(self.Xy_file)
 
     def _batch_read_write(self, batch, dir):
         df = ray.data.read_parquet(batch)
-        df = df.map_batches(self._na_2_zero, batch_format = 'pandas')
         df.write_parquet(dir)
         for file in batch:
             os.remove(file)
-
-    def _na_2_zero(self, df):
-        df = df.fillna(0)
-        cols = list(df.columns)
-        df[cols] = df[cols].astype(np.int32)
-        return df

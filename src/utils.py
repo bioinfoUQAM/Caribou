@@ -1,5 +1,5 @@
 import numpy as np
-import modin.pandas as pd
+import pandas as pd
 
 import os
 import ray

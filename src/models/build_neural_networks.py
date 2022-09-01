@@ -15,22 +15,6 @@ def build_attention(batch_size, kmers_length, nb_kmers):
     VirNet package [Abdelkareem et al. 2018]
     https://github.com/alyosama/virnet/blob/master/NNClassifier.py
     """
-# File "/home/nicolas/miniconda3/envs/caribou/lib/python3.8/site-packages/tensorflow/python/ops/script_ops.py", line 270, in __call__
-#     ret = func(*args)
-#
-#   File "/home/nicolas/miniconda3/envs/caribou/lib/python3.8/site-packages/tensorflow/python/autograph/impl/api.py", line 642, in wrapper
-#     return func(*args, **kwargs)
-#
-#   File "/home/nicolas/miniconda3/envs/caribou/lib/python3.8/site-packages/tensorflow/python/data/ops/dataset_ops.py", line 1073, in generator_py_func
-#     raise TypeError(
-#
-# TypeError: `generator` yielded an element of shape (3, 136) where an element of shape (None, 3) was expected.
-#
-#
-#          [[{{node PyFunc}}]]
-#          [[MultiDeviceIteratorGetNextFromShard]]
-#          [[RemoteCall]]
-#          [[IteratorGetNextAsOptional]]
     inputs = Input(shape = (batch_size,))
     x = Embedding(nb_kmers, 128)(inputs)
 

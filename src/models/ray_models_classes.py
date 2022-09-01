@@ -1,24 +1,22 @@
 import numpy as np
-import pandas as pd
+import pandas.pandas as pd
 
 from abc import ABC, abstractmethod
 from math import ceil
 
 from models.build_neural_networks import *
+from models.sklearn_proba import SklearnPredictProba
 
 import os
 import ray
 import json
 import warnings
 
-from sklearn.model_selection import train_test_split
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.metrics import precision_recall_fscore_support
-from sklearn.preprocessing import StandardScaler, LabelEncoder
 
 from sklearn.svm import SVC
 from sklearn.naive_bayes import MultinomialNB
-from sklearn.model_selection import GridSearchCV
 from sklearn.linear_model import SGDOneClassSVM, SGDClassifier
 
 from joblib import parallel_backend, dump
@@ -30,6 +28,12 @@ from tensorflow import distribute, int64, TensorSpec
 from tensorflow.config import list_physical_devices
 from ray.train import Trainer, save_checkpoint, CheckpointStrategy
 from ray.ml.predictors.integrations.tensorflow import TensorflowPredictor
+
+
+from ray.data.preprocessors import MinMaxScaler, LabelEncoder, Chain, SimpleImputer
+from ray.train.sklearn import SklearnTrainer
+
+
 
 __author__ = 'Nicolas de Montigny'
 
@@ -64,9 +68,6 @@ class ModelsUtils(ABC):
     taxa : string
         The taxa for which the model is trained in classifying
 
-    labels_list : list of int
-        A list of the labels for multiclass learning / classifying
-
     ----------
     Methods
     ----------
@@ -83,36 +84,38 @@ class ModelsUtils(ABC):
     predict : abstract method to predict the classes of a dataset
 
     """
-    def __init__(self, classifier, outdir_results, batch_size, training_epochs, k, taxa, verbose):
+    def __init__(self, classifier, outdir_results, batch_size, training_epochs, k, taxa, kmers_list, verbose):
         # Parameters
         self.classifier = classifier
         self.outdir_results = outdir_results
         self.batch_size = batch_size
         self.k = k
         self.taxa = taxa
+        self.kmers = kmers_list
         self.verbose = verbose
+        # Initialize hidden
+        self._nb_kmers = len(cols)
         self._training_epochs = training_epochs
         # Initialize empty
-        self._label_encoder = None
-        self.labels_list = []
+        self._labels_map = None
         self._ids_list = []
-        self._nb_kmers = 0
+        # Initialize Ray variables
+        self._preprocessor = None
+        self._encoder = None
+        self._trainer = None
+        self._train_params = {}
+        self._tuner = None
+        self._tune_params = {}
+        self._predictor = None
         # Files
         self._cv_csv = os.path.join(self.outdir_results,'{}_{}_K{}_cv_scores.csv'.format(self.classifier, self.taxa, self.k))
 
     def _preprocess(self, df):
         print('_preprocess')
-        df = df.to_pandas()
-        self._ids_list = list(df.index)
-        df = df.fillna(0)
-        cols = df.columns
-        self._nb_kmers = len(cols)
-        if self.classifier != 'mnb':
-            with parallel_backend('ray'):
-                scaler = StandardScaler()
-                df = pd.DataFrame(scaler.fit_transform(df), columns = cols)
-
-        return ray.data.from_pandas(df)
+        self._ids_list = list(df.to_pandas().index) # Could use iterator + append to empty list if dataset too big
+        self._preprocessor = Chain(SimpleImputer(self.kmers, strategy = 'constant', fill_value = 0), MinMaxScaler(self.kmers))
+        df = self._preprocessor.fit_transform(df)
+        return df
 
     @abstractmethod
     def _build(self):
@@ -121,40 +124,34 @@ class ModelsUtils(ABC):
 
     def train(self, X, y, cv = True):
         print('train')
+        df = X.add_column(self.taxa, lambda df : y[taxa])
         if cv:
-            self._cross_validation(X, y)
+            self._cross_validation(df)
         else:
-            self._fit_model(X, y)
+            self._fit_model(df)
 
     @abstractmethod
     def _fit_model(self):
         """
         """
 
-    def _cross_validation(self, X_train, y_train):
+    def _cross_validation(self, df):
         print('_cross_validation')
-        X_train = X_train.to_pandas()
-        y_train = y_train.to_pandas()
 
-        with parallel_backend('ray'):
-            X_train, X_test, y_train, y_test = train_test_split(X_train, y_train, train_size = 0.8, random_state=42)
+        df_train, df_test = df.train_test_split(0.2, shuffle = True, seed = 42)
 
-        X_train = ray.data.from_pandas(X_train)
-        y_train = ray.data.from_pandas(y_train)
-        X_test = ray.data.from_pandas(X_test)
-        y_test = ray.data.from_pandas(y_test)
+        self._fit_model(df_train)
 
-        self._fit_model(X_train, y_train)
-
-        y_pred = self.predict(X_test)
-        self._cv_score(y_test, y_pred)
+        y_true = df_test.to_pandas()[self.taxa]
+        y_pred = self.predict(df_test)
+        self._cv_score(y_true, y_pred)
 
     # Outputs scores for cross validation in a dictionnary
     def _cv_score(self, y_true, y_pred):
         print('_cv_score')
 
         print('y_true :')
-        print(y_true.to_pandas())
+        print(y_true)
         print('y_pred :')
         print(y_pred)
 
@@ -175,25 +172,19 @@ class ModelsUtils(ABC):
 
     def _label_encode(self, df):
         print('_label_encode')
-        df = df.to_pandas()
-        with parallel_backend('ray'):
-            self._label_encoder = LabelEncoder()
-            df[self.taxa] = self._label_encoder.fit_transform(df[self.taxa])
-
-        self.labels_list = np.unique(df[self.taxa])
-        return ray.data.from_pandas(df)
+        label_list = np.unique(df.to_pandas()[self.taxa])
+        self._encoder = LabelEncoder(self.taxa)
+        df = self._encoder.fit_transform(df)
+        encoded_labels = np.unique(df.to_pandas()[self.taxa])
+        self._labels_map = zip(label_list, encoded_labels)
+        return df
 
     def _label_decode(self, arr):
         print('_label_decode')
         decoded = np.empty(len(arr), dtype = object)
         decoded[arr == -1] = 'unknown'
-        arr[decoded == 'unknown'] = 0
-        with parallel_backend('ray'):
-            arr = self._label_encoder.inverse_transform(arr)
-        for pos in np.arange(len(decoded)):
-            if decoded[pos] != 'unknown':
-                decoded[pos] = arr[pos]
-
+        for label, encoded in self._labels_map:
+            decoded[arr == encoded] = label
         return decoded
 
 class SklearnModel(ModelsUtils):
@@ -245,26 +236,26 @@ class SklearnModel(ModelsUtils):
         elif self.classifier == 'sgd':
             if self.verbose:
                 print('Training multiclass SGD classifier with squared loss function (Ridge)')
-            self._clf = SGDClassifier(loss = 'squared_error', n_jobs = -1)
+            self._clf = SVC(kernel = 'rbf', probability = True, random_state = 42)
+            # https://scikit-learn.org/stable/auto_examples/svm/plot_rbf_parameters.html#train-classifiers
+            #self._clf = SGDClassifier(loss = 'squared_error', n_jobs = -1, random_state = 42)
         elif self.classifier == 'svm':
             if self.verbose:
                 print('Training multiclass SGD classifier with hinge loss (Linear SVM)')
-            self._clf = SVC(kernel = 'rbf', probability = True)
-            # https://scikit-learn.org/stable/auto_examples/svm/plot_rbf_parameters.html#train-classifiers
-            #self._clf = SGDClassifier(loss = 'hinge', penalty = 'elasticnet', alpha = 0.1, warm_start = True, n_jobs = -1)
+            self._clf = SGDClassifier(loss = 'hinge', penalty = 'elasticnet', alpha = 0.1, warm_start = True, n_jobs = -1, random_state = 42)
         elif self.classifier == 'mlr':
             if self.verbose:
                 print('Training multiclass Multinomial Logistic Regression classifier')
-            self._clf = SGDClassifier(loss = 'log_loss', penalty = 'elasticnet', alpha = 0.1, warm_start = True, n_jobs = -1)
+            self._clf = SGDClassifier(loss = 'log_loss', penalty = 'elasticnet', alpha = 0.1, warm_start = True, n_jobs = -1, random_state = 42)
         elif self.classifier == 'mnb':
             if self.verbose:
                 print('Training multiclass Multinomial Naive Bayes classifier')
             self._clf = MultinomialNB()
 
-    def _fit_model(self, X, y):
+    def _fit_model(self, df):
         print('_fit_model')
-        X = self._preprocess(X)
-        y = self._label_encode(y)
+        df = self._preprocess(df)
+        df = self._label_encode(df)
 
         with parallel_backend('ray'):
             if self.classifier == 'onesvm':
@@ -415,7 +406,7 @@ class KerasTFModel(ModelsUtils):
         print('_fit_model')
         X = self._preprocess(X)
         y = self._label_encode(y)
-        self.nb_classes = len(self.labels_list)
+        self.nb_classes = len(self.labels_map)
 
         checkpoint_strategy = CheckpointStrategy(num_to_keep = 1,
                                     checkpoint_score_attribute='val_accuracy',

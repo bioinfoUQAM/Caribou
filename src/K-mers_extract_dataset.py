@@ -82,7 +82,7 @@ def kmers_dataset(opt):
 
     if kmers_list is None:
         # Reference Database Only
-        if opt['seq_file'] is not None and opt['cls_file'] is not None:
+        if opt['seq_file'] is not None and opt['cls_file'] is not None and opt['seq_file_host'] is None and opt['cls_file_host'] is None:
             k_profile_database = build_load_save_data((opt['seq_file'],opt['cls_file']),
                 None,
                 outdirs["data_dir"],
@@ -119,13 +119,13 @@ def kmers_dataset(opt):
             print("Caribou finished extracting k-mers of {} and {}".format(opt['dataset_name'],opt['host_name']))
     else:
         # Reference Host only
-        if opt['seq_file_host'] is not None and opt['cls_file_host'] is not None:
+        if opt['seq_file'] is not None and opt['cls_file'] is not None:
 
             k_profile_host = build_load_save_data(None,
-            (opt['seq_file_host'],opt['cls_file_host']),
+            (opt['seq_file'],opt['cls_file']),
             outdirs["data_dir"],
             opt['dataset_name'],
-            opt['host_name'],
+            None,
             k = opt['k_length'],
             kmers_list = kmers_list
             )
