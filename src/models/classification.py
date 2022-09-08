@@ -2,10 +2,11 @@ import os
 import sys
 import ray
 
-import pandas.pandas as pd
+import pandas as pd
 
+from models.ray_sklearn import SklearnModel
+from models.ray_keras_tf import KerasTFModel
 from utils import load_Xy_data, save_Xy_data
-from models.models_classes import SklearnModel, KerasTFModel
 
 __author__ = 'Nicolas de Montigny'
 
@@ -29,7 +30,7 @@ def bacteria_classification(classified_data, database_k_mers, k, outdirs, datase
             classified_data['order'].append(taxa)
         else:
             if classifier in ['sgd','svm','mlr','mnb']:
-                model = SklearnModel(classifier, dataset, outdirs['models_dir'], outdirs['results_dir'], batch_size, training_epochs, k, taxa, verbose)
+                model = SklearnModel(classifier, dataset, outdirs['models_dir'], outdirs['results_dir'], batch_size, k, taxa, database_k_mers['kmers'], verbose)
             elif classifier in ['lstm_attention','cnn','widecnn']:
                 model = KerasTFModel(classifier, dataset, outdirs['models_dir'], outdirs['results_dir'], batch_size, training_epochs, k, taxa, verbose)
             else:
@@ -53,7 +54,7 @@ def bacteria_classification(classified_data, database_k_mers, k, outdirs, datase
                     # Get training dataset and assign to variables
                     # Keep only classes of sequences that were not removed in kmers extraction
                     X_train = ray.data.read_parquet(database_k_mers['profile'])
-                    y_train = ray.data.from_pandas(pd.DataFrame(database_k_mers['classes'], columns = database_k_mers['taxas']).loc[:,taxa].astype('string').str.lower())
+                    y_train = pd.DataFrame(pd.DataFrame(database_k_mers['classes'], columns = database_k_mers['taxas']).loc[:,taxa].astype('string').str.lower())
 
                     model.train(X_train, y_train, cv)
 
