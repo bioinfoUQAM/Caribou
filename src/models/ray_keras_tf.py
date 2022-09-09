@@ -172,6 +172,8 @@ class KerasTFModel(ModelsUtils):
             else:
                 y_pred[i] = -1
 
+        predictions = self._label_threshold(predictions, threshold)
+
         return self._label_decode(y_pred)
 
     def __reduce__(self):
@@ -179,3 +181,16 @@ class KerasTFModel(ModelsUtils):
         serialized_data = (self.classifier, self.dataset, self.outdir_model, self.outdir_results, self.batch_size, self._training_epochs, self.k, self.taxa, self.verbose)
 
         return deserializer, serialized_data
+
+    def _label_threshold(self, arr, threshold):
+        arr = np.array(arr.to_pandas())
+        nb_labels = len(arr)
+        predict = np.empty(nb_labels, dtype = np.int32)
+        for i in range(nb_labels):
+            if np.isnan(arr[i,np.argmax(arr[i])]):
+                predict[i] = -1
+            elif arr[i,np.argmax(arr[i])] >= threshold:
+                predict[i] = np.argmax(arr[i])
+            else:
+                predict[i] = -1
+        return ray.data.from_numpy(predict)

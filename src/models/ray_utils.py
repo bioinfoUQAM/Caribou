@@ -147,11 +147,7 @@ class ModelsUtils(ABC):
         if isinstance(y_pred, ray.data.dataset.Dataset):
             y_pred = y_pred.to_pandas()
 
-        support = []
-        if self.classifier in ['onesvm','linearsvm', 'attention','lstm','deeplstm']:
-            support = precision_recall_fscore_support(y_true, y_pred, pos_label = 1, average = 'binary')
-        elif self.classifier in ['sgd','svm','mlr','mnb','lstm_attention','cnn','widecnn']:
-            support = precision_recall_fscore_support(y_true, y_pred, average = 'macro')
+        support = precision_recall_fscore_support(y_true, y_pred, average = 'weighted')
 
         scores = pd.DataFrame({'Classifier':self.classifier,'Precision':support[0],'Recall':support[1],'F-score':support[2]}, index = [1]).T
 
@@ -173,24 +169,8 @@ class ModelsUtils(ABC):
 
     def _label_decode(self, predict, threshold):
         print('_label_decode')
-        if self.classifier in ['sgd','svm','mlr','mnb','lstm_attention','cnn','widecnn']:
-            predict = self._label_threshold(predict, threshold)
-        else:
-            predict = np.array(predict.to_pandas())
+        predict = np.array(predict.to_pandas())
         decoded = pd.Series(np.empty(len(predict), dtype = object))
         for label, encoded in self._labels_map:
             decoded[predict == encoded] = label
         return decoded
-
-    def _label_threshold(self, arr, threshold):
-        arr = np.array(arr.to_pandas())
-        nb_labels = len(arr)
-        predict = np.empty(nb_labels, dtype = np.int32)
-        for i in range(nb_labels):
-            if np.isnan(arr[i,np.argmax(arr[i])]):
-                predict[i] = -1
-            elif arr[i,np.argmax(arr[i])] >= threshold:
-                predict[i] = np.argmax(arr[i])
-            else:
-                predict[i] = -1
-        return predict

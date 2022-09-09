@@ -55,13 +55,11 @@ def bacteria_extraction(metagenome_k_mers, database_k_mers, k, outdirs, dataset,
                 sys.exit()
             X_train = ray.data.read_parquet(database_k_mers['profile'])
             y_train = pd.DataFrame(pd.DataFrame(database_k_mers['classes'], columns = database_k_mers['taxas']).loc[:,'domain'].str.lower())
-            if not os.path.isfile(model.clf_file):
-                train = True
         else:
             print('Only classifier One Class SVM can be used without host data!\nEither add host data in config file or choose classifier One Class SVM.')
             sys.exit()
 
-        if train is True:
+        if not os.path.isfile(model.clf_file):
             model.train(X_train, y_train, cv)
 
         # Classify sequences into bacteria / unclassified / host and build k-mers profiles for bacteria

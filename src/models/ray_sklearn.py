@@ -17,7 +17,6 @@ from ray.tune import Tuner, TuneConfig
 
 # Predicting
 from ray.train.sklearn import SklearnPredictor
-from models.sklearn_proba import SklearnPredictProba
 from ray.train.batch_predictor import BatchPredictor
 
 # Parent class
@@ -191,15 +190,10 @@ class SklearnModel(ModelsUtils):
         if not cv:
             df = self._predict_preprocess(df)
         # Define predictor
-        if self.classifier in ['onesvm','linearsvm']:
-            self._predictor = BatchPredictor.from_checkpoint(self._model_ckpt, SklearnPredictor)
-        else:
-            self._predictor = BatchPredictor.from_checkpoint(self._model_ckpt, SklearnPredictProba)
+        self._predictor = BatchPredictor.from_checkpoint(self._model_ckpt, SklearnPredictor)
         # Make predictions
         predictions = self._predictor.predict(df, batch_size = self.batch_size)
-        if cv and self.classifier in ['onesvm','linearsvm']:
+        if cv:
             return predictions
-        elif cv and self.classifier in ['sgd','svm','mlr','mnb']:
-            return self._label_threshold(predictions, threshold)
         else:
             return self._label_decode(predictions, threshold)
