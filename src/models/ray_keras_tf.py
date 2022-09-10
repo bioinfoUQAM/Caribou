@@ -9,7 +9,7 @@ from models.ray_utils import ModelsUtils
 
 __author__ = 'Nicolas de Montigny'
 
-__all__ = ['ModelsUtils','SklearnModel','KerasTFModel','BatchInferModel']
+__all__ = ['KerasTFModel']
 
 # Ignore warnings to have a more comprehensible output on stdout
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'

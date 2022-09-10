@@ -25,7 +25,7 @@ from models.ray_utils import ModelsUtils
 
 __author__ = 'Nicolas de Montigny'
 
-__all__ = ['ModelsUtils','SklearnModel','KerasTFModel','BatchInferModel']
+__all__ = ['SklearnModel']
 
 # Ignore warnings to have a more comprehensible output on stdout
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
@@ -165,7 +165,7 @@ class SklearnModel(ModelsUtils):
             estimator = self._clf,
             label_column = self.taxa,
             params = self._train_params,
-            scoring = 'accuracy',
+            scoring = 'f1_weighted',
             datasets = datasets
         )
         # Definer tuner
