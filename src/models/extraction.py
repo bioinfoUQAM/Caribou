@@ -60,7 +60,7 @@ def bacteria_extraction(metagenome_k_mers, database_k_mers, k, outdirs, dataset,
             sys.exit()
 
         if not os.path.isfile(model.clf_file):
-            model.train(X_train, y_train, cv)
+            model.train(X_train, y_train, database_k_mers, cv)
 
         # Classify sequences into bacteria / unclassified / host and build k-mers profiles for bacteria
         if metagenome_k_mers is not None:

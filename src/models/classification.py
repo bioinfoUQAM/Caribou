@@ -56,7 +56,7 @@ def bacteria_classification(classified_data, database_k_mers, k, outdirs, datase
                     X_train = ray.data.read_parquet(database_k_mers['profile'])
                     y_train = pd.DataFrame(pd.DataFrame(database_k_mers['classes'], columns = database_k_mers['taxas']).loc[:,taxa].astype('string').str.lower())
 
-                    model.train(X_train, y_train, cv)
+                    model.train(X_train, y_train, database_k_mers, cv)
 
                 # Classify sequences into taxa and build k-mers profiles for classified and unclassified data
                 # Keep previous taxa to reclassify only unclassified reads at a higher taxonomic level

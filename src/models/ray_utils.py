@@ -13,6 +13,9 @@ from ray.data.preprocessors import MinMaxScaler, LabelEncoder, Chain, SimpleImpu
 # CV metrics
 from sklearn.metrics import precision_recall_fscore_support
 
+# Simulation class
+from models.reads_simulation import readsSimulation
+
 __author__ = 'Nicolas de Montigny'
 
 __all__ = ['ModelsUtils']
@@ -113,11 +116,11 @@ class ModelsUtils(ABC):
         """
         """
 
-    def train(self, X, y, cv = True):
+    def train(self, X, y, kmers_ds, cv = True):
         print('train')
         df = self._training_preprocess(X, y)
         if cv:
-            self._cross_validation(df)
+            self._cross_validation(df, kmers_ds)
         else:
             datasets = {'train' : df}
             self._fit_model(datasets)
@@ -127,10 +130,17 @@ class ModelsUtils(ABC):
         """
         """
 
-    def _cross_validation(self, df):
+    def _cross_validation(self, df, kmers_ds):
         print('_cross_validation')
 
         df_train, df_test = df.train_test_split(0.2, shuffle = True)
+# NOTE: KMERS_DS == KMERS_DATA EXTRACTED FROM SEQUENCES
+# NOTE: MUST RECRETE CLASSES DATAFRAME TO PASS TO SIMULATION
+        sim_genomes = []
+        for row in df_test.iter_rows():
+            sim_genomes.append(row['__index_level_0__'])
+        sim_outdir = os.path.dirname(kmers_ds['fasta'])
+        cv_sim = readsSimulation(kmers_ds['fasta'], cls, sim_genomes, 'miseq', sim_outdir)
 
         datasets = {'train' : df_train, 'test' : df_test}
         self._fit_model(datasets)

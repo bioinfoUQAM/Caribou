@@ -92,6 +92,7 @@ def build_Xy_data(seq_data, k, Xy_file, dataset, kmers_list = None):
     data['classes'] = collection.classes # Class labels
     data['kmers'] = collection.kmers_list # Features
     data['taxas'] = collection.taxas # Known taxas for classification
+    data['fasta'] = collection.fasta # Fasta file -> simulate reads if cv
 
     return data
 
