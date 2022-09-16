@@ -1,7 +1,6 @@
 setuptools
 wheel
-biopython<=1.78
-Bio
+biopython==1.78
 h5py
 matplotlib
 numpy
@@ -11,4 +10,4 @@ scipy
 tensorflow
 keras
 ray>=2.0.0
-InSilicoSeq
+insilicoseq

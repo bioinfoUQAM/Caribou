@@ -34,11 +34,6 @@ def kmers_dataset(opt):
         print("No file to extract K-mers from ! Exiting")
         sys.exit()
 
-    # Verify names are not None
-    if opt['dataset_name'] is None:
-        opt['dataset_name'] = "dataset"
-    if opt['host_name'] is None:
-        opt['host_name'] = "host"
     # Verification of existence of files
     for file in [opt['seq_file'],opt['cls_file'],opt['seq_file_host'],opt['cls_file_host'],opt['kmers_list']]:
         if file is not None and not os.path.isfile(file):
@@ -124,8 +119,8 @@ def kmers_dataset(opt):
             k_profile_host = build_load_save_data(None,
             (opt['seq_file'],opt['cls_file']),
             outdirs["data_dir"],
-            opt['dataset_name'],
             None,
+            opt['host_name'],
             k = opt['k_length'],
             kmers_list = kmers_list
             )
@@ -155,11 +150,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='This script extracts K-mers of the given dataset using the available ressources on the computer before saving it to drive.')
     parser.add_argument('-s','--seq_file', default=None, type=pathlib.Path, help='PATH to a fasta file containing bacterial genomes to build k-mers from')
     parser.add_argument('-c','--cls_file', default=None, type=pathlib.Path, help='PATH to a csv file containing classes of the corresponding fasta')
-    parser.add_argument('-dt','--dataset_name', default=None, help='Name of the dataset used to name files')
+    parser.add_argument('-dt','--dataset_name', default='dataset', help='Name of the dataset used to name files')
 
     parser.add_argument('-sh','--seq_file_host', default=None, type=pathlib.Path, help='PATH to a fasta file containing host genomes to build k-mers from')
     parser.add_argument('-ch','--cls_file_host', default=None, type=pathlib.Path, help='PATH to a csv file containing classes of the corresponding host fasta')
-    parser.add_argument('-dh','--host_name', default=None, help='Name of the host used to name files')
+    parser.add_argument('-dh','--host_name', default='host', help='Name of the host used to name files')
 
     parser.add_argument('-k','--k_length', required=True, type=int, help='Length of k-mers to extract')
     parser.add_argument('-l','--kmers_list', default=None, type=pathlib.Path, help='PATH to a file containing a list of k-mers to be extracted if the dataset is not a training database')

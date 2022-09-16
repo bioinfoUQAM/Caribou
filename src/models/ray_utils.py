@@ -96,7 +96,8 @@ class ModelsUtils(ABC):
         for row in X.iter_rows():
             self._train_ids.append(row['__index_level_0__'])
         y = y.set_index(np.array(self._train_ids))
-        df = X.add_column(self.taxa, lambda x : y[self.taxa])
+        y.insert(1, 'id', np.array(self._train_ids))
+        df = X.add_column([self.taxa,'id'], lambda x : y)
         self._preprocessor = Chain(SimpleImputer(self.kmers, strategy = 'constant', fill_value = 0), MinMaxScaler(self.kmers))
         df = self._preprocessor.fit_transform(df)
         labels = np.unique(y[self.taxa])
@@ -134,23 +135,26 @@ class ModelsUtils(ABC):
         print('_cross_validation')
 
         df_train, df_test = df.train_test_split(0.2, shuffle = True)
-# NOTE: KMERS_DS == KMERS_DATA EXTRACTED FROM SEQUENCES
-# NOTE: MUST RECRETE CLASSES DATAFRAME TO PASS TO SIMULATION
+
+        df_train = df_train.drop_columns(['id',])
+
         sim_genomes = []
         for row in df_test.iter_rows():
-            sim_genomes.append(row['__index_level_0__'])
-        sim_outdir = os.path.dirname(kmers_ds['fasta'])
+            sim_genomes.append(row['id'])
+        cls = pd.DataFrame({'id':sim_genomes,self.taxa:df_test.to_pandas()[self.taxa]})
+        sim_outdir = os.path.dirname(kmers_ds['profile'])
         cv_sim = readsSimulation(kmers_ds['fasta'], cls, sim_genomes, 'miseq', sim_outdir)
+        sim_data = cv_sim.simulation(self.k, self.kmers)
+
+        df_test = ray.data.read_parquet(sim_data['profile'])
 
         datasets = {'train' : df_train, 'test' : df_test}
         self._fit_model(datasets)
 
-        y_true = df_test.to_pandas()[self.taxa]
-        df_test = df_test.drop_columns([self.taxa])
+        y_true = sim_data['classes']
         y_pred = self.predict(df_test, cv = True)
         self._cv_score(y_true, y_pred)
 
-    # Outputs scores for cross validation in a dictionnary
     def _cv_score(self, y_true, y_pred):
         print('_cv_score')
 
