@@ -76,7 +76,6 @@ class ModelsUtils(ABC):
         self._nb_kmers = len(kmers_list)
         # Initialize empty
         self._labels_map = None
-        self._train_ids = []
         self._predict_ids = []
         # Initialize Ray variables
         self._clf = None
@@ -91,24 +90,17 @@ class ModelsUtils(ABC):
         # Files
         self._cv_csv = os.path.join(self.outdir_results,'{}_{}_K{}_cv_scores.csv'.format(self.classifier, self.taxa, self.k))
 
-    def _training_preprocess(self, X, y):
-        print('_training_preprocess')
-        for row in X.iter_rows():
-            self._train_ids.append(row['__index_level_0__'])
-        y = y.set_index(np.array(self._train_ids))
-        y.insert(1, 'id', np.array(self._train_ids))
-        df = X.add_column([self.taxa,'id'], lambda x : y)
-        self._preprocessor = Chain(SimpleImputer(self.kmers, strategy = 'constant', fill_value = 0), MinMaxScaler(self.kmers))
-        df = self._preprocessor.fit_transform(df)
-        labels = np.unique(y[self.taxa])
-        df = self._label_encode(df, labels)
-        return df
+    @abstractmethod
+    def _training_preprocess(self):
+        """
+        """
 
     def _predict_preprocess(self, df):
         print('_predict_preprocess')
         for row in df.iter_rows():
             self._predict_ids.append(row['__index_level_0__'])
-        self._preprocessor = Chain(SimpleImputer(self.kmers, strategy = 'constant', fill_value = 0), MinMaxScaler(self.kmers))
+        self._preprocessor = Chain(SimpleImputer(
+            self.kmers, strategy='constant', fill_value=0), MinMaxScaler(self.kmers))
         df = self._preprocessor.fit_transform(df)
         return df
 
@@ -172,19 +164,15 @@ class ModelsUtils(ABC):
         """
         """
 
-    def _label_encode(self, df, labels):
-        print('_label_encode')
-        self._encoder = LabelEncoder(self.taxa)
-        df = self._encoder.fit_transform(df)
-        encoded = np.append(np.unique(df.to_pandas()[self.taxa]), -1)
-        labels = np.append(labels, 'unknown')
-        self._labels_map = zip(labels, encoded)
-        return df
+    @abstractmethod
+    def _label_encode(self):
+        """
+        """
 
     def _label_decode(self, predict, threshold):
         print('_label_decode')
         predict = np.array(predict.to_pandas())
-        decoded = pd.Series(np.empty(len(predict), dtype = object))
+        decoded = pd.Series(np.empty(len(predict), dtype=object))
         for label, encoded in self._labels_map:
             decoded[predict == encoded] = label
         return decoded

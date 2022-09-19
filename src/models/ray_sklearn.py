@@ -69,11 +69,34 @@ class SklearnModel(ModelsUtils):
         # Computes
         self._build()
 
+    def _training_preprocess(self, X, y):
+        print('_training_preprocess')
+        df = X.add_column([self.taxa, 'id'], lambda x: y)
+        self._preprocessor = Chain(
+            SimpleImputer(
+            self.kmers,
+            strategy='constant',
+            fill_value=0),
+            MinMaxScaler(self.kmers)
+        )
+        df = self._preprocessor.fit_transform(df)
+        labels = np.unique(y[self.taxa])
+        df = self._label_encode(df, labels)
+        return df
+
+    def _label_encode(self, df, labels):
+        print('_label_encode')
+        self._encoder = LabelEncoder(self.taxa)
+        df = self._encoder.fit_transform(df)
+        encoded = np.append(np.unique(df.to_pandas()[self.taxa]), -1)
+        labels = np.append(labels, 'unknown')
+        self._labels_map = zip(labels, encoded)
+        return df
+
     def _build(self):
         print('_build')
         if self.classifier == 'onesvm':
-            if self.verbose:
-                print('Training bacterial extractor with One Class SVM')
+            print('Training bacterial extractor with One Class SVM')
             self._clf = OneClassSVM()
             self._train_params = {
                 'kernel' : 'rbf',
@@ -86,8 +109,7 @@ class SklearnModel(ModelsUtils):
                 }
             }
         elif self.classifier == 'linearsvm':
-            if self.verbose:
-                print('Training bacterial / host classifier with Linear SVM')
+            print('Training bacterial / host classifier with Linear SVM')
             self._clf = LinearSVC()
             self._train_params = {
                 'penalty' : 'l2'
@@ -99,8 +121,7 @@ class SklearnModel(ModelsUtils):
                 }
             }
         elif self.classifier == 'sgd':
-            if self.verbose:
-                print('Training multiclass SGD classifier')
+            print('Training multiclass SGD classifier')
             self._clf = SGDClassifier()
             self._train_params = {
                 'loss' : 'squared_error'
@@ -115,8 +136,7 @@ class SklearnModel(ModelsUtils):
                 }
             }
         elif self.classifier == 'svm':
-            if self.verbose:
-                print('Training multiclass Linear SVM classifier')
+            print('Training multiclass Linear SVM classifier')
             self._clf = SVC()
             self._train_params = {
                 'kernel' : 'rbf',
@@ -130,8 +150,7 @@ class SklearnModel(ModelsUtils):
                 }
             }
         elif self.classifier == 'mlr':
-            if self.verbose:
-                print('Training multiclass Multinomial Logistic Regression classifier')
+            print('Training multiclass Multinomial Logistic Regression classifier')
             self._clf = LogisticRegression()
             self._train_params = {
                 'solver' : 'saga',
@@ -145,8 +164,7 @@ class SklearnModel(ModelsUtils):
                 }
             }
         elif self.classifier == 'mnb':
-            if self.verbose:
-                print('Training multiclass Multinomial Naive Bayes classifier')
+            print('Training multiclass Multinomial Naive Bayes classifier')
             self._clf = MultinomialNB()
             self._train_params = {
                 'alpha' : '1.0'
@@ -168,7 +186,7 @@ class SklearnModel(ModelsUtils):
             scoring = 'f1_weighted',
             datasets = datasets
         )
-        # Definer tuner
+        # Define tuner
         self._tuner = Tuner(
             self._trainer,
             param_space = self._tuning_params,
@@ -181,7 +199,7 @@ class SklearnModel(ModelsUtils):
                 verbose = 1
             )
         )
-        # Train/tune execution
+        # Train / tune execution
         tuning_result = self._tuner.fit()
         self._model_ckpt = tuning_result.get_best_result().checkpoint
 
