@@ -111,15 +111,15 @@ class readsSimulation():
     def _fastq2fasta(self):
         with gzip.open(self._R1_fastq, "rt") as handle_R1, gzip.open(self._R2_fastq, "rt") as handle_R2, gzip.open(self._fasta_out, "at") as handle_out:
             for record_R1, record_R2 in zip(SeqIO.parse(handle_R1, 'fastq'), SeqIO.parse(handle_R2, 'fastq')):
-                record_R1.id = record_R1.id.replace('/','_')
-                record_R2.id = record_R2.id.replace('/','_')
+                record_R1.id = record_R1.id.replace('/','--')
+                record_R2.id = record_R2.id.replace('/','--')
                 SeqIO.write(record_R1, handle_out, 'fasta')
                 SeqIO.write(record_R2, handle_out, 'fasta')
 
     def _write_cls_file(self):
         with gzip.open(self._fasta_out, 'rt') as handle:
             reads_ids = [record.id for record in SeqIO.parse(handle, 'fasta')]
-        reads_crop = [id.split('_')[0] for id in reads_ids]
+        reads_crop = [id.split('--')[0] for id in reads_ids]
         print(reads_crop)
         reads_df = pd.DataFrame({'real_id' : reads_ids, 'id': reads_crop})
         print(reads_df)
