@@ -16,6 +16,9 @@ __author__ = "Nicolas de Montigny"
 
 __all__ = ['ReadsSimulation']
 
+# Reduce number of cpus used to reduce nb of tmp files
+# reduce number of reads generated
+
 class readsSimulation():
     """
     Class used to make reads simulation from whole genomes files
@@ -62,7 +65,7 @@ class readsSimulation():
             self._fasta_host = None
         self._cls_in = cls
         self._genomes = genomes
-        self._nb_reads = len(genomes) * 20
+        self._nb_reads = len(genomes) * 10
         self._sequencing = sequencing
         self._path = outdir
         self._prefix = os.path.join(outdir,'sim')
@@ -117,18 +120,24 @@ class readsSimulation():
         with gzip.open(self._fasta_out, 'rt') as handle:
             reads_ids = [record.id for record in SeqIO.parse(handle, 'fasta')]
         reads_crop = [id.split('_')[0] for id in reads_ids]
+        print(reads_crop)
         reads_df = pd.DataFrame({'real_id' : reads_ids, 'id': reads_crop})
+        print(reads_df)
         cls_out = reads_df.join(self._cls_in.set_index('id'), on = 'id')
+        print(cls_out)
         cls_out = cls_out.drop('id', axis = 1)
+        print(cls_out)
         cls_out = cls_out.rename(columns = {'real_id':'id'})
+        print(cls_out)
         cls_out.to_csv(self._cls_out, index = False)
+        print(cls_out)
 
     def _kmers_dataset(self, k, kmers_list):
         self.kmers_data = build_load_save_data(None,
             (self._fasta_out,self._cls_out),
             self._path,
-            'cv_simulation',
             None,
+            'cv_simulation',
             k = k,
             kmers_list = kmers_list
         )

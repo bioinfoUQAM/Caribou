@@ -200,6 +200,7 @@ class SklearnModel(ModelsUtils):
             )
         )
         # Train / tune execution
+        # The Trainable/training function is too large for grpc resource limit. Check that its definition is not implicitly capturing a large array or other object in scope. Tip: use tune.with_parameters() to put large objects in the Ray object store.
         tuning_result = self._tuner.fit()
         self._model_ckpt = tuning_result.get_best_result().checkpoint
 

@@ -196,8 +196,7 @@ class KmersCollection():
                 else:
                     given_profile.at[id,kmer] = 0
             # Save given kmers profile to csv file
-            if len(given_profile.columns) > 0:
-                given_profile.to_parquet(os.path.join(self._tmp_dir,"{}.parquet".format(ind)))
+            given_profile.to_parquet(os.path.join(self._tmp_dir,"{}.parquet".format(ind)))
         # Delete temp dir and file
         rmtree(tmp_folder)
         os.remove(os.path.join(self._tmp_dir,"{}.txt".format(ind)))

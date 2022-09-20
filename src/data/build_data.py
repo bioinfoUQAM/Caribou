@@ -14,8 +14,6 @@ def build_load_save_data(file, hostfile, prefix, dataset, host, kmers_list=None,
     # Declare data variables as none
     data = None
     data_host = None
-    print(host)
-    print(dataset)
     # Generate the names of files
     Xy_file = os.path.join(prefix,'Xy_genome_{}_data_K{}'.format(dataset,k))
     data_file = os.path.join(prefix,'Xy_genome_{}_data_K{}.npz'.format(dataset,k))
