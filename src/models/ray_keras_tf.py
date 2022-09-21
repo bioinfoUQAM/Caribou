@@ -75,7 +75,6 @@ class KerasTFModel(ModelsUtils):
             self.clf_file = '{}{}_multiclass_classifier_K{}_{}_{}_model'.format(outdir_model, taxa, k, classifier, dataset)
         # Initialize hidden
         self._training_epochs = training_epochs
-        self._n_workers = int(np.floor(os.cpu_count()*.8))
         # Initialize empty
         self._nb_classes = None
         self._use_gpu = False

@@ -78,6 +78,7 @@ class ModelsUtils(ABC):
         self._labels_map = None
         self._predict_ids = []
         # Initialize Ray variables
+        self._n_workers = int(np.floor(os.cpu_count()*.8))
         self._clf = None
         self._model_ckpt = None
         self._preprocessor = None

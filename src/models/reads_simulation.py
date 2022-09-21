@@ -119,20 +119,14 @@ class readsSimulation():
     def _write_cls_file(self):
         with gzip.open(self._fasta_out, 'rt') as handle:
             reads_ids = [record.id for record in SeqIO.parse(handle, 'fasta')]
-        reads_crop = list(pd.read_csv(self._cls_in['id']))
-        print(reads_crop)
+        reads_crop = list(self._cls_in['id'])
         reads_df = pd.DataFrame({'reads_id' : reads_ids, 'id': np.empty(len(reads_ids), dtype=object)})
         for id in reads_crop:
             reads_df.loc[reads_df['reads_id'].str.contains(id),'id'] = id
-        print(reads_df)
         cls_out = reads_df.join(self._cls_in.set_index('id'), on = 'id')
-        print(cls_out)
         cls_out = cls_out.drop('id', axis = 1)
-        print(cls_out)
         cls_out = cls_out.rename(columns = {'reads_id':'id'})
-        print(cls_out)
         cls_out.to_csv(self._cls_out, index = False)
-        print(cls_out)
 
     def _kmers_dataset(self, k, kmers_list):
         self.kmers_data = build_load_save_data(None,

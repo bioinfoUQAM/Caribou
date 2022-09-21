@@ -12,8 +12,8 @@ from sklearn.linear_model import LogisticRegression, SGDClassifier
 
 # Tuning
 from ray import tune
-from ray.air.config import RunConfig
 from ray.tune import Tuner, TuneConfig
+from ray.air.config import RunConfig, ScalingConfig
 
 # Predicting
 from ray.train.sklearn import SklearnPredictor
@@ -193,6 +193,9 @@ class SklearnModel(ModelsUtils):
             tune_config = TuneConfig(
                 metric = 'test/test_score',
                 mode = 'max',
+            ),
+            scaling_config = ScalingConfig(
+                trainer_ressources = self._n_workers
             ),
             run_config = RunConfig(
                 name = self.classifier,
