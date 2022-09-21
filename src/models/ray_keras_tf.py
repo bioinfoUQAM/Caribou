@@ -6,8 +6,9 @@ import numpy as np
 # Preprocessing
 from ray.data.preprocessors import MinMaxScaler, LabelEncoder, Chain, SimpleImputer, OneHotEncoder, Concatenator
 
-# Models
-from build_neural_networks import *
+# Parent class / models
+from models.ray_utils import ModelsUtils
+from models.build_neural_networks import *
 
 # Training
 import tensorflow as tf
@@ -210,7 +211,7 @@ class KerasTFModel(ModelsUtils):
         data = session.get_dataset_shard('train')
 
         def to_tf_dataset(data, batch_size):
-             def to_tensor_iterator():
+            def to_tensor_iterator():
                 for batch in data.iter_tf_batches(
                     batch_size=batch_size, dtypes=tf.float32,
                 ):
