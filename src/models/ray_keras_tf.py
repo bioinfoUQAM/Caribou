@@ -207,13 +207,14 @@ class KerasTFModel(ModelsUtils):
 
         model = self._build(model, nb_cls, size)
 
-        def to_tf_dataset(data, batch_size):
+        data = session.get_dataset_shard('train')
 
-        def to_tensor_iterator():
-           for batch in data.iter_tf_batches(
-               batch_size=batch_size, dtypes=tf.float32,
-           ):
-               yield batch['features'], batch['labels']
+        def to_tf_dataset(data, batch_size):
+             def to_tensor_iterator():
+                for batch in data.iter_tf_batches(
+                    batch_size=batch_size, dtypes=tf.float32,
+                ):
+                    yield batch['features'], batch['labels']
 
             output_signature = (
                 tf.TensorSpec(shape=(None, size), dtype=tf.float32),
