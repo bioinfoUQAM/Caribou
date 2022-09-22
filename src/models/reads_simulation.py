@@ -54,7 +54,7 @@ class readsSimulation():
                 List of the k-mers to extract, must be concordant with the database used for classification
 
     """
-
+    
     def __init__(self, fasta, cls, genomes, sequencing, outdir):
         # Parameters
         if isinstance(fasta, tuple):

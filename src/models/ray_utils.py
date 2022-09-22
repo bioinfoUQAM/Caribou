@@ -8,7 +8,7 @@ import pandas as pd
 from abc import ABC, abstractmethod
 
 # Data preprocessing
-from ray.data.preprocessors import MinMaxScaler, LabelEncoder, Chain, SimpleImputer
+from ray.data.preprocessors import MinMaxScaler, Chain, SimpleImputer
 
 # CV metrics
 from sklearn.metrics import precision_recall_fscore_support
@@ -138,13 +138,19 @@ class ModelsUtils(ABC):
         sim_outdir = os.path.dirname(kmers_ds['profile'])
         cv_sim = readsSimulation(kmers_ds['fasta'], cls, sim_genomes, 'miseq', sim_outdir)
         sim_data = cv_sim.simulation(self.k, self.kmers)
-
         df_test = ray.data.read_parquet(sim_data['profile'])
+        test_ids = []
+        for row in df_test.iter_rows():
+            test_ids.append(row['__index_level_0__'])
+        y_true = pd.DataFrame(sim_data['classes'], index = test_ids)
+        if self.classifier in ['onesvm', 'linearsvm', 'sgd', 'svm', 'mlr', 'mnb']:
+            df_test = df_test.add_column(self.taxa, lambda x : y_true)
+            print(df_test.to_pandas().head())
+        sys.exit()
 
         datasets = {'train' : df_train, 'test' : df_test}
         self._fit_model(datasets)
 
-        y_true = sim_data['classes']
         y_pred = self.predict(df_test, cv = True)
         self._cv_score(y_true, y_pred)
 

@@ -4,6 +4,9 @@ import warnings
 import numpy as np
 import pandas as pd
 
+# Preprocessing
+from ray.data.preprocessors import MinMaxScaler, LabelEncoder, Chain, SimpleImputer
+
 # Training
 from sklearn.svm import SVC, LinearSVC, OneClassSVM
 from ray.train.sklearn import SklearnTrainer
@@ -71,9 +74,6 @@ class SklearnModel(ModelsUtils):
 
     def _training_preprocess(self, X, y):
         print('_training_preprocess')
-        print(X.to_pandas())
-        print(y)
-        sys.exit()
         df = X.add_column([self.taxa, 'id'], lambda x: y)
         self._preprocessor = Chain(
             SimpleImputer(
@@ -187,8 +187,16 @@ class SklearnModel(ModelsUtils):
             label_column = self.taxa,
             params = self._train_params,
             scoring = 'f1_weighted',
-            datasets = datasets
+            datasets = datasets,
+            scaling_config=ScalingConfig(
+                trainer_resources = {
+                    'CPU' : self._n_workers
+                }
+            )
         )
+        result = self._trainer.fit()
+        print(result)
+        sys.exit()
         # Define tuner
         self._tuner = Tuner(
             self._trainer,
@@ -197,16 +205,15 @@ class SklearnModel(ModelsUtils):
                 metric = 'test/test_score',
                 mode = 'max',
             ),
-            scaling_config = ScalingConfig(
-                trainer_ressources = self._n_workers
-            ),
             run_config = RunConfig(
                 name = self.classifier,
                 verbose = 1
             )
         )
         # Train / tune execution
-        # The Trainable/training function is too large for grpc resource limit. Check that its definition is not implicitly capturing a large array or other object in scope. Tip: use tune.with_parameters() to put large objects in the Ray object store.
+        # The Trainable/training function is too large for grpc resource limit.
+        # Check that its definition is not implicitly capturing a large array or other object in scope.
+        # Tip: use tune.with_parameters() to put large objects in the Ray object store.
         tuning_result = self._tuner.fit()
         self._model_ckpt = tuning_result.get_best_result().checkpoint
 
