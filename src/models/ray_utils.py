@@ -66,9 +66,10 @@ class ModelsUtils(ABC):
     predict : abstract method to predict the classes of a dataset
 
     """
-    def __init__(self, classifier, outdir_results, batch_size, k, taxa, kmers_list, verbose):
+    def __init__(self, classifier, dataset, outdir_results, batch_size, k, taxa, kmers_list, verbose):
         # Parameters
         self.classifier = classifier
+        self.dataset = dataset
         self.outdir_results = outdir_results
         self.batch_size = batch_size
         self.k = k
@@ -127,40 +128,26 @@ class ModelsUtils(ABC):
         """
         """
 
-    def _cross_validation(self, df, kmers_ds):
-        print('_cross_validation')
+    @abstractmethod
+    def _cross_validation(self):
+        """
+        """
 
-        df_train, df_test = df.train_test_split(0.2, shuffle = True)
-        df_train, df_val = df_train.train_test_split(0.2, shuffle = True)
-
-        df_train = df_train.drop_columns(['id'])
-
+    def _sim_4_cv(self, df, kmers_ds, name):
         sim_genomes = []
-        for row in df_val.iter_rows():
+        for row in df.iter_rows():
             sim_genomes.append(row['id'])
-        cls = pd.DataFrame({'id':sim_genomes,self.taxa:df_val.to_pandas()[self.taxa]})
+        cls = pd.DataFrame({'id':sim_genomes,self.taxa:df.to_pandas()[self.taxa]})
         sim_outdir = os.path.dirname(kmers_ds['profile'])
-        cv_sim = readsSimulation(kmers_ds['fasta'], cls, sim_genomes, 'miseq', sim_outdir)
+        cv_sim = readsSimulation(kmers_ds['fasta'], cls, sim_genomes, 'miseq', sim_outdir, name)
         sim_data = cv_sim.simulation(self.k, self.kmers)
-        df_val = ray.data.read_parquet(sim_data['profile'])
-        val_ids = []
-        for row in df_val.iter_rows():
-            val_ids.append(row['__index_level_0__'])
-        labels_val = pd.DataFrame(sim_data['classes'], index = val_ids)
-        if self.classifier in ['onesvm', 'linearsvm', 'sgd', 'svm', 'mlr', 'mnb']:
-            df_val = df_val.add_column(self.taxa, lambda x : labels_val)
-
-        datasets = {'train' : df_train, 'validation' : df_val}
-        self._fit_model(datasets)
-
-        y_true = df_test.to_pandas()[self.taxa]
-        y_pred = self.predict(df_test.drop_columns(['id',self.taxa]), cv = True)
-
-        rmtree(sim_data['profile'])
-        for file in glob(os.path.join(sim_outdir, '*sim*')):
-            os.remove(file)
-
-        self._cv_score(y_true, y_pred)
+        df = ray.data.read_parquet(sim_data['profile'])
+        ids = []
+        for row in df.iter_rows():
+            ids.append(row['__index_level_0__'])
+        labels = pd.DataFrame(sim_data['classes'], index = ids)
+        df = df.add_column(self.taxa, lambda x : labels)
+        return df
 
     def _cv_score(self, y_true, y_pred):
         print('_cv_score')

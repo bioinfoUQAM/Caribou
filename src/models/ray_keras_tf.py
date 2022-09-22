@@ -63,12 +63,10 @@ class KerasTFModel(ModelsUtils):
             Defaults to 80%
 
     """
-# TODO : TEST THE METHOD IN CLS
 
     def __init__(self, classifier, dataset, outdir_model, outdir_results, batch_size, training_epochs, k, taxa, kmers_list, verbose):
-        super().__init__(classifier, outdir_results, batch_size, k, taxa, kmers_list, verbose)
+        super().__init__(classifier, dataset, outdir_results, batch_size, k, taxa, kmers_list, verbose)
         # Parameters
-        self.dataset = dataset
         self.outdir_model = outdir_model
         if classifier in ['attention','lstm','deeplstm']:
             self.clf_file = '{}bacteria_binary_classifier_K{}_{}_{}_model'.format(outdir_model, k, classifier, dataset)
@@ -80,16 +78,16 @@ class KerasTFModel(ModelsUtils):
         self._nb_classes = None
         self._use_gpu = False
         # Variables for training with Ray
-        self._strategy = distribute.MultiWorkerMirroredStrategy()
-        if len(list_physical_devices('GPU')) > 0:
+        self._strategy = tf.distribute.MultiWorkerMirroredStrategy()
+        if len(tf.config.list_physical_devices('GPU')) > 0:
             self._use_gpu = True
-            self._n_workers = len(list_physical_devices('GPU'))
+            self._n_workers = len(tf.config.list_physical_devices('GPU'))
         else:
             self._use_gpu = False
 
     def _training_preprocess(self, X, y):
         print('_training_preprocess')
-        df = X.add_column(self.taxa, lambda x: y[self.taxa])
+        df = X.add_column([self.taxa, 'id'], lambda x: y)
         self._preprocessor = Chain(
             SimpleImputer(
                 self.kmers,
@@ -102,20 +100,27 @@ class KerasTFModel(ModelsUtils):
                 include=self.kmers
             )
         )
-        df = self._preprocessor.fit_transform(df)
-        if self.classifier in ['attention', 'lstm', 'deeplstm']:
-            df = self._label_encode_binary(df)
-        elif self.classifier in ['lstm_attention', 'cnn', 'widecnn']:
-            df = self._label_encode_multiclass(df)
+        self._label_encode(df, y)
 
-        encoded = np.append(np.unique(df.to_pandas()[self.taxa]), -1)
-        labels = np.append(np.unique(y[self.taxa]), 'unknown')
+        return df
+
+    def _label_encode(self, df, y):
+        if self.classifier in ['attention', 'lstm', 'deeplstm']:
+            self._label_encode_binary(df)
+        elif self.classifier in ['lstm_attention', 'cnn', 'widecnn']:
+            self._label_encode_multiclass(df)
+
+        encoded = [-1]
+        labels = ['unknown']
+        for k, v in self._encoder.preprocessors[0].stats_['unique_values(domain)'].items():
+            encoded = encoded.append(v)
+            labels = labels.append(k)
+
         self._labels_map = zip(labels, encoded)
         if self.classifier in ['attention', 'lstm', 'deeplstm']:
             self._nb_classes = 1
         else:
             self._nb_classes = len(np.unique(y[self.taxa]))
-        return df
 
     def _label_encode_binary(self, df):
         print('_label_encode_binary')
@@ -123,24 +128,50 @@ class KerasTFModel(ModelsUtils):
             LabelEncoder(self.taxa),
             Concatenator(
                 output_column_name='labels',
-                include=[taxa]
+                include=[self.taxa]
             )
         )
-        df = self._encoder.fit_transform(df)
-        return df
+        self._encoder.fit(df)
 
     def _label_encode_multiclass(self, df):
         print('_label_encode_multiclass')
         self._encoder = Chain(
-            LabelEncoder(taxa),
-            OneHotEncoder([taxa]),
+            LabelEncoder(self.taxa),
+            OneHotEncoder([self.taxa]),
             Concatenator(
                 output_column_name='labels',
-                include=['{}_{}'.format(taxa, i) for i in range(nb_cls)]
+                include=['{}_{}'.format(self.taxa, i) for i in range(self._nb_classes)]
             )
         )
-        df = encoder.fit_transform(df)
-        return df
+        self._encoder.fit(df)
+
+    def _cross_validation(self, df, kmers_ds):
+        print('_cross_validation')
+
+        df_train, df_test = df.train_test_split(0.2, shuffle = True)
+        df_train, df_val = df_train.train_test_split(0.1, shuffle = True)
+
+        df_val = self._sim_4_cv(df_val, kmers_ds, '{}_val'.format(self.dataset))
+        df_test = self._sim_4_cv(df_test, kmers_ds, '{}_test'.format(self.dataset))
+
+        df_train = df_train.drop_columns(['id'])
+
+        df_train = self._encoder.transform(df_train)
+        df_val = self._encoder.transform(df_val)
+        df_test = self._encoder.transform(df_test)
+
+        datasets = {'train' : df_train, 'validation' : df_val}
+        self._fit_model(datasets)
+
+        y_true = df_test.to_pandas()[self.taxa]
+        y_pred = self.predict(df_test.drop_columns(['id',self.taxa]), cv = True)
+
+        rmtree(sim_data['profile'])
+        for file in glob(os.path.join(sim_outdir, '*sim*')):
+            os.remove(file)
+
+        self._cv_score(y_true, y_pred)
+
 
     def _build(self, classifier, nb_cls, nb_kmers):
         print('_build')
@@ -260,3 +291,10 @@ class KerasTFModel(ModelsUtils):
             return predictions
         else:
             return self._label_decode(predictions, threshold)
+
+    # Overcharge to serialize class
+    def __reduce__(self):
+        deserializer = self.__class__
+        serialized_data = (self.classifier, self.dataset, self.outdir_model, self.outdir_results, self.batch_size, self._training_epochs, self.k, self.taxa, self.kmers, self.verbose)
+
+        return deserializer, serialized_data

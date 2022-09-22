@@ -47,7 +47,7 @@ def bacteria_extraction(metagenome_k_mers, database_k_mers, k, outdirs, dataset,
             for row in X_train.iter_rows():
                 ids.append(row['__index_level_0__'])
             y_train = pd.DataFrame(
-                {taxa: pd.DataFrame(database_k_mers['classes'], columns=database_k_mers['taxas']).loc[:, taxa].astype('string').str.lower(),
+                {'domain': pd.DataFrame(database_k_mers['classes'], columns=database_k_mers['taxas']).loc[:, 'domain'].astype('string').str.lower(),
                 'id': ids}
             )
             y_train.index = ids
@@ -65,7 +65,7 @@ def bacteria_extraction(metagenome_k_mers, database_k_mers, k, outdirs, dataset,
             for row in X_train.iter_rows():
                 ids.append(row['__index_level_0__'])
             y_train = pd.DataFrame(
-                {taxa: pd.DataFrame(database_k_mers['classes'], columns=database_k_mers['taxas']).loc[:, taxa].astype('string').str.lower(),
+                {'domain': pd.DataFrame(database_k_mers['classes'], columns=database_k_mers['taxas']).loc[:, 'domain'].astype('string').str.lower(),
                 'id': ids}
             )
             y_train.index = ids

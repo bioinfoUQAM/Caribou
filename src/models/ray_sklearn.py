@@ -63,7 +63,7 @@ class SklearnModel(ModelsUtils):
 
     """
     def __init__(self, classifier, dataset, outdir_model, outdir_results, batch_size, k, taxa, kmers_list, verbose):
-        super().__init__(classifier, outdir_results, batch_size, k, taxa, kmers_list, verbose)
+        super().__init__(classifier, dataset, outdir_results, batch_size, k, taxa, kmers_list, verbose)
         # Parameters
         if classifier in ['onesvm','linearsvm']:
             self.clf_file = '{}bacteria_binary_classifier_K{}_{}_{}_model.jb'.format(outdir_model, k, classifier, dataset)
@@ -95,6 +95,29 @@ class SklearnModel(ModelsUtils):
         labels = np.append(labels, 'unknown')
         self._labels_map = zip(labels, encoded)
         return df
+
+    def _cross_validation(self, df, kmers_ds):
+        print('_cross_validation')
+
+        df_train, df_test = df.train_test_split(0.2, shuffle = True)
+        df_train, df_val = df_train.train_test_split(0.2, shuffle = True)
+
+        df_train = df_train.drop_columns(['id'])
+
+        df_val = self._sim_4_cv(df_val, kmers_ds, '{}_val'.format(self.dataset))
+        df_test = self._sim_4_cv(df_test, kmers_ds, '{}_test'.format(self.dataset))
+
+        datasets = {'train' : df_train, 'validation' : df_val}
+        self._fit_model(datasets)
+
+        y_true = df_test.to_pandas()[self.taxa]
+        y_pred = self.predict(df_test.drop_columns(['id',self.taxa]), cv = True)
+
+        rmtree(sim_data['profile'])
+        for file in glob(os.path.join(sim_outdir, '*sim*')):
+            os.remove(file)
+
+        self._cv_score(y_true, y_pred)
 
     def _build(self):
         print('_build')

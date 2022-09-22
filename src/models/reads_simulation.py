@@ -54,8 +54,8 @@ class readsSimulation():
                 List of the k-mers to extract, must be concordant with the database used for classification
 
     """
-    
-    def __init__(self, fasta, cls, genomes, sequencing, outdir):
+
+    def __init__(self, fasta, cls, genomes, sequencing, outdir, name):
         # Parameters
         if isinstance(fasta, tuple):
             self._fasta_in = fasta[0]
@@ -68,13 +68,14 @@ class readsSimulation():
         self._nb_reads = len(genomes) * 10
         self._sequencing = sequencing
         self._path = outdir
-        self._prefix = os.path.join(outdir,'sim')
+        self._name = name
+        self._prefix = os.path.join(outdir,'sim_{}'.format(self._name))
         # Files paths
-        self._fasta_tmp = os.path.join(outdir, 'sim_tmp.fasta')
-        self._R1_fastq = os.path.join(outdir, 'sim_R1.fastq.gz')
-        self._R2_fastq = os.path.join(outdir, 'sim_R2.fastq.gz')
-        self._fasta_out = os.path.join(outdir, 'sim_data.fna.gz')
-        self._cls_out = os.path.join(outdir, 'sim_class.csv')
+        self._fasta_tmp = os.path.join(outdir, 'sim_{}_tmp.fasta'.format(self._name))
+        self._R1_fastq = os.path.join(outdir, 'sim_{}_R1.fastq.gz'.format(self._name))
+        self._R2_fastq = os.path.join(outdir, 'sim_{}_R2.fastq.gz'.format(self._name))
+        self._fasta_out = os.path.join(outdir, 'sim_{}_data.fna.gz'.format(self._name))
+        self._cls_out = os.path.join(outdir, 'sim_{}_class.csv'.format(self._name))
         # Dataset variables
         self.kmers_data = {}
 
@@ -133,7 +134,7 @@ class readsSimulation():
             (self._fasta_out,self._cls_out),
             self._path,
             None,
-            'cv_simulation',
+            'cv_simulation_{}'.format(self._name),
             k = k,
             kmers_list = kmers_list
         )
