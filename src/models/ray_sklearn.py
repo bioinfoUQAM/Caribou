@@ -194,15 +194,12 @@ class SklearnModel(ModelsUtils):
                 }
             )
         )
-        result = self._trainer.fit()
-        print(result)
-        sys.exit()
         # Define tuner
         self._tuner = Tuner(
             self._trainer,
             param_space = self._tuning_params,
             tune_config = TuneConfig(
-                metric = 'test/test_score',
+                metric = 'validation/test_score',
                 mode = 'max',
             ),
             run_config = RunConfig(

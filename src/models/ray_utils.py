@@ -4,6 +4,9 @@ import warnings
 import numpy as np
 import pandas as pd
 
+from shutil import rmtree
+from glob import glob
+
 # Class construction
 from abc import ABC, abstractmethod
 
@@ -128,30 +131,35 @@ class ModelsUtils(ABC):
         print('_cross_validation')
 
         df_train, df_test = df.train_test_split(0.2, shuffle = True)
+        df_train, df_val = df_train.train_test_split(0.2, shuffle = True)
 
-        df_train = df_train.drop_columns(['id',])
+        df_train = df_train.drop_columns(['id'])
 
         sim_genomes = []
-        for row in df_test.iter_rows():
+        for row in df_val.iter_rows():
             sim_genomes.append(row['id'])
-        cls = pd.DataFrame({'id':sim_genomes,self.taxa:df_test.to_pandas()[self.taxa]})
+        cls = pd.DataFrame({'id':sim_genomes,self.taxa:df_val.to_pandas()[self.taxa]})
         sim_outdir = os.path.dirname(kmers_ds['profile'])
         cv_sim = readsSimulation(kmers_ds['fasta'], cls, sim_genomes, 'miseq', sim_outdir)
         sim_data = cv_sim.simulation(self.k, self.kmers)
-        df_test = ray.data.read_parquet(sim_data['profile'])
-        test_ids = []
-        for row in df_test.iter_rows():
-            test_ids.append(row['__index_level_0__'])
-        y_true = pd.DataFrame(sim_data['classes'], index = test_ids)
+        df_val = ray.data.read_parquet(sim_data['profile'])
+        val_ids = []
+        for row in df_val.iter_rows():
+            val_ids.append(row['__index_level_0__'])
+        labels_val = pd.DataFrame(sim_data['classes'], index = val_ids)
         if self.classifier in ['onesvm', 'linearsvm', 'sgd', 'svm', 'mlr', 'mnb']:
-            df_test = df_test.add_column(self.taxa, lambda x : y_true)
-            print(df_test.to_pandas().head())
-        sys.exit()
+            df_val = df_val.add_column(self.taxa, lambda x : labels_val)
 
-        datasets = {'train' : df_train, 'test' : df_test}
+        datasets = {'train' : df_train, 'validation' : df_val}
         self._fit_model(datasets)
 
-        y_pred = self.predict(df_test, cv = True)
+        y_true = df_test.to_pandas()[self.taxa]
+        y_pred = self.predict(df_test.drop_columns(['id',self.taxa]), cv = True)
+
+        rmtree(sim_data['profile'])
+        for file in glob(os.path.join(sim_outdir, '*sim*')):
+            os.remove(file)
+
         self._cv_score(y_true, y_pred)
 
     def _cv_score(self, y_true, y_pred):
