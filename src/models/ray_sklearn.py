@@ -188,7 +188,8 @@ class SklearnModel(ModelsUtils):
             params = self._train_params,
             scoring = 'f1_weighted',
             datasets = datasets,
-            scaling_config=ScalingConfig(
+            set_estimator_cpus = True,
+            scaling_config = ScalingConfig(
                 trainer_resources = {
                     'CPU' : self._n_workers
                 }
