@@ -117,7 +117,9 @@ class KmersCollection():
             self.kmers_list = list(self.df.limit(1).to_pandas().columns)
         # Get labels that match K-mers extracted sequences
         if len(seq_data.labels) > 0:
-            ids = list(self.df.to_pandas().index)
+            ids = []
+            for row in self.df.iter_rows():
+                ids.append(row['__index_level_0__'])
             msk = np.array([True if id in ids else False for id in seq_data.ids])
             self.classes = seq_data.labels[msk]
         # Delete global tmp dir
