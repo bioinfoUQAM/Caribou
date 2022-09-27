@@ -1,4 +1,5 @@
 import os
+import ray
 # import atexit
 import warnings
 import numpy as np

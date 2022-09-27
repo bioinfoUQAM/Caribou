@@ -204,6 +204,7 @@ class SklearnModel(ModelsUtils):
 
     def _fit_model(self, datasets):
         print('_fit_model')
+        datasets = ray.put(datasets)
         # Define trainer
         self._trainer = SklearnTrainer(
             estimator = self._clf,
@@ -218,7 +219,7 @@ class SklearnModel(ModelsUtils):
                 }
             )
         )
-        ray.put(self._trainer)
+        self._trainer = ray.put(self._trainer)
         # Define tuner
         self._tuner = Tuner(
             self._trainer,
