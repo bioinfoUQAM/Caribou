@@ -10,5 +10,6 @@ scipy
 tensorflow
 keras
 pyarrow
-ray>=2.0.0
+ray[default]>=2.0.0
+ray[tune]
 insilicoseq

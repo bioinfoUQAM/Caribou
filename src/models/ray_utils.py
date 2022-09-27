@@ -116,6 +116,7 @@ class ModelsUtils(ABC):
 
     def train(self, X, y, kmers_ds, cv = True):
         print('train')
+        cv = False
         df = self._training_preprocess(X, y)
         if cv:
             self._cross_validation(df, kmers_ds)
@@ -145,9 +146,6 @@ class ModelsUtils(ABC):
         ids = []
         for row in df.iter_rows():
             ids.append(row['__index_level_0__'])
-        print(len(ids))
-        print(len(sim_data['classes']))
-        sys.exit()
         labels = pd.DataFrame(sim_data['classes'], index = ids)
         df = df.add_column(self.taxa, lambda x : labels)
         return df

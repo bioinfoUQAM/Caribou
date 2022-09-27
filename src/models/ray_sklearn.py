@@ -220,7 +220,7 @@ class SklearnModel(ModelsUtils):
         )
         # Define tuner
         self._tuner = Tuner(
-            self._trainer,
+            tune.with_parameters(self._trainer, datasets = datasets),
             param_space = self._tuning_params,
             tune_config = TuneConfig(
                 metric = 'validation/test_score',

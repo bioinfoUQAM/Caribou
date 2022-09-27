@@ -1,5 +1,5 @@
 import os
-import atexit
+# import atexit
 import warnings
 import numpy as np
 
@@ -100,28 +100,26 @@ class KerasTFModel(ModelsUtils):
                 include=self.kmers
             )
         )
+        self._preprocessor.fit(df)
         self._label_encode(df, y)
-
         return df
 
     def _label_encode(self, df, y):
         if self.classifier in ['attention', 'lstm', 'deeplstm']:
+            self._nb_classes = 1
             self._label_encode_binary(df)
         elif self.classifier in ['lstm_attention', 'cnn', 'widecnn']:
+            self._nb_classes = len(np.unique(y[self.taxa]))
             self._label_encode_multiclass(df)
 
         encoded = []
         encoded.append(-1)
         labels = ['unknown']
-        for k, v in self._encoder.preprocessors[0].stats_['unique_values(domain)'].items():
+        for k, v in self._encoder.preprocessors[0].stats_['unique_values({})'.format(self.taxa)].items():
             encoded.append(v)
             labels.append(k)
 
         self._labels_map = zip(labels, encoded)
-        if self.classifier in ['attention', 'lstm', 'deeplstm']:
-            self._nb_classes = 1
-        else:
-            self._nb_classes = len(np.unique(y[self.taxa]))
 
     def _label_encode_binary(self, df):
         print('_label_encode_binary')
@@ -155,12 +153,6 @@ class KerasTFModel(ModelsUtils):
         df_val = self._sim_4_cv(df_val, kmers_ds, '{}_val'.format(self.dataset))
         df_test = self._sim_4_cv(df_test, kmers_ds, '{}_test'.format(self.dataset))
 
-        df_train = df_train.drop_columns(['id'])
-
-        df_train = self._encoder.transform(df_train)
-        df_val = self._encoder.transform(df_val)
-        df_test = self._encoder.transform(df_test)
-
         datasets = {'train' : df_train, 'validation' : df_val}
         self._fit_model(datasets)
 
@@ -177,8 +169,8 @@ class KerasTFModel(ModelsUtils):
     def _build(self, classifier, nb_cls, nb_kmers):
         print('_build')
         with self._strategy.scope():
-            atexit.register(strategy._extended._cross_device_ops._pool.close) # type: ignore
-            atexit.register(strategy._extended._host_cross_device_ops._pool.close) #type: ignore
+            # atexit.register(self._strategy._extended._cross_device_ops._pool.close) # type: ignore
+            # atexit.register(self._strategy._extended._host_cross_device_ops._pool.close) #type: ignore
             if classifier == 'attention':
                 print('Training bacterial / host classifier based on Attention Weighted Neural Network')
                 clf = build_attention(nb_kmers)
@@ -201,6 +193,13 @@ class KerasTFModel(ModelsUtils):
 
     def _fit_model(self, datasets):
         print('_fit_model')
+        for name, ds in datasets.items():
+            ds = self._preprocessor.transform(ds)
+            ds = self._encoder.transform(ds)
+            ds = ds.drop_columns(['id'])
+            print(ds.to_pandas())
+            datasets[name] = ds
+        print(datasets)
         # Training parameters
         self._train_params = {
             'batch_size': self.batch_size,
@@ -211,20 +210,23 @@ class KerasTFModel(ModelsUtils):
         }
         # Define trainer / tuner
         self._trainer = TensorflowTrainer(
-            train_loop_per_worker=self._train_func,
-            train_loop_config=self._train_params,
-            scaling_config=ScalingConfig(num_workers=self._n_workers, use_gpu=self._use_gpu),
-            run_config=RunConfig(
-                name=self.classifier,
-                local_dir=self.outdir_model,
-                sync_config=SyncConfig(syncer=None),
-                checkpoint_config=CheckpointConfig(
-                    num_to_keep=1,
-                    checkpoint_score_attribute='accuracy',
-                    checkpoint_score_order='max'
+            train_loop_per_worker = self._train_func,
+            train_loop_config = self._train_params,
+            scaling_config = ScalingConfig(
+                num_workers = self._n_workers,
+                use_gpu = self._use_gpu
+            ),
+            run_config = RunConfig(
+                name = self.classifier,
+                local_dir = self.outdir_model,
+                sync_config = SyncConfig(syncer=None),
+                checkpoint_config = CheckpointConfig(
+                    num_to_keep = 1,
+                    checkpoint_score_attribute = 'accuracy',
+                    checkpoint_score_order = 'max'
                 )
             ),
-            datasets=datasets
+            datasets = datasets
         )
         # Train / tune execution
         training_result = self._trainer.fit()

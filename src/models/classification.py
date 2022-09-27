@@ -32,7 +32,7 @@ def bacteria_classification(classified_data, database_k_mers, k, outdirs, datase
             if classifier in ['sgd','svm','mlr','mnb']:
                 model = SklearnModel(classifier, dataset, outdirs['models_dir'], outdirs['results_dir'], batch_size, k, taxa, database_k_mers['kmers'], verbose)
             elif classifier in ['lstm_attention','cnn','widecnn']:
-                model = KerasTFModel(classifier, dataset, outdirs['models_dir'], outdirs['results_dir'], batch_size, training_epochs, k, taxa, verbose)
+                model = KerasTFModel(classifier, dataset, outdirs['models_dir'], outdirs['results_dir'], batch_size, training_epochs, k, taxa, database_k_mers['kmers'], verbose)
             else:
                 print('Bacteria classifier type unknown !!!\n\tModels implemented at this moment are :\n\tLinear models :  Ridge regressor (sgd), Linear SVM (svm), Multiple Logistic Regression (mlr)\n\tProbability classifier : Multinomial Bayes (mnb)\n\tNeural networks : Deep hybrid between LSTM and Attention (lstm_attention), CNN (cnn) and Wide CNN (widecnn)')
                 sys.exit()
@@ -62,7 +62,7 @@ def bacteria_classification(classified_data, database_k_mers, k, outdirs, datase
                         'id' : ids}
                     )
                     y_train.index = ids
-                    
+
                     model.train(X_train, y_train, database_k_mers, cv)
 
                 # Classify sequences into taxa and build k-mers profiles for classified and unclassified data
