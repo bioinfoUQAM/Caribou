@@ -13,3 +13,4 @@ pyarrow
 ray[default]>=2.0.0
 ray[tune]
 insilicoseq
+tqdm

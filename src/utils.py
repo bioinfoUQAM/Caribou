@@ -23,10 +23,14 @@ def merge_database_host(database_data, host_data):
     merged_file = "{}_host_merged".format(os.path.splitext(database_data["profile"])[0])
 
     merged_data['profile'] = merged_file # Kmers profile
-    merged_data['classes'] = np.array(pd.DataFrame(database_data["classes"], columns = database_data["taxas"]).append(pd.DataFrame(host_data["classes"], columns = host_data["taxas"]), ignore_index = True)) # Class labels
+    df_classes = pd.DataFrame(database_data["classes"], columns = database_data["taxas"])
+    if len(np.unique(df_classes['domain'])) != 1:
+        df_classes[df_classes['domain'] != 'bacteria'] = 'bacteria'
+    df_classes = df_classes.append(pd.DataFrame(host_data["classes"], columns = host_data["taxas"]), ignore_index = True)
+    merged_data['classes'] = np.array(df_classes) # Class labels
     merged_data['kmers'] = database_data["kmers"] # Features
     merged_data['taxas'] = database_data["taxas"] # Known taxas for classification
-    merged_data['fasta'] = (database_data['fasta'],host_data['fasta'])
+    merged_data['fasta'] = (database_data['fasta'],host_data['fasta']) # Fasta fiule needed for reads simulation
 
 
     df_db = ray.data.read_parquet(database_data["profile"])

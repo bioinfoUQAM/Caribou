@@ -194,11 +194,12 @@ class KerasTFModel(ModelsUtils):
     def _fit_model(self, datasets):
         print('_fit_model')
         for name, ds in datasets.items():
+            print(ds.to_pandas())
             ds = self._preprocessor.transform(ds)
             ds = self._encoder.transform(ds)
             ds = ds.drop_columns(['id'])
             print(ds.to_pandas())
-            datasets[name] = ds
+        datasets[name] = ds
         print(datasets)
         # Training parameters
         self._train_params = {
