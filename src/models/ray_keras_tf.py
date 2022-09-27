@@ -79,11 +79,11 @@ class KerasTFModel(ModelsUtils):
         self._use_gpu = False
         # Variables for training with Ray
         self._strategy = tf.distribute.MultiWorkerMirroredStrategy()
-        if len(tf.config.list_physical_devices('GPU')) > 0:
-            self._use_gpu = True
-            self._n_workers = len(tf.config.list_physical_devices('GPU'))
-        else:
-            self._use_gpu = False
+        # if len(tf.config.list_physical_devices('GPU')) > 0:
+        #     self._use_gpu = True
+        #     self._n_workers = len(tf.config.list_physical_devices('GPU'))
+        # else:
+        #     self._use_gpu = False
 
     def _training_preprocess(self, X, y):
         print('_training_preprocess')
@@ -110,11 +110,12 @@ class KerasTFModel(ModelsUtils):
         elif self.classifier in ['lstm_attention', 'cnn', 'widecnn']:
             self._label_encode_multiclass(df)
 
-        encoded = [-1]
+        encoded = []
+        encoded.append(-1)
         labels = ['unknown']
         for k, v in self._encoder.preprocessors[0].stats_['unique_values(domain)'].items():
-            encoded = encoded.append(v)
-            labels = labels.append(k)
+            encoded.append(v)
+            labels.append(k)
 
         self._labels_map = zip(labels, encoded)
         if self.classifier in ['attention', 'lstm', 'deeplstm']:
