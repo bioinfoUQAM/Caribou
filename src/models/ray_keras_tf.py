@@ -153,11 +153,11 @@ class KerasTFModel(ModelsUtils):
         df_val = self._sim_4_cv(df_val, kmers_ds, '{}_val'.format(self.dataset))
         df_test = self._sim_4_cv(df_test, kmers_ds, '{}_test'.format(self.dataset))
 
-        datasets = {'train' : df_train, 'validation' : df_val}
+        datasets = {'train' : df_train.drop_columns(['id']), 'validation' : df_val}
         self._fit_model(datasets)
 
         y_true = df_test.to_pandas()[self.taxa]
-        y_pred = self.predict(df_test.drop_columns(['id',self.taxa]), cv = True)
+        y_pred = self.predict(df_test.drop_columns([self.taxa]), cv = True)
 
         rmtree(sim_data['profile'])
         for file in glob(os.path.join(sim_outdir, '*sim*')):
@@ -194,13 +194,9 @@ class KerasTFModel(ModelsUtils):
     def _fit_model(self, datasets):
         print('_fit_model')
         for name, ds in datasets.items():
-            print(ds.to_pandas())
             ds = self._preprocessor.transform(ds)
             ds = self._encoder.transform(ds)
-            ds = ds.drop_columns(['id'])
-            print(ds.to_pandas())
-        datasets[name] = ds
-        print(datasets)
+            datasets[name] = ds
         # Training parameters
         self._train_params = {
             'batch_size': self.batch_size,
@@ -229,6 +225,7 @@ class KerasTFModel(ModelsUtils):
             ),
             datasets = datasets
         )
+        ray.put(self._trainer)
         # Train / tune execution
         training_result = self._trainer.fit()
         self._model_ckpt = training_result.best_checkpoint[0][0]

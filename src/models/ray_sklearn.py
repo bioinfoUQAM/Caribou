@@ -218,6 +218,7 @@ class SklearnModel(ModelsUtils):
                 }
             )
         )
+        ray.put(self._trainer)
         # Define tuner
         self._tuner = Tuner(
             self._trainer,
