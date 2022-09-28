@@ -78,6 +78,7 @@ class SklearnPartialTrainer(SklearnTrainer):
     def _get_datasets(self):
         out_datasets = {}
         for key, ray_dataset in self.datasets.items():
+            ray_dataset = ray.get(ray_dataset)
             out_datasets[key] = (
                 ray_dataset.drop_columns([self.label_column]),
                 ray.data.from_pandas(pd.DataFrame(ray_dataset.to_pandas()[self.label_column], columns = [self.label_column])),

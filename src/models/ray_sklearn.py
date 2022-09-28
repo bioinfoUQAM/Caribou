@@ -198,13 +198,9 @@ class SklearnModel(ModelsUtils):
             )
         )
 
-        # result = self._trainer.fit()
-
-        # self._trainer = ray.put(self._trainer)
-
         # Define tuner
         self._tuner = Tuner(
-            tune.with_parameters(self._trainer, data = datasets),
+            self._trainer,
             param_space = self._tuning_params,
             tune_config = TuneConfig(
                 metric = 'validation/test_score',
