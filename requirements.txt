@@ -2,7 +2,6 @@ setuptools
 wheel
 biopython==1.78
 h5py
-matplotlib
 numpy
 pandas
 scikit-learn>=1.1.2

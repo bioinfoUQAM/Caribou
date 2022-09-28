@@ -121,7 +121,8 @@ class ModelsUtils(ABC):
         if cv:
             self._cross_validation(df, kmers_ds)
         else:
-            datasets = {'train' : df}
+            df_train, df_val = df.drop_columns(['id']).train_test_split(0.2, shuffle = True)
+            datasets = {'train' : df_train, 'validation': df_val}
             self._fit_model(datasets)
 
     @abstractmethod

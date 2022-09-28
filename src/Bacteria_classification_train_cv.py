@@ -51,7 +51,6 @@ def bacteria_classification_train_cv(opt):
         print("Invalid number of training iterations for neural networks")
         sys.exit()
 
-
     # Validate path for saving
     outdir_path, outdir_folder = os.path.split(opt['outdir'])
     if not os.path.isdir(opt['outdir']) and os.path.exists(outdir_path):
@@ -94,7 +93,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='This script trains and cross-validates a model for the bacteria classification step.')
     parser.add_argument('-db','--data_bacteria', required=True, type=Path, help='PATH to a npz file containing the data corresponding to the k-mers profile for the bacteria database')
     parser.add_argument('-dt','--database_name', required=True, help='Name of the bacteria database used to name files')
-    parser.add_argument('-model','--model_type', default='lstm_attention', choices=['sgd','svm','mlr','mnb','lstm_attention','cnn','widecnn'], help='The type of model to train')
+    parser.add_argument('-model','--model_type', default='lstm_attention', choices=['sgd','mnb','lstm_attention','cnn','widecnn'], help='The type of model to train')
     parser.add_argument('-bs','--batch_size', default=32, type=int, help='Size of the batch size to use, defaults to 32')
     parser.add_argument('-e','--training_epochs', default=100, type=int, help='The number of training iterations for the neural networks models if one ise chosen, defaults to 100')
     parser.add_argument('-v','--verbose', action='store_true', help='Should the program be verbose')

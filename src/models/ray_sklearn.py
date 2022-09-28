@@ -8,10 +8,8 @@ import pandas as pd
 from ray.data.preprocessors import MinMaxScaler, LabelEncoder, Chain, SimpleImputer
 
 # Training
-from sklearn.svm import SVC, LinearSVC, OneClassSVM
-from ray.train.sklearn import SklearnTrainer
 from sklearn.naive_bayes import MultinomialNB
-from sklearn.linear_model import LogisticRegression, SGDClassifier
+from sklearn.linear_model import SGDOneClassSVM, SGDClassifier
 
 # Tuning
 from ray import tune
@@ -24,6 +22,7 @@ from ray.train.batch_predictor import BatchPredictor
 
 # Parent class
 from models.ray_utils import ModelsUtils
+from models.ray_sklearn_partial_trainer import SklearnPartialTrainer
 
 
 __author__ = 'Nicolas de Montigny'
@@ -65,6 +64,7 @@ class SklearnModel(ModelsUtils):
     def __init__(self, classifier, dataset, outdir_model, outdir_results, batch_size, k, taxa, kmers_list, verbose):
         super().__init__(classifier, dataset, outdir_results, batch_size, k, taxa, kmers_list, verbose)
         # Parameters
+        self._encoded = []
         if classifier in ['onesvm','linearsvm']:
             self.clf_file = '{}bacteria_binary_classifier_K{}_{}_{}_model.jb'.format(outdir_model, k, classifier, dataset)
         else:
@@ -91,7 +91,8 @@ class SklearnModel(ModelsUtils):
         print('_label_encode')
         self._encoder = LabelEncoder(self.taxa)
         df = self._encoder.fit_transform(df)
-        encoded = np.append(np.unique(df.to_pandas()[self.taxa]), -1)
+        self._encoded = np.unique(df.to_pandas()[self.taxa])
+        encoded = np.append(self._encoded, -1)
         labels = np.append(labels, 'unknown')
         self._labels_map = zip(labels, encoded)
         return df
@@ -123,27 +124,31 @@ class SklearnModel(ModelsUtils):
         print('_build')
         if self.classifier == 'onesvm':
             print('Training bacterial extractor with One Class SVM')
-            self._clf = OneClassSVM()
+            self._clf = SGDOneClassSVM()
             self._train_params = {
-                'kernel' : 'rbf',
-                'nu' : 0.05
+                'nu' : 0.05,
+                'tol' : 1e-4
             }
             self._tuning_params = {
                 'params' : {
-                    'kernel' : tune.choice(['rbf','poly','sigmoid']),
-                    'gamma' : tune.grid_search(np.linspace(0.1,1,10))
+                    'nu' : tune.grid_search(np.logspace(-4,4)),
+                    'learning_rate' : tune.choice(['constant','optimal','invscaling','adaptive']),
+                    'eta0' : tune.grid_search(np.logspace(-4,4))
                 }
             }
         elif self.classifier == 'linearsvm':
-            print('Training bacterial / host classifier with Linear SVM')
-            self._clf = LinearSVC()
+            print('Training bacterial / host classifier with SGD')
+            self._clf = SGDClassifier()
             self._train_params = {
-                'penalty' : 'l2'
+                'loss' : 'squared_error'
             }
             self._tuning_params = {
                 'params' : {
-                    'loss' : tune.choice(['hinge','squared_hinge']),
-                    'C' : tune.grid_search(np.logspace(-3,3))
+                    'loss' : tune.choice(['hinge', 'log_loss', 'modified_huber', 'squared_hinge', 'perceptron', 'squared_error', 'huber', 'epsilon_insensitive', 'squared_epsilon_insensitive']),
+                    'penalty' : tune.choice(['l2', 'l1', 'elasticnet']),
+                    'alpha' : tune.grid_search(np.logspace(-4,4)),
+                    'learning_rate' : tune.choice(['constant','optimal','invscaling','adaptive']),
+                    'eta0' : tune.grid_search(np.logspace(-4,4))
                 }
             }
         elif self.classifier == 'sgd':
@@ -159,34 +164,6 @@ class SklearnModel(ModelsUtils):
                     'alpha' : tune.grid_search(np.logspace(-4,4)),
                     'learning_rate' : tune.choice(['constant','optimal','invscaling','adaptive']),
                     'eta0' : tune.grid_search(np.logspace(-4,4))
-                }
-            }
-        elif self.classifier == 'svm':
-            print('Training multiclass Linear SVM classifier')
-            self._clf = SVC()
-            self._train_params = {
-                'kernel' : 'rbf',
-                'probability' : True
-            }
-            self._tuning_params = {
-                'params' : {
-                    'kernel' : tune.choice(['rbf','poly','sigmoid']),
-                    'C' : tune.grid_search(np.logspace(-3,3)),
-                    'gamma' : tune.grid_search(np.linspace(0.1,1,10))
-                }
-            }
-        elif self.classifier == 'mlr':
-            print('Training multiclass Multinomial Logistic Regression classifier')
-            self._clf = LogisticRegression()
-            self._train_params = {
-                'solver' : 'saga',
-                'multi_class' : 'multinomial'
-            }
-            self._tuning_params = {
-                'params' : {
-                    'penalty' : tune.choice(['l1', 'l2', 'elasticnet', 'none']),
-                    'C' : tune.grid_search(np.logspace(-3,3)),
-                    'l1_ratio' : tune.grid_search(np.linspace(0.1,0.9,10))
                 }
             }
         elif self.classifier == 'mnb':
@@ -205,9 +182,10 @@ class SklearnModel(ModelsUtils):
     def _fit_model(self, datasets):
         print('_fit_model')
         # Define trainer
-        self._trainer = SklearnTrainer(
+        self._trainer = SklearnPartialTrainer(
             estimator = self._clf,
             label_column = self.taxa,
+            labels_list = self._encoded,
             params = self._train_params,
             scoring = 'f1_weighted',
             datasets = datasets,
@@ -219,11 +197,9 @@ class SklearnModel(ModelsUtils):
             )
         )
 
-        result = self._trainer.fit()
-        print(result)
-        sys.exit()
+        # result = self._trainer.fit()
 
-        self._trainer = ray.put(self._trainer)
+        # self._trainer = ray.put(self._trainer)
 
         # Define tuner
         self._tuner = Tuner(
@@ -241,7 +217,7 @@ class SklearnModel(ModelsUtils):
         # Train / tune execution
         tuning_result = self._tuner.fit()
         df_tuning = tuning_result.get_dataframe()
-        df_tuning.write_csv(os.path.join(self.outdir_results,'tuning_result_{}.csv'.format(self.classifier)))
+        df_tuning.to_csv(os.path.join(self.outdir_results,'tuning_result_{}.csv'.format(self.classifier)))
         self._model_ckpt = tuning_result.get_best_result().checkpoint
 
     def predict(self, df, threshold = 0.8, cv = False):
