@@ -109,7 +109,7 @@ class SklearnModel(ModelsUtils):
         df_val = self._sim_4_cv(df_val, kmers_ds, '{}_val'.format(self.dataset))
         df_test = self._sim_4_cv(df_test, kmers_ds, '{}_test'.format(self.dataset))
 
-        datasets = {'train' : df_train, 'validation' : df_val}
+        datasets = {'train' : ray.put(df_train), 'validation' : ray.put(df_val)}
         self._fit_model(datasets)
 
         y_true = df_test.to_pandas()[self.taxa]

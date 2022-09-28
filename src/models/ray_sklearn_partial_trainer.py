@@ -74,6 +74,90 @@ class SklearnPartialTrainer(SklearnTrainer):
         self._batch_size = batch_size
         self._labels = labels_list
 
+    def _validate_attributes(self):
+        # Run config
+        if not isinstance(self.run_config, RunConfig):
+            raise ValueError(
+                f"`run_config` should be an instance of `ray.air.RunConfig`, "
+                f"found {type(self.run_config)} with value `{self.run_config}`."
+            )
+        # Scaling config
+        if not isinstance(self.scaling_config, ScalingConfig):
+            raise ValueError(
+                "`scaling_config` should be an instance of `ScalingConfig`, "
+                f"found {type(self.scaling_config)} with value `{self.scaling_config}`."
+            )
+        # Datasets
+        if not isinstance(self.datasets, dict):
+            raise ValueError(
+                f"`datasets` should be a dict mapping from a string to "
+                f"`ray.data.Dataset` objects, "
+                f"found {type(self.datasets)} with value `{self.datasets}`."
+            )
+        # Preprocessor
+        if self.preprocessor is not None and not isinstance(
+            self.preprocessor, ray.data.Preprocessor
+        ):
+            raise ValueError(
+                f"`preprocessor` should be an instance of `ray.data.Preprocessor`, "
+                f"found {type(self.preprocessor)} with value `{self.preprocessor}`."
+            )
+
+        if self.resume_from_checkpoint is not None and not isinstance(
+            self.resume_from_checkpoint, ray.air.Checkpoint
+        ):
+            raise ValueError(
+                f"`resume_from_checkpoint` should be an instance of "
+                f"`ray.air.Checkpoint`, found {type(self.resume_from_checkpoint)} "
+                f"with value `{self.resume_from_checkpoint}`."
+            )
+
+
+        if self.label_column is not None and not isinstance(self.label_column, str):
+            raise ValueError(
+                f"`label_column` must be a string or None, got '{self.label_column}'"
+            )
+
+        if self.params is not None and not isinstance(self.params, dict):
+            raise ValueError(f"`params` must be a dict or None, got '{self.params}'")
+
+        # Don't validate self.scoring for now as many types are supported
+        # Don't validate self.cv for now as many types are supported
+
+        if not isinstance(self.return_train_score_cv, bool):
+            raise ValueError(
+                f"`return_train_score_cv` must be a boolean, got "
+                f"'{self.return_train_score_cv}'"
+            )
+
+        if TRAIN_DATASET_KEY not in self.datasets:
+            raise KeyError(
+                f"'{TRAIN_DATASET_KEY}' key must be preset in `datasets`. "
+                f"Got {list(self.datasets.keys())}"
+            )
+        if "cv" in self.datasets:
+            raise KeyError(
+                "'cv' is a reserved key. Please choose a different key "
+                "for the dataset."
+            )
+        if (
+            not isinstance(self.parallelize_cv, bool)
+            and self.parallelize_cv is not None
+        ):
+            raise ValueError(
+                "`parallelize_cv` must be a bool or None, got "
+                f"'{self.parallelize_cv}'"
+            )
+        scaling_config = self._validate_scaling_config(self.scaling_config)
+        if (
+            self.cv
+            and self.parallelize_cv
+            and scaling_config.trainer_resources.get("GPU", 0)
+        ):
+            raise ValueError(
+                "`parallelize_cv` cannot be True if there are GPUs assigned to the "
+                "trainer."
+            )
 
     def _get_datasets(self):
         out_datasets = {}

@@ -79,8 +79,6 @@ class KerasTFModel(ModelsUtils):
         # Initialize empty
         self._nb_classes = None
         self._use_gpu = False
-        # Variables for training with Ray
-        self._strategy = tf.distribute.MultiWorkerMirroredStrategy()
         # if len(tf.config.list_physical_devices('GPU')) > 0:
         #     self._use_gpu = True
         #     self._n_workers = len(tf.config.list_physical_devices('GPU'))
@@ -167,35 +165,10 @@ class KerasTFModel(ModelsUtils):
 
         self._cv_score(y_true, y_pred)
 
-
-    def _build(self, classifier, nb_cls, nb_kmers):
-        print('_build')
-        with self._strategy.scope():
-            # atexit.register(self._strategy._extended._cross_device_ops._pool.close) # type: ignore
-            # atexit.register(self._strategy._extended._host_cross_device_ops._pool.close) #type: ignore
-            if classifier == 'attention':
-                print('Training bacterial / host classifier based on Attention Weighted Neural Network')
-                clf = build_attention(nb_kmers)
-            elif classifier == 'lstm':
-                print('Training bacterial / host classifier based on Shallow LSTM Neural Network')
-                clf = build_LSTM(nb_kmers)
-            elif classifier == 'deeplstm':
-                print('Training bacterial / host classifier based on Deep LSTM Neural Network')
-                clf = build_deepLSTM(nb_kmers)
-            elif classifier == 'lstm_attention':
-                print('Training multiclass classifier based on Deep Neural Network hybrid between LSTM and Attention')
-                clf = build_LSTM_attention(nb_kmers, nb_cls)
-            elif classifier == 'cnn':
-                print('Training multiclass classifier based on CNN Neural Network')
-                clf = build_CNN(nb_kmers, nb_cls)
-            elif classifier == 'widecnn':
-                print('Training multiclass classifier based on Wide CNN Network')
-                clf = build_wideCNN(nb_kmers, nb_cls)
-        return clf
-
     def _fit_model(self, datasets):
         print('_fit_model')
         for name, ds in datasets.items():
+            ds = ray.get(ds)
             ds = self._preprocessor.transform(ds)
             ds = self._encoder.transform(ds)
             datasets[name] = ds
@@ -264,7 +237,7 @@ class KerasTFModel(ModelsUtils):
 # https://discuss.ray.io/t/statuscode-resource-exhausted/4379/16
 ################################################################################
 
-def _train_func(self, config):
+def train_func(config):
     print('_train_func')
     batch_size = config.get('batch_size', 128)
     epochs = config.get('epochs', 10)
@@ -272,9 +245,10 @@ def _train_func(self, config):
     nb_cls = config.get('nb_cls')
     model = config.get('model')
 
-    model = self._build(model, nb_cls, size)
+    model = build_model(model, nb_cls, size)
 
-    data = session.get_dataset_shard('train')
+    train_data = session.get_dataset_shard('train')
+    val_data = session.get_dataset_shard('validation')
 
     def to_tf_dataset(data, batch_size):
         def to_tensor_iterator():
@@ -294,8 +268,14 @@ def _train_func(self, config):
 
     results = []
     for epoch in range(epochs):
-        tf_data = to_tf_dataset(data, batch_size)
-        history = model.fit(tf_data, verbose=0, callbacks=[Callback()])
+        tf_train_data = to_tf_dataset(train_data, batch_size)
+        tf_val_data = to_tf_dataset(val_data, batch_size)
+        history = model.fit(
+            tf_train_data,
+            validation_data = tf_val_data,
+            callbacks=[Callback()],
+            verbose=0
+        )
         results.append(history.history)
         session.report(
             dict(accuracy=history.history['accuracy'][0], loss=history.history['loss'][0]),
@@ -305,3 +285,28 @@ def _train_func(self, config):
         )
 
     return results
+
+def build_model(classifier, nb_cls, nb_kmers):
+    print('_build')
+    with tf.distribute.MultiWorkerMirroredStrategy().scope():
+        # atexit.register(self._strategy._extended._cross_device_ops._pool.close) # type: ignore
+        # atexit.register(self._strategy._extended._host_cross_device_ops._pool.close) #type: ignore
+        if classifier == 'attention':
+            print('Training bacterial / host classifier based on Attention Weighted Neural Network')
+            clf = build_attention(nb_kmers)
+        elif classifier == 'lstm':
+            print('Training bacterial / host classifier based on Shallow LSTM Neural Network')
+            clf = build_LSTM(nb_kmers)
+        elif classifier == 'deeplstm':
+            print('Training bacterial / host classifier based on Deep LSTM Neural Network')
+            clf = build_deepLSTM(nb_kmers)
+        elif classifier == 'lstm_attention':
+            print('Training multiclass classifier based on Deep Neural Network hybrid between LSTM and Attention')
+            clf = build_LSTM_attention(nb_kmers, nb_cls)
+        elif classifier == 'cnn':
+            print('Training multiclass classifier based on CNN Neural Network')
+            clf = build_CNN(nb_kmers, nb_cls)
+        elif classifier == 'widecnn':
+            print('Training multiclass classifier based on Wide CNN Network')
+            clf = build_wideCNN(nb_kmers, nb_cls)
+    return clf

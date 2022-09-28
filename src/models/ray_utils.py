@@ -109,11 +109,6 @@ class ModelsUtils(ABC):
         df = self._preprocessor.fit_transform(df)
         return df
 
-    @abstractmethod
-    def _build(self):
-        """
-        """
-
     def train(self, X, y, kmers_ds, cv = True):
         print('train')
         cv = False
