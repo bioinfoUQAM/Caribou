@@ -203,8 +203,8 @@ class SklearnModel(ModelsUtils):
             self._trainer,
             param_space = self._tuning_params,
             tune_config = TuneConfig(
-                metric = 'validation/test_score',
-                mode = 'max',
+                # metric = 'validation/test_score',
+                # mode = 'max',
                 scheduler = ASHAScheduler(metric = 'validation/test_score', mode = 'max')
             ),
             run_config = RunConfig(
