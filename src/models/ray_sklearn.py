@@ -218,7 +218,37 @@ class SklearnModel(ModelsUtils):
                 }
             )
         )
+
+        result = self._trainer.fit()
+        print(result)
+        sys.exit()
+
         self._trainer = ray.put(self._trainer)
+
+"""        _fit_model
+        Traceback (most recent call last):
+          File "/usr/local/bin/Bacteria_extraction_train_cv.py", line 141, in <module>
+            bacteria_extraction_train_cv(opt)
+          File "/usr/local/bin/Bacteria_extraction_train_cv.py", line 97, in bacteria_extraction_train_cv
+            bacteria_extraction(None,
+          File "/usr/local/lib/python3.8/dist-packages/models/extraction.py", line 77, in bacteria_extraction
+            model.train(X_train, y_train, database_k_mers, cv)
+          File "/usr/local/lib/python3.8/dist-packages/models/ray_utils.py", line 125, in train
+            self._fit_model(datasets)
+          File "/usr/local/lib/python3.8/dist-packages/models/ray_sklearn.py", line 223, in _fit_model
+            self._tuner = Tuner(
+          File "/usr/local/lib/python3.8/dist-packages/ray/tune/tuner.py", line 144, in __init__
+            self._local_tuner = TunerInternal(**kwargs)
+          File "/usr/local/lib/python3.8/dist-packages/ray/tune/impl/tuner_internal.py", line 103, in __init__
+            self._experiment_checkpoint_dir = self._setup_create_experiment_checkpoint_dir(
+          File "/usr/local/lib/python3.8/dist-packages/ray/tune/impl/tuner_internal.py", line 255, in _setup_create_experiment_checkpoint_dir
+            path = Experiment.get_experiment_checkpoint_dir(
+          File "/usr/local/lib/python3.8/dist-packages/ray/tune/experiment/experiment.py", line 389, in get_experiment_checkpoint_dir
+            run_identifier = cls.get_trainable_name(run_obj)
+          File "/usr/local/lib/python3.8/dist-packages/ray/tune/experiment/experiment.py", line 330, in get_trainable_name
+            raise TuneError("Improper 'run' - not string nor trainable.")
+        ray.tune.error.TuneError: Improper 'run' - not string nor trainable."""
+
         # Define tuner
         self._tuner = Tuner(
             self._trainer,
@@ -233,10 +263,9 @@ class SklearnModel(ModelsUtils):
             )
         )
         # Train / tune execution
-        # The Trainable/training function is too large for grpc resource limit.
-        # Check that its definition is not implicitly capturing a large array or other object in scope.
-        # Tip: use tune.with_parameters() to put large objects in the Ray object store.
         tuning_result = self._tuner.fit()
+        df_tuning = tuning_result.get_dataframe()
+        df_tuning.write_csv(os.path.join(self.outdir_results,'tuning_result_{}.csv'.format(self.classifier)))
         self._model_ckpt = tuning_result.get_best_result().checkpoint
 
     def predict(self, df, threshold = 0.8, cv = False):
