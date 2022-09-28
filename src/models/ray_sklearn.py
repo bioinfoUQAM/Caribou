@@ -205,7 +205,7 @@ class SklearnModel(ModelsUtils):
             tune_config = TuneConfig(
                 metric = 'validation/test_score',
                 mode = 'max',
-                scheduler = ASHAScheduler(metrics = 'validation/test_score', mode = 'max')
+                scheduler = ASHAScheduler(metric = 'validation/test_score', mode = 'max')
             ),
             run_config = RunConfig(
                 name = self.classifier,

@@ -238,7 +238,7 @@ class KerasTFModel(ModelsUtils):
 ################################################################################
 
 def train_func(config):
-    print('_train_func')
+    print('train_func')
     batch_size = config.get('batch_size', 128)
     epochs = config.get('epochs', 10)
     size = config.get('size')
@@ -287,7 +287,7 @@ def train_func(config):
     return results
 
 def build_model(classifier, nb_cls, nb_kmers):
-    print('_build')
+    print('build')
     with tf.distribute.MultiWorkerMirroredStrategy().scope():
         # atexit.register(self._strategy._extended._cross_device_ops._pool.close) # type: ignore
         # atexit.register(self._strategy._extended._host_cross_device_ops._pool.close) #type: ignore
