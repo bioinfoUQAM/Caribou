@@ -14,6 +14,7 @@ from sklearn.linear_model import SGDOneClassSVM, SGDClassifier
 # Tuning
 from ray import tune
 from ray.tune import Tuner, TuneConfig
+from ray.tune.schedulers import ASHAScheduler
 from ray.air.config import RunConfig, ScalingConfig
 
 # Predicting
@@ -203,11 +204,12 @@ class SklearnModel(ModelsUtils):
 
         # Define tuner
         self._tuner = Tuner(
-            self._trainer,
+            tune.with_parameters(self._trainer, data = datasets),
             param_space = self._tuning_params,
             tune_config = TuneConfig(
                 metric = 'validation/test_score',
                 mode = 'max',
+                scheduler = ASHAScheduler(metrics = 'validation/test_score', mode = 'max')
             ),
             run_config = RunConfig(
                 name = self.classifier,

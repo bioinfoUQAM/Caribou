@@ -15,6 +15,7 @@ from models.build_neural_networks import *
 import tensorflow as tf
 from ray.air import session, Checkpoint
 from ray.air.callbacks.keras import Callback
+from ray.tune.schedulers import ASHAScheduler
 from ray.air.config import ScalingConfig, CheckpointConfig
 from ray.train.tensorflow import TensorflowTrainer, prepare_dataset_shard
 
@@ -208,7 +209,7 @@ class KerasTFModel(ModelsUtils):
         }
         # Define trainer / tuner
         self._trainer = TensorflowTrainer(
-            train_loop_per_worker = self._train_func,
+            train_loop_per_worker = train_func,
             train_loop_config = self._train_params,
             scaling_config = ScalingConfig(
                 num_workers = self._n_workers,
@@ -230,48 +231,6 @@ class KerasTFModel(ModelsUtils):
         # Train / tune execution
         training_result = self._trainer.fit()
         self._model_ckpt = training_result.best_checkpoint[0][0]
-
-    def _train_func(self, config):
-        print('_train_func')
-        batch_size = config.get('batch_size', 128)
-        epochs = config.get('epochs', 10)
-        size = config.get('size')
-        nb_cls = config.get('nb_cls')
-        model = config.get('model')
-
-        model = self._build(model, nb_cls, size)
-
-        data = session.get_dataset_shard('train')
-
-        def to_tf_dataset(data, batch_size):
-            def to_tensor_iterator():
-                for batch in data.iter_tf_batches(
-                    batch_size=batch_size, dtypes=tf.float32,
-                ):
-                    yield batch['features'], batch['labels']
-
-            output_signature = (
-                tf.TensorSpec(shape=(None, size), dtype=tf.float32),
-                tf.TensorSpec(shape=(None, nb_cls), dtype=tf.int64),
-            )
-            tf_data = tf.data.Dataset.from_generator(
-                to_tensor_iterator, output_signature=output_signature
-            )
-            return prepare_dataset_shard(tf_data)
-
-        results = []
-        for epoch in range(epochs):
-            tf_data = to_tf_dataset(data, batch_size)
-            history = model.fit(tf_data, verbose=0, callbacks=[Callback()])
-            results.append(history.history)
-            session.report(
-                dict(accuracy=history.history['accuracy'][0], loss=history.history['loss'][0]),
-                checkpoint=Checkpoint.from_dict(
-                    dict(model=model, epoch=epoch, model_weights=model.get_weights())
-                )
-            )
-
-        return results
 
     def predict(self, df, threshold = 0.8, cv = False):
         print('predict')
@@ -295,8 +254,54 @@ class KerasTFModel(ModelsUtils):
             return self._label_decode(predictions, threshold)
 
     # Overcharge to serialize class
-    def __reduce__(self):
-        deserializer = self.__class__
-        serialized_data = (self.classifier, self.dataset, self.outdir_model, self.outdir_results, self.batch_size, self._training_epochs, self.k, self.taxa, self.kmers, self.verbose)
+    # def __reduce__(self):
+    #     deserializer = self.__class__
+    #     serialized_data = (self.classifier, self.dataset, self.outdir_model, self.outdir_results, self.batch_size, self._training_epochs, self.k, self.taxa, self.kmers, self.verbose)
+    #
+    #     return deserializer, serialized_data
 
-        return deserializer, serialized_data
+# Training function outside of the class as mentioned on the Ray discussion
+# https://discuss.ray.io/t/statuscode-resource-exhausted/4379/16
+################################################################################
+
+def _train_func(self, config):
+    print('_train_func')
+    batch_size = config.get('batch_size', 128)
+    epochs = config.get('epochs', 10)
+    size = config.get('size')
+    nb_cls = config.get('nb_cls')
+    model = config.get('model')
+
+    model = self._build(model, nb_cls, size)
+
+    data = session.get_dataset_shard('train')
+
+    def to_tf_dataset(data, batch_size):
+        def to_tensor_iterator():
+            for batch in data.iter_tf_batches(
+                batch_size=batch_size, dtypes=tf.float32,
+            ):
+                yield batch['features'], batch['labels']
+
+        output_signature = (
+            tf.TensorSpec(shape=(None, size), dtype=tf.float32),
+            tf.TensorSpec(shape=(None, nb_cls), dtype=tf.int64),
+        )
+        tf_data = tf.data.Dataset.from_generator(
+            to_tensor_iterator, output_signature=output_signature
+        )
+        return prepare_dataset_shard(tf_data)
+
+    results = []
+    for epoch in range(epochs):
+        tf_data = to_tf_dataset(data, batch_size)
+        history = model.fit(tf_data, verbose=0, callbacks=[Callback()])
+        results.append(history.history)
+        session.report(
+            dict(accuracy=history.history['accuracy'][0], loss=history.history['loss'][0]),
+            checkpoint=Checkpoint.from_dict(
+                dict(model=model, epoch=epoch, model_weights=model.get_weights())
+            )
+        )
+
+    return results
