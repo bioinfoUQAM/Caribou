@@ -4,6 +4,8 @@ import warnings
 import numpy as np
 import pandas as pd
 
+from glob import glob
+from shutil import rmtree
 # Preprocessing
 from ray.data.preprocessors import MinMaxScaler, LabelEncoder, Chain, SimpleImputer
 
@@ -14,7 +16,6 @@ from sklearn.linear_model import SGDOneClassSVM, SGDClassifier
 # Tuning
 from ray import tune
 from ray.tune import Tuner, TuneConfig
-from ray.tune.schedulers import ASHAScheduler
 from ray.air.config import RunConfig, ScalingConfig
 
 # Predicting
@@ -78,9 +79,9 @@ class SklearnModel(ModelsUtils):
         df = X.add_column([self.taxa, 'id'], lambda x: y)
         self._preprocessor = Chain(
             SimpleImputer(
-            self.kmers,
-            strategy='constant',
-            fill_value=0),
+                self.kmers,
+                strategy='constant',
+                fill_value=0),
             MinMaxScaler(self.kmers)
         )
         df = self._preprocessor.fit_transform(df)
@@ -113,11 +114,13 @@ class SklearnModel(ModelsUtils):
         self._fit_model(datasets)
 
         y_true = df_test.to_pandas()[self.taxa]
-        y_pred = self.predict(df_test.drop_columns(['id',self.taxa]), cv = True)
+        y_pred = self.predict(df_test.drop_columns([self.taxa]), cv = True)
 
-        rmtree(sim_data['profile'])
-        for file in glob(os.path.join(sim_outdir, '*sim*')):
-            os.remove(file)
+        for file in glob(os.path.join( os.path.dirname(kmers_ds['profile']), '*sim*')):
+            if os.path.isdir(file):
+                rmtree(file)
+            else:
+                os.remove(file)
 
         self._cv_score(y_true, y_pred)
 
@@ -190,6 +193,7 @@ class SklearnModel(ModelsUtils):
             params = self._train_params,
             scoring = 'f1_weighted',
             datasets = datasets,
+            batch_size = self.batch_size
             set_estimator_cpus = True,
             scaling_config = ScalingConfig(
                 trainer_resources = {
@@ -203,9 +207,8 @@ class SklearnModel(ModelsUtils):
             self._trainer,
             param_space = self._tuning_params,
             tune_config = TuneConfig(
-                # metric = 'validation/test_score',
-                # mode = 'max',
-                scheduler = ASHAScheduler(metric = 'validation/test_score', mode = 'max')
+                metric = 'validation/test_score',
+                mode = 'max'
             ),
             run_config = RunConfig(
                 name = self.classifier,

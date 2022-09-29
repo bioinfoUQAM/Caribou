@@ -15,7 +15,6 @@ from models.build_neural_networks import *
 import tensorflow as tf
 from ray.air import session, Checkpoint
 from ray.air.callbacks.keras import Callback
-from ray.tune.schedulers import ASHAScheduler
 from ray.air.config import ScalingConfig, CheckpointConfig
 from ray.train.tensorflow import TensorflowTrainer, prepare_dataset_shard
 

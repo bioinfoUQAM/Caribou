@@ -4,8 +4,8 @@ import warnings
 import numpy as np
 import pandas as pd
 
-from shutil import rmtree
 from glob import glob
+from shutil import rmtree
 
 # Class construction
 from abc import ABC, abstractmethod
