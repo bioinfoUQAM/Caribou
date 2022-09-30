@@ -82,15 +82,12 @@ class ModelsUtils(ABC):
         self._labels_map = None
         self._predict_ids = []
         # Initialize Ray variables
-        self._n_workers = int(np.floor(os.cpu_count()*.8))
         self._clf = None
         self._model_ckpt = None
         self._preprocessor = None
         self._encoder = None
         self._trainer = None
         self._train_params = {}
-        self._tuner = None
-        self._tuning_params = {}
         self._predictor = None
         # Files
         self._cv_csv = os.path.join(self.outdir_results,'{}_{}_K{}_cv_scores.csv'.format(self.classifier, self.taxa, self.k))

@@ -133,27 +133,11 @@ class SklearnModel(ModelsUtils):
                 'nu' : 0.05,
                 'tol' : 1e-4
             }
-            self._tuning_params = {
-                'params' : {
-                    'nu' : tune.grid_search(np.logspace(-4,4)),
-                    'learning_rate' : tune.choice(['constant','optimal','invscaling','adaptive']),
-                    'eta0' : tune.grid_search(np.logspace(-4,4))
-                }
-            }
         elif self.classifier == 'linearsvm':
             print('Training bacterial / host classifier with SGD')
             self._clf = SGDClassifier()
             self._train_params = {
                 'loss' : 'squared_error'
-            }
-            self._tuning_params = {
-                'params' : {
-                    'loss' : tune.choice(['hinge', 'log_loss', 'modified_huber', 'squared_hinge', 'perceptron', 'squared_error', 'huber', 'epsilon_insensitive', 'squared_epsilon_insensitive']),
-                    'penalty' : tune.choice(['l2', 'l1', 'elasticnet']),
-                    'alpha' : tune.grid_search(np.logspace(-4,4)),
-                    'learning_rate' : tune.choice(['constant','optimal','invscaling','adaptive']),
-                    'eta0' : tune.grid_search(np.logspace(-4,4))
-                }
             }
         elif self.classifier == 'sgd':
             print('Training multiclass SGD classifier')
@@ -161,26 +145,11 @@ class SklearnModel(ModelsUtils):
             self._train_params = {
                 'loss' : 'squared_error'
             }
-            self._tuning_params = {
-                'params' : {
-                    'loss' : tune.choice(['hinge', 'log_loss', 'modified_huber', 'squared_hinge', 'perceptron', 'squared_error', 'huber', 'epsilon_insensitive', 'squared_epsilon_insensitive']),
-                    'penalty' : tune.choice(['l2', 'l1', 'elasticnet']),
-                    'alpha' : tune.grid_search(np.logspace(-4,4)),
-                    'learning_rate' : tune.choice(['constant','optimal','invscaling','adaptive']),
-                    'eta0' : tune.grid_search(np.logspace(-4,4))
-                }
-            }
         elif self.classifier == 'mnb':
             print('Training multiclass Multinomial Naive Bayes classifier')
             self._clf = MultinomialNB()
             self._train_params = {
                 'alpha' : '1.0'
-            }
-            self._tuning_params = {
-                'params' : {
-                    'alpha' : tune.grid_search(np.linspace(0,1,10)),
-                    'fit_prior' : tune.choice([True, False])
-                }
             }
 
     def _fit_model(self, datasets):
@@ -191,35 +160,19 @@ class SklearnModel(ModelsUtils):
             label_column = self.taxa,
             labels_list = self._encoded,
             params = self._train_params,
-            scoring = 'f1_weighted',
             datasets = datasets,
             batch_size = self.batch_size
             set_estimator_cpus = True,
             scaling_config = ScalingConfig(
                 trainer_resources = {
-                    'CPU' : self._n_workers
+                    'CPU' : 5
                 }
             )
         )
 
-        # Define tuner
-        self._tuner = Tuner(
-            self._trainer,
-            param_space = self._tuning_params,
-            tune_config = TuneConfig(
-                metric = 'validation/test_score',
-                mode = 'max'
-            ),
-            run_config = RunConfig(
-                name = self.classifier,
-                verbose = 1
-            )
-        )
-        # Train / tune execution
-        tuning_result = self._tuner.fit()
-        df_tuning = tuning_result.get_dataframe()
-        df_tuning.to_csv(os.path.join(self.outdir_results,'tuning_result_{}.csv'.format(self.classifier)))
-        self._model_ckpt = tuning_result.get_best_result().checkpoint
+        # Training execution
+        result = trainer.fit()
+        self._model_ckpt = result.checkpoint
 
     def predict(self, df, threshold = 0.8, cv = False):
         print('predict')

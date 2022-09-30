@@ -33,8 +33,6 @@ from joblib import Parallel, delayed, parallel_backend
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 warnings.filterwarnings('ignore')
 
-ray.init()
-
 # Functions
 ################################################################################
 
@@ -82,12 +80,15 @@ parser.add_argument('-dt','--database_name', required=True, help='Name of the ba
 parser.add_argument('-ds','--host_name', default=False, help='Name of the host database used to name files')
 parser.add_argument('-c','--classifier', required=True, choices=['onesvm','linearsvm','sgd','mnb'], help='Name of the classifier to tune')
 parser.add_argument('-bs','--batch_size', required=True, help='Size of the batches to pass while training')
+parser.add_argument('-t','--taxa', required=True, help='The taxa for which the tuning should be done')
 parser.add_argument('-k','--kmers_length', required=True, help='Length of k-mers')
-parser.add_argument('-o','--out', required=True, type=Path, help='Path to outdir')
+parser.add_argument('-o','--outfile', required=True, type=Path, help='Path to outfile')
 
 args = parser.parse_args()
 
 opt = vars(args)
+
+ray.init()
 
 # Data
 ################################################################################
@@ -100,137 +101,113 @@ if opt['data_host']:
 else:
     data = load_Xy_data(opt['data'])
 
-taxas = data['taxas'].copy()
+X = ray.data.read_parquet(data['profile'])
+cols = list(X.limit(1).to_pandas().columns)
+ids = list(X.to_pandas().index)
+y = pd.DataFrame(
+    {opt['taxa']:pd.DataFrame(data['classes'], columns = data['taxas']).loc[:,opt['taxa']].astype('string').str.lower(),
+    'id' : ids}
+)
+y.index = ids
+labels_list = np.unique(y[opt['taxa']])
+df = preprocess(X, y, cols, opt['taxa'])
 
-if opt['classifier'] in ['onesvm', 'linearsvm']:
-    taxas = [taxas[-1]]
-    result_file = os.path.join(opt['out'],'tuning_{}_{}_classifier_{}_k{}.csv'.format(opt['database_name'],opt['host_name'],opt['classifier'],opt['kmers_length']))
-else:
-    del taxas[-1]
-    result_file = os.path.join(opt['out'],'tuning_{}_classifier_{}_k{}.csv'.format(opt['database_name'],opt['classifier'],opt['kmers_length']))
+df_train, df_val = df.train_test_split(0.2, shuffle = True)
+df_train = df_train.drop_columns(['id'])
+df_val = sim_4_cv(df_val, data, 'tuning_val', opt['taxa'], cols, opt['kmers_length'])
 
-tuning_df = pd.DataFrame(np.empty((len(taxas), 3)), columns = ['precision','recall','f1_weighted'], index = taxas)
-
-for taxa in taxas:
-    X = ray.data.read_parquet(data['profile'])
-    cols = list(X.limit(1).to_pandas().columns)
-    ids = list(X.to_pandas().index)
-    y = pd.DataFrame(
-        {taxa:pd.DataFrame(data['classes'], columns = data['taxas']).loc[:,taxa].astype('string').str.lower(),
-        'id' : ids}
-    )
-    y.index = ids
-    labels_list = np.unique(y[taxa])
-    df = preprocess(X, y, cols, taxa)
-
-    df_train, df_val = df.train_test_split(0.2, shuffle = True)
-    df_train = df_train.drop_columns(['id'])
-    df_val = sim_4_cv(df_val, data, 'tuning_val', taxa, cols, opt['kmers_length'])
-
-    datasets = {'train' : ray.put(df_train), 'validation' : ray.put(df_val)}
+datasets = {'train' : ray.put(df_train), 'validation' : ray.put(df_val)}
 
 # Model parameters
 ################################################################################
-    clf = None
-    train_params = {}
-    tune_params = []
+clf = None
+train_params = {}
+tune_params = {}
 
-    if opt['classifier'] == 'onesvm':
-        clf = SGDOneClassSVM()
-        train_params = {
-            'nu' : 0.05,
-            'tol' : 1e-4
+if opt['classifier'] == 'onesvm':
+    clf = SGDOneClassSVM()
+    train_params = {
+        'nu' : 0.05,
+        'tol' : 1e-4
+    }
+    tune_params = {
+        'params' : {
+            'nu' : tune.grid_search(np.logspace(-4,4,10)),
+            'learning_rate' : tune.grid_search(['constant','optimal','invscaling','adaptive']),
+            'eta0' : tune.grid_search(np.logspace(-4,4,10))
         }
-
-        tune_params = []
-        for  lr in ['constant','optimal','invscaling','adaptive']:
-            tune_params.append({
-                'params' : {
-                    'nu' : tune.grid_search(np.logspace(-4,4,10)),
-                    'learning_rate' : lr,
-                    'eta0' : tune.grid_search(np.logspace(-4,4,10))
-                }
-            })
-
-    elif opt['classifier'] == 'linearsvm' or opt['classifier'] == 'sgd':
-        clf = SGDClassifier()
-        train_params = {
-            'loss' : 'squared_error'
+    }
+elif opt['classifier'] == 'linearsvm' or opt['classifier'] == 'sgd':
+    clf = SGDClassifier()
+    train_params = {
+        'loss' : 'squared_error'
+    }
+    tune_params = {
+        'params' : {
+            'loss' : tune.grid_search(['hinge', 'log_loss', 'modified_huber', 'squared_hinge', 'perceptron', 'squared_error', 'huber', 'epsilon_insensitive', 'squared_epsilon_insensitive']),
+            'penalty' : tune.grid_search(['l2', 'l1', 'elasticnet']),
+            'alpha' : tune.grid_search(np.logspace(-4,4,10)),
+            'learning_rate' : tune.grid_search(['constant','optimal','invscaling','adaptive']),
+            'eta0' : tune.grid_search(np.logspace(-4,4,10))
         }
-        tune_params = []
-        for loss in ['hinge', 'log_loss', 'modified_huber', 'squared_hinge', 'perceptron', 'squared_error', 'huber', 'epsilon_insensitive', 'squared_epsilon_insensitive']:
-            for penalty in ['l2', 'l1', 'elasticnet']:
-                for lr in ['constant','optimal','invscaling','adaptive']:
-                    tune_params.append({
-                        'params' : {
-                            'loss' : loss,
-                            'penalty' : penalty,
-                            'alpha' : tune.grid_search(np.logspace(-4,4,10)),
-                            'learning_rate' : lr,
-                            'eta0' : tune.grid_search(np.logspace(-4,4,10))
-                        }
-                    })
-
-    elif opt['classifier'] == 'mnb':
-        clf = MultinomialNB()
-        train_params = {
-            'alpha' : 1.0
+    }
+elif opt['classifier'] == 'mnb':
+    clf = MultinomialNB()
+    train_params = {
+        'alpha' : 1.0
+    }
+    tune_params = {
+        'params' : {
+            'alpha' : tune.grid_search(np.linspace(0,1,10)),
+            'fit_prior' : tune.grid_search([True,False])
         }
-        tune_params = {
-            'params' : {
-                'alpha' : tune.grid_search(np.linspace(0,1,10)),
-                'fit_prior' : tune.grid_search([True,False])
-            }
-        }
+    }
 
 # Trainer
 ################################################################################
-    trainer = SklearnPartialTrainer(
-        estimator = clf,
-        label_column = taxa,
-        labels_list = labels_list,
-        params = train_params,
-        scoring = ['precision','recall','f1_weighted'],
-        datasets = datasets,
-        batch_size = int(opt['batch_size']),
-        set_estimator_cpus = True,
-        scaling_config = ScalingConfig(
-            trainer_resources = {
-                'CPU' : 5
-            }
-        )
+trainer = SklearnPartialTrainer(
+    estimator = clf,
+    label_column = opt['taxa'],
+    labels_list = labels_list,
+    params = train_params,
+    scoring = 'accuracy',
+    datasets = datasets,
+    batch_size = int(opt['batch_size']),
+    set_estimator_cpus = True,
+    scaling_config = ScalingConfig(
+        trainer_resources = {
+            'CPU' : 5
+        }
     )
+)
 
 # Tuning parallelisation
 ################################################################################
 
-    tuner = Tuner(
-        trainer,
-        param_space = tune_params,
-        tune_config = TuneConfig(
-            metric = 'validation/test_f1_weighted',
-            mode = 'max',
-            scheduler = ASHAScheduler()
-        ),
-        run_config = RunConfig(
-            name = opt['classifier']
-        )
+tuner = Tuner(
+    trainer,
+    param_space = tune_params,
+    tune_config = TuneConfig(
+        metric = 'validation/test_score',
+        mode = 'max',
+        scheduler = ASHAScheduler()
+    ),
+    run_config = RunConfig(
+        name = opt['classifier']
     )
-    tuning_results = tuner.fit()
+)
+tuning_results = tuner.fit()
 
 # Tuning results
 ################################################################################
 
-    best_metric = tuning_results.get_best_result().metric
-    tuning_df.loc[taxa,'precision'] = best_metric['validation']['test_precision']
-    tuning_df.loc[taxa,'recall'] = best_metric['validation']['test_recall']
-    tuning_df.loc[taxa,'f1_weighted'] = best_metric['validation']['test_f1_weighted']
+tuning_df = tuning_results.get_dataframe(filter_metric = 'validation/test_score', filter_mode = 'max')
+tuning_df.index = [opt['taxa']] * len(tuning_df)
+tuning_df.to_csv(opt['outfile'])
 
-    # delete sim files
-    for file in glob(os.path.join(os.path.dirname(kmers_ds['profile']),'*sim*')):
-        if os.path.isdir(file):
-            rmtree(file)
-        else:
-            os.remove(file)
-
-tuning_df.to_csv(result_file)
+# delete sim files
+for file in glob(os.path.join(os.path.dirname(data['profile']),'*sim*')):
+    if os.path.isdir(file):
+        rmtree(file)
+    else:
+        os.remove(file)

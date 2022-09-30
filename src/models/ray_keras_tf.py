@@ -78,11 +78,13 @@ class KerasTFModel(ModelsUtils):
         # Initialize empty
         self._nb_classes = None
         self._use_gpu = False
+        # Computing variables
         # if len(tf.config.list_physical_devices('GPU')) > 0:
         #     self._use_gpu = True
         #     self._n_workers = len(tf.config.list_physical_devices('GPU'))
         # else:
         #     self._use_gpu = False
+        self._n_workers = int(np.floor(os.cpu_count()*.8))
 
     def _training_preprocess(self, X, y):
         print('_training_preprocess')
