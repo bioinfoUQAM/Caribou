@@ -72,7 +72,7 @@ def sim_4_cv(df, kmers_ds, name, taxa, cols, k):
 
 # CLI argument
 ################################################################################
-parser = argparse.ArgumentParser(description='This script extracts K-mers of the given dataset using the available ressources on the computer before saving it to drive.')
+parser = argparse.ArgumentParser(description="This script executes tuning of a given model on a chosen taxa for Caribou's Sciki-learn models")
 
 parser.add_argument('-d','--data', required=True, type=Path, help='Path to .npz data for extracted k-mers profile of bacteria')
 parser.add_argument('-dh','--data_host', default=False, type=Path, help='Path to .npz data for extracted k-mers profile of host')
@@ -109,8 +109,8 @@ y = pd.DataFrame(
     'id' : ids}
 )
 y.index = ids
-labels_list = np.unique(y[opt['taxa']])
 df = preprocess(X, y, cols, opt['taxa'])
+labels_list = np.unique(df.to_pandas()[opt['taxa']])
 
 df_train, df_val = df.train_test_split(0.2, shuffle = True)
 df_train = df_train.drop_columns(['id'])
