@@ -147,9 +147,12 @@ class ModelsUtils(ABC):
     def _cv_score(self, y_true, y_pred):
         print('_cv_score')
 
-        if isinstance(y_pred, ray.data.dataset.Dataset):
-            y_pred = y_pred.to_pandas()
 
+        # if isinstance(y_pred, ray.data.dataset.Dataset):
+        #     y_pred = y_pred.to_pandas()['predictions']
+
+        print(y_true)
+        print(y_pred)
         support = precision_recall_fscore_support(y_true, y_pred, average = 'weighted')
 
         scores = pd.DataFrame({'Classifier':self.classifier,'Precision':support[0],'Recall':support[1],'F-score':support[2]}, index = [1]).T
@@ -166,10 +169,7 @@ class ModelsUtils(ABC):
         """
         """
 
-    def _label_decode(self, predict, threshold):
-        print('_label_decode')
-        predict = np.array(predict.to_pandas())
-        decoded = pd.Series(np.empty(len(predict), dtype=object))
-        for label, encoded in self._labels_map:
-            decoded[predict == encoded] = label
-        return decoded
+    @abstractmethod
+    def _label_decode(self):
+        """
+        """

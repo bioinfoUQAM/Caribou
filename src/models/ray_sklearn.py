@@ -99,6 +99,14 @@ class SklearnModel(ModelsUtils):
         self._labels_map = zip(labels, encoded)
         return df
 
+    def _label_decode(self, predict):
+        print('_label_decode')
+        predict = np.array(predict.to_pandas())
+        decoded = pd.Series(np.empty(len(predict), dtype=object))
+        for label, encoded in self._labels_map:
+            decoded[predict == encoded] = label
+        return decoded
+        
     def _cross_validation(self, df, kmers_ds):
         print('_cross_validation')
 

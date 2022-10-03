@@ -1,8 +1,10 @@
 import os
 import ray
-# import atexit
 import warnings
 import numpy as np
+
+from glob import glob
+from shutil import rmtree
 
 # Preprocessing
 from ray.data.preprocessors import MinMaxScaler, LabelEncoder, Chain, SimpleImputer, OneHotEncoder, Concatenator
@@ -16,7 +18,7 @@ import tensorflow as tf
 from ray.air import session, Checkpoint
 from ray.air.callbacks.keras import Callback
 from ray.air.config import ScalingConfig, CheckpointConfig
-from ray.train.tensorflow import TensorflowTrainer, prepare_dataset_shard
+from ray.train.tensorflow import TensorflowTrainer, TensorflowCheckpoint, prepare_dataset_shard
 
 
 # Tuning
@@ -140,6 +142,21 @@ class KerasTFModel(ModelsUtils):
         )
         self._encoder.fit(df)
 
+    def _label_decode(self, predict, threshold, nb_cls):
+        print('_label_decode')
+        predict = np.array(predict.to_pandas())
+        decoded = pd.Series(np.empty(len(predict), dtype=object))
+        if nb_cls == 1:
+            decoded = np.round(predict)
+        else:
+# TODO: DECODE THE LABELS WHEN OUTPUTED BY KERAS (PROBABILITIES)
+    # OUTPUT FROM keras_multiclas.py FOR TESTING IN LOCAL
+
+            for label, encoded in self._labels_map:
+                decoded[predict == encoded] = label
+
+        return decoded
+
     def _cross_validation(self, df, kmers_ds):
         print('_cross_validation')
 
@@ -155,9 +172,11 @@ class KerasTFModel(ModelsUtils):
         y_true = df_test.to_pandas()[self.taxa]
         y_pred = self.predict(df_test.drop_columns([self.taxa]), cv = True)
 
-        rmtree(sim_data['profile'])
-        for file in glob(os.path.join(sim_outdir, '*sim*')):
-            os.remove(file)
+        for file in glob(os.path.join( os.path.dirname(kmers_ds['profile']), '*sim*')):
+            if os.path.isdir(file):
+                rmtree(file)
+            else:
+                os.remove(file)
 
         self._cv_score(y_true, y_pred)
 
@@ -168,6 +187,7 @@ class KerasTFModel(ModelsUtils):
             ds = self._preprocessor.transform(ds)
             ds = self._encoder.transform(ds)
             datasets[name] = ds
+
         # Training parameters
         self._train_params = {
             'batch_size': self.batch_size,
@@ -197,17 +217,17 @@ class KerasTFModel(ModelsUtils):
         )
         # Train / tune execution
         training_result = self._trainer.fit()
-        self._model_ckpt = training_result.best_checkpoint[0][0]
+        self._model_ckpt = training_result.best_checkpoints[0][0]
 
     def predict(self, df, threshold = 0.8, cv = False):
         print('predict')
-        if not cv:
-            df = self._predict_preprocess(df)
+        df = self._preprocessor.transform(df)
+        print(df.to_pandas())
         # Define predictor
         self._predictor = BatchPredictor.from_checkpoint(
             self._model_ckpt,
             TensorflowPredictor,
-            model_definiton = self._clf
+            model_definition = lambda : build_model(self.classifier, self._nb_classes, len(self.kmers))
         )
         # Make predictions
         predictions = self._predictor.predict(
@@ -215,10 +235,8 @@ class KerasTFModel(ModelsUtils):
             feature_columns = ['features'],
             batch_size = self.batch_size
         )
-        if cv:
-            return predictions
-        else:
-            return self._label_decode(predictions, threshold)
+        return self._label_decode(predictions, threshold, self._nb_classes)
+
 
     # Overcharge to serialize class
     # def __reduce__(self):
@@ -239,7 +257,9 @@ def train_func(config):
     nb_cls = config.get('nb_cls')
     model = config.get('model')
 
-    model = build_model(model, nb_cls, size)
+    strategy = tf.distribute.MultiWorkerMirroredStrategy()
+    with strategy.scope():
+        model = build_model(model, nb_cls, size)
 
     train_data = session.get_dataset_shard('train')
     val_data = session.get_dataset_shard('validation')
@@ -273,40 +293,37 @@ def train_func(config):
         history = model.fit(
             tf_train_data,
             validation_data = tf_val_data,
-            # callbacks=[Callback()],
+            callbacks=[Callback()],
             verbose=0
         )
         results.append(history.history)
-        session.report(
-            dict(accuracy=history.history['accuracy'][0], loss=history.history['loss'][0]),
-            checkpoint=Checkpoint.from_dict(
-                dict(model=model, epoch=epoch, model_weights=model.get_weights())
-            )
+        session.report({
+            'accuracy' : history.history['accuracy'][0],
+            'loss' : history.history['loss'][0],
+            'val_accuracy' : history.history['val_accuracy'][0],
+            'val_loss' : history.history['val_loss'][0]
+            },
+            checkpoint = TensorflowCheckpoint.from_model(model)
         )
-
-    return results
 
 def build_model(classifier, nb_cls, nb_kmers):
     print('build')
-    with tf.distribute.MultiWorkerMirroredStrategy().scope():
-        # atexit.register(self._strategy._extended._cross_device_ops._pool.close) # type: ignore
-        # atexit.register(self._strategy._extended._host_cross_device_ops._pool.close) #type: ignore
-        if classifier == 'attention':
-            print('Training bacterial / host classifier based on Attention Weighted Neural Network')
-            clf = build_attention(nb_kmers)
-        elif classifier == 'lstm':
-            print('Training bacterial / host classifier based on Shallow LSTM Neural Network')
-            clf = build_LSTM(nb_kmers)
-        elif classifier == 'deeplstm':
-            print('Training bacterial / host classifier based on Deep LSTM Neural Network')
-            clf = build_deepLSTM(nb_kmers)
-        elif classifier == 'lstm_attention':
-            print('Training multiclass classifier based on Deep Neural Network hybrid between LSTM and Attention')
-            clf = build_LSTM_attention(nb_kmers, nb_cls)
-        elif classifier == 'cnn':
-            print('Training multiclass classifier based on CNN Neural Network')
-            clf = build_CNN(nb_kmers, nb_cls)
-        elif classifier == 'widecnn':
-            print('Training multiclass classifier based on Wide CNN Network')
-            clf = build_wideCNN(nb_kmers, nb_cls)
+    if classifier == 'attention':
+        print('Training bacterial / host classifier based on Attention Weighted Neural Network')
+        clf = build_attention(nb_kmers)
+    elif classifier == 'lstm':
+        print('Training bacterial / host classifier based on Shallow LSTM Neural Network')
+        clf = build_LSTM(nb_kmers)
+    elif classifier == 'deeplstm':
+        print('Training bacterial / host classifier based on Deep LSTM Neural Network')
+        clf = build_deepLSTM(nb_kmers)
+    elif classifier == 'lstm_attention':
+        print('Training multiclass classifier based on Deep Neural Network hybrid between LSTM and Attention')
+        clf = build_LSTM_attention(nb_kmers, nb_cls)
+    elif classifier == 'cnn':
+        print('Training multiclass classifier based on CNN Neural Network')
+        clf = build_CNN(nb_kmers, nb_cls)
+    elif classifier == 'widecnn':
+        print('Training multiclass classifier based on Wide CNN Network')
+        clf = build_wideCNN(nb_kmers, nb_cls)
     return clf
