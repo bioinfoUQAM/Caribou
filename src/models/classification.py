@@ -23,7 +23,7 @@ def bacteria_classification(classified_data, database_k_mers, k, outdirs, datase
 
     for taxa in taxas:
         train = False
-        model_file = '{}{}_{}.pickle'.format(outdirs['models_dir'], classifier, taxa)
+        model_file = '{}{}_{}.pkl'.format(outdirs['models_dir'], classifier, taxa)
         classified_kmers_file = '{}Xy_classified_{}_K{}_{}_database_{}_data'.format(outdirs['data_dir'], taxa, k, classifier, dataset)
         unclassified_kmers_file = '{}Xy_unclassified_{}_K{}_{}_database_{}_data'.format(outdirs['data_dir'], taxa, k, classifier, dataset)
 
@@ -72,7 +72,7 @@ def bacteria_classification(classified_data, database_k_mers, k, outdirs, datase
                 else:
                     with open(model_file, 'rb') as handle:
                         model = pickle.load(handle)
-                        
+
                 # Classify sequences into taxa and build k-mers profiles for classified and unclassified data
                 # Keep previous taxa to reclassify only unclassified reads at a higher taxonomic level
                 if classifying is True:

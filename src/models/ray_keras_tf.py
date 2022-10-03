@@ -68,10 +68,6 @@ class KerasTFModel(ModelsUtils):
     def __init__(self, classifier, dataset, outdir_model, outdir_results, batch_size, training_epochs, k, taxa, kmers_list, verbose):
         super().__init__(classifier, dataset, outdir_model, outdir_results, batch_size, k, taxa, kmers_list, verbose)
         # Parameters
-        # if classifier in ['attention','lstm','deeplstm']:
-        #     self.clf_file = '{}bacteria_binary_classifier_K{}_{}_{}_model'.format(self._workdir, k, classifier, dataset)
-        # else:
-        #     self.clf_file = '{}{}_multiclass_classifier_K{}_{}_{}_model'.format(self._workdir, taxa, k, classifier, dataset)
         # Initialize hidden
         self._training_epochs = training_epochs
         # Initialize empty
@@ -193,9 +189,8 @@ class KerasTFModel(ModelsUtils):
                 local_dir = self._workdir,
                 sync_config = SyncConfig(syncer=None),
                 checkpoint_config = CheckpointConfig(
-                    num_to_keep = 1,
-                    checkpoint_score_attribute = 'accuracy',
-                    checkpoint_score_order = 'max'
+                    checkpoint_score_attribute = 'loss',
+                    checkpoint_score_order = 'min'
                 )
             ),
             datasets = datasets
@@ -267,12 +262,18 @@ def train_func(config):
 
     results = []
     for epoch in range(epochs):
-        tf_train_data = to_tf_dataset(train_data, batch_size)
-        tf_val_data = to_tf_dataset(val_data, batch_size)
+        tf_train_data = to_tf_dataset(
+            dataset = train_data,
+            batch_size = batch_size
+        )
+        tf_val_data = to_tf_dataset(
+            dataset = val_data,
+            batch_size = batch_size
+        )
         history = model.fit(
             tf_train_data,
             validation_data = tf_val_data,
-            callbacks=[Callback()],
+            # callbacks=[Callback()],
             verbose=0
         )
         results.append(history.history)

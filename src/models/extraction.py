@@ -1,6 +1,7 @@
 import os
 import sys
 import ray
+import pickle
 
 import pandas as pd
 
@@ -19,7 +20,7 @@ def bacteria_extraction(metagenome_k_mers, database_k_mers, k, outdirs, dataset,
     train = False
     model = None
 
-    model_file = '{}{}_{}.pickle'.format(outdirs['models_dir'], classifier, 'domain')
+    model_file = '{}{}_{}.pkl'.format(outdirs['models_dir'], classifier, 'domain')
     bacteria_kmers_file = '{}Xy_bacteria_database_K{}_{}_{}_data'.format(outdirs['data_dir'], k, classifier, dataset)
     host_kmers_file = '{}Xy_host_database_K{}_{}_{}_data'.format(outdirs['data_dir'], k, classifier, dataset)
     unclassified_kmers_file = '{}Xy_unclassified_database_K{}_{}_{}_data'.format(outdirs['data_dir'], k, classifier, dataset)
