@@ -83,6 +83,7 @@ parser.add_argument('-bs','--batch_size', required=True, help='Size of the batch
 parser.add_argument('-t','--taxa', required=True, help='The taxa for which the tuning should be done')
 parser.add_argument('-k','--kmers_length', required=True, help='Length of k-mers')
 parser.add_argument('-o','--outfile', required=True, type=Path, help='Path to outfile')
+parser.add_argument('-wd','--workdir', default='~/ray_results', type=Path, help='Optional. Path to a working directory where Ray Tune will output and spill tuning data')
 
 args = parser.parse_args()
 
@@ -193,7 +194,8 @@ tuner = Tuner(
         scheduler = ASHAScheduler()
     ),
     run_config = RunConfig(
-        name = opt['classifier']
+        name = opt['classifier'],
+        local_dir = opt['workdir']
     )
 )
 tuning_results = tuner.fit()
