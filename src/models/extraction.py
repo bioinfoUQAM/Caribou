@@ -19,6 +19,7 @@ def bacteria_extraction(metagenome_k_mers, database_k_mers, k, outdirs, dataset,
     train = False
     model = None
 
+    model_file = '{}{}_{}.pickle'.format(outdirs['models_dir'], classifier, 'domain')
     bacteria_kmers_file = '{}Xy_bacteria_database_K{}_{}_{}_data'.format(outdirs['data_dir'], k, classifier, dataset)
     host_kmers_file = '{}Xy_host_database_K{}_{}_{}_data'.format(outdirs['data_dir'], k, classifier, dataset)
     unclassified_kmers_file = '{}Xy_unclassified_database_K{}_{}_{}_data'.format(outdirs['data_dir'], k, classifier, dataset)
@@ -35,46 +36,51 @@ def bacteria_extraction(metagenome_k_mers, database_k_mers, k, outdirs, dataset,
         if verbose:
             print('Bacteria sequences already extracted. Skipping this step')
     else:
-        # Get training dataset and assign to variables
-        # Keep only classes of sequences that were not removed in kmers extraction
-        if classifier == 'onesvm' and isinstance(database_k_mers, tuple):
-            print('Classifier One Class SVM cannot be used with host data!\nEither remove host data from config file or choose another bacteria extraction method.')
-            sys.exit()
-        elif classifier == 'onesvm' and not isinstance(database_k_mers, tuple):
-            model = SklearnModel(classifier, dataset, outdirs['models_dir'], outdirs['results_dir'], batch_size, k, 'domain', database_k_mers['kmers'], verbose)
-            X_train = ray.data.read_parquet(database_k_mers['profile'])
-            ids = []
-            for row in X_train.iter_rows():
-                ids.append(row['__index_level_0__'])
-            y_train = pd.DataFrame(
-                {'domain': pd.DataFrame(database_k_mers['classes'], columns=database_k_mers['taxas']).loc[:, 'domain'].astype('string').str.lower(),
-                'id': ids}
-            )
-            y_train.index = ids
-        elif classifier != 'onesvm' and isinstance(database_k_mers, tuple):
-            database_k_mers = merge_database_host(database_k_mers[0], database_k_mers[1])
-            if classifier in ['attention','lstm','deeplstm']:
-                model = KerasTFModel(classifier, dataset, outdirs['models_dir'], outdirs['results_dir'], batch_size, training_epochs, k, 'domain', database_k_mers['kmers'], verbose)
-            elif classifier == 'linearsvm':
-                model = SklearnModel(classifier, dataset, outdirs['models_dir'], outdirs['results_dir'], batch_size, k, 'domain', database_k_mers['kmers'], verbose)
-            else:
-                print('Bacteria extractor unknown !!!\n\tModels implemented at this moment are :\n\tBacteria isolator :  One Class SVM (onesvm)\n\tBacteria/host classifiers : Linear SVM (linearsvm)\n\tNeural networks : Attention (attention), Shallow LSTM (lstm) and Deep LSTM (deeplstm)')
+        if not os.path.isfile(model_file):
+            # Get training dataset and assign to variables
+            # Keep only classes of sequences that were not removed in kmers extraction
+            if classifier == 'onesvm' and isinstance(database_k_mers, tuple):
+                print('Classifier One Class SVM cannot be used with host data!\nEither remove host data from config file or choose another bacteria extraction method.')
                 sys.exit()
-            X_train = ray.data.read_parquet(database_k_mers['profile'])
-            ids = []
-            for row in X_train.iter_rows():
-                ids.append(row['__index_level_0__'])
-            y_train = pd.DataFrame(
-                {'domain': pd.DataFrame(database_k_mers['classes'], columns=database_k_mers['taxas']).loc[:, 'domain'].astype('string').str.lower(),
-                'id': ids}
-            )
-            y_train.index = ids
-        else:
-            print('Only classifier One Class SVM can be used without host data!\nEither add host data in config file or choose classifier One Class SVM.')
-            sys.exit()
+            elif classifier == 'onesvm' and not isinstance(database_k_mers, tuple):
+                model = SklearnModel(classifier, dataset, outdirs['models_dir'], outdirs['results_dir'], batch_size, k, 'domain', database_k_mers['kmers'], verbose)
+                X_train = ray.data.read_parquet(database_k_mers['profile'])
+                ids = []
+                for row in X_train.iter_rows():
+                    ids.append(row['__index_level_0__'])
+                y_train = pd.DataFrame(
+                    {'domain': pd.DataFrame(database_k_mers['classes'], columns=database_k_mers['taxas']).loc[:, 'domain'].astype('string').str.lower(),
+                    'id': ids}
+                )
+                y_train.index = ids
+            elif classifier != 'onesvm' and isinstance(database_k_mers, tuple):
+                database_k_mers = merge_database_host(database_k_mers[0], database_k_mers[1])
+                if classifier in ['attention','lstm','deeplstm']:
+                    model = KerasTFModel(classifier, dataset, outdirs['models_dir'], outdirs['results_dir'], batch_size, training_epochs, k, 'domain', database_k_mers['kmers'], verbose)
+                elif classifier == 'linearsvm':
+                    model = SklearnModel(classifier, dataset, outdirs['models_dir'], outdirs['results_dir'], batch_size, k, 'domain', database_k_mers['kmers'], verbose)
+                else:
+                    print('Bacteria extractor unknown !!!\n\tModels implemented at this moment are :\n\tBacteria isolator :  One Class SVM (onesvm)\n\tBacteria/host classifiers : Linear SVM (linearsvm)\n\tNeural networks : Attention (attention), Shallow LSTM (lstm) and Deep LSTM (deeplstm)')
+                    sys.exit()
+                X_train = ray.data.read_parquet(database_k_mers['profile'])
+                ids = []
+                for row in X_train.iter_rows():
+                    ids.append(row['__index_level_0__'])
+                y_train = pd.DataFrame(
+                    {'domain': pd.DataFrame(database_k_mers['classes'], columns=database_k_mers['taxas']).loc[:, 'domain'].astype('string').str.lower(),
+                    'id': ids}
+                )
+                y_train.index = ids
+            else:
+                print('Only classifier One Class SVM can be used without host data!\nEither add host data in config file or choose classifier One Class SVM.')
+                sys.exit()
 
-        if not os.path.isfile(model.clf_file):
             model.train(X_train, y_train, database_k_mers, cv)
+            with open(model_file, 'wb') as handle:
+                pickle.dump(model, handle)
+        else:
+            with open(model_file, 'rb') as handle:
+                model = pickle.load(handle)
 
         # Classify sequences into bacteria / unclassified / host and build k-mers profiles for bacteria
         if metagenome_k_mers is not None:

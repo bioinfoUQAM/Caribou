@@ -66,7 +66,7 @@ class ModelsUtils(ABC):
     predict : abstract method to predict the classes of a dataset
 
     """
-    def __init__(self, classifier, dataset, outdir_results, batch_size, k, taxa, kmers_list, verbose):
+    def __init__(self, classifier, dataset, outdir_model, outdir_results, batch_size, k, taxa, kmers_list, verbose):
         # Parameters
         self.classifier = classifier
         self.dataset = dataset
@@ -89,6 +89,7 @@ class ModelsUtils(ABC):
         self._trainer = None
         self._train_params = {}
         self._predictor = None
+        self._workdir = outdir_model
         # Files
         self._cv_csv = os.path.join(self.outdir_results,'{}_{}_K{}_cv_scores.csv'.format(self.classifier, self.taxa, self.k))
 

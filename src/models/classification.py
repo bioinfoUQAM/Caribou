@@ -1,6 +1,7 @@
 import os
 import sys
 import ray
+import pickle
 
 import pandas as pd
 
@@ -22,6 +23,7 @@ def bacteria_classification(classified_data, database_k_mers, k, outdirs, datase
 
     for taxa in taxas:
         train = False
+        model_file = '{}{}_{}.pickle'.format(outdirs['models_dir'], classifier, taxa)
         classified_kmers_file = '{}Xy_classified_{}_K{}_{}_database_{}_data'.format(outdirs['data_dir'], taxa, k, classifier, dataset)
         unclassified_kmers_file = '{}Xy_unclassified_{}_K{}_{}_database_{}_data'.format(outdirs['data_dir'], taxa, k, classifier, dataset)
 
@@ -29,7 +31,7 @@ def bacteria_classification(classified_data, database_k_mers, k, outdirs, datase
             classified_data[taxa] = previous_taxa_unclassified
             classified_data['order'].append(taxa)
         else:
-            if classifier in ['sgd','svm','mlr','mnb']:
+            if classifier in ['sgd','mnb']:
                 model = SklearnModel(classifier, dataset, outdirs['models_dir'], outdirs['results_dir'], batch_size, k, taxa, database_k_mers['kmers'], verbose)
             elif classifier in ['lstm_attention','cnn','widecnn']:
                 model = KerasTFModel(classifier, dataset, outdirs['models_dir'], outdirs['results_dir'], batch_size, training_epochs, k, taxa, database_k_mers['kmers'], verbose)
@@ -37,7 +39,7 @@ def bacteria_classification(classified_data, database_k_mers, k, outdirs, datase
                 print('Bacteria classifier type unknown !!!\n\tModels implemented at this moment are :\n\tLinear models :  Ridge regressor (sgd), Linear SVM (svm), Multiple Logistic Regression (mlr)\n\tProbability classifier : Multinomial Bayes (mnb)\n\tNeural networks : Deep hybrid between LSTM and Attention (lstm_attention), CNN (cnn) and Wide CNN (widecnn)')
                 sys.exit()
 
-            if not os.path.isfile(model.clf_file) or not os.path.isdir(model.clf_file):
+            if not os.path.isfile(model_file):
                 train = True
 
             # Load extracted data if already exists or train and classify bacteria depending on chosen method and taxonomic rank
@@ -65,6 +67,12 @@ def bacteria_classification(classified_data, database_k_mers, k, outdirs, datase
 
                     model.train(X_train, y_train, database_k_mers, cv)
 
+                    with open(model_file, 'wb') as handle:
+                        pickle.dump(model, handle)
+                else:
+                    with open(model_file, 'rb') as handle:
+                        model = pickle.load(handle)
+                        
                 # Classify sequences into taxa and build k-mers profiles for classified and unclassified data
                 # Keep previous taxa to reclassify only unclassified reads at a higher taxonomic level
                 if classifying is True:
@@ -72,7 +80,7 @@ def bacteria_classification(classified_data, database_k_mers, k, outdirs, datase
                         if verbose:
                             print('Classifying bacteria sequences at {} level'.format(taxa))
                         df = ray.data.read_parquet(classified_data['bacteria']['profile'])
-                        classified_data[taxa], previous_taxa_unclassified = classify(df, clf_file, label_encoder, taxa, classified_kmers_file, unclassified_kmers_file, threshold = threshold, verbose = verbose)
+                        classified_data[taxa], previous_taxa_unclassified = classify(df, model, taxa, classified_kmers_file, unclassified_kmers_file, threshold = threshold, verbose = verbose)
                     else:
                         if verbose:
                             print('Classifying bacteria sequences at {} level'.format(taxa))

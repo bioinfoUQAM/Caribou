@@ -64,13 +64,13 @@ class SklearnModel(ModelsUtils):
 
     """
     def __init__(self, classifier, dataset, outdir_model, outdir_results, batch_size, k, taxa, kmers_list, verbose):
-        super().__init__(classifier, dataset, outdir_results, batch_size, k, taxa, kmers_list, verbose)
+        super().__init__(classifier, dataset, outdir_model, outdir_results, batch_size, k, taxa, kmers_list, verbose)
         # Parameters
         self._encoded = []
-        if classifier in ['onesvm','linearsvm']:
-            self.clf_file = '{}bacteria_binary_classifier_K{}_{}_{}_model.jb'.format(outdir_model, k, classifier, dataset)
-        else:
-            self.clf_file = '{}{}_multiclass_classifier_K{}_{}_{}_model.jb'.format(outdir_model, taxa, k, classifier, dataset)
+        # if classifier in ['onesvm','linearsvm']:
+        #     self.clf_file = '{}bacteria_binary_classifier_K{}_{}_{}_model.jb'.format(outdir_model, k, classifier, dataset)
+        # else:
+        #     self.clf_file = '{}{}_multiclass_classifier_K{}_{}_{}_model.jb'.format(outdir_model, taxa, k, classifier, dataset)
         # Computes
         self._build()
 
@@ -161,12 +161,16 @@ class SklearnModel(ModelsUtils):
             labels_list = self._encoded,
             params = self._train_params,
             datasets = datasets,
-            batch_size = self.batch_size
+            batch_size = self.batch_size,
             set_estimator_cpus = True,
             scaling_config = ScalingConfig(
                 trainer_resources = {
                     'CPU' : 5
                 }
+            ),
+            run_config = RunConfig(
+                name = self.classifier,
+                local_dir = self._workdir
             )
         )
 

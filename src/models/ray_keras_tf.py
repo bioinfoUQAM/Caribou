@@ -66,13 +66,12 @@ class KerasTFModel(ModelsUtils):
     """
 
     def __init__(self, classifier, dataset, outdir_model, outdir_results, batch_size, training_epochs, k, taxa, kmers_list, verbose):
-        super().__init__(classifier, dataset, outdir_results, batch_size, k, taxa, kmers_list, verbose)
+        super().__init__(classifier, dataset, outdir_model, outdir_results, batch_size, k, taxa, kmers_list, verbose)
         # Parameters
-        self.outdir_model = outdir_model
-        if classifier in ['attention','lstm','deeplstm']:
-            self.clf_file = '{}bacteria_binary_classifier_K{}_{}_{}_model'.format(outdir_model, k, classifier, dataset)
-        else:
-            self.clf_file = '{}{}_multiclass_classifier_K{}_{}_{}_model'.format(outdir_model, taxa, k, classifier, dataset)
+        # if classifier in ['attention','lstm','deeplstm']:
+        #     self.clf_file = '{}bacteria_binary_classifier_K{}_{}_{}_model'.format(self._workdir, k, classifier, dataset)
+        # else:
+        #     self.clf_file = '{}{}_multiclass_classifier_K{}_{}_{}_model'.format(self._workdir, taxa, k, classifier, dataset)
         # Initialize hidden
         self._training_epochs = training_epochs
         # Initialize empty
@@ -154,7 +153,7 @@ class KerasTFModel(ModelsUtils):
         df_val = self._sim_4_cv(df_val, kmers_ds, '{}_val'.format(self.dataset))
         df_test = self._sim_4_cv(df_test, kmers_ds, '{}_test'.format(self.dataset))
 
-        datasets = {'train' : df_train.drop_columns(['id']), 'validation' : df_val}
+        datasets = {'train' : ray.put(df_train.drop_columns(['id'])), 'validation' : ray.put(df_val)}
         self._fit_model(datasets)
 
         y_true = df_test.to_pandas()[self.taxa]
@@ -191,7 +190,7 @@ class KerasTFModel(ModelsUtils):
             ),
             run_config = RunConfig(
                 name = self.classifier,
-                local_dir = self.outdir_model,
+                local_dir = self._workdir,
                 sync_config = SyncConfig(syncer=None),
                 checkpoint_config = CheckpointConfig(
                     num_to_keep = 1,
@@ -201,7 +200,6 @@ class KerasTFModel(ModelsUtils):
             ),
             datasets = datasets
         )
-        ray.put(self._trainer)
         # Train / tune execution
         training_result = self._trainer.fit()
         self._model_ckpt = training_result.best_checkpoint[0][0]
@@ -230,7 +228,7 @@ class KerasTFModel(ModelsUtils):
     # Overcharge to serialize class
     # def __reduce__(self):
     #     deserializer = self.__class__
-    #     serialized_data = (self.classifier, self.dataset, self.outdir_model, self.outdir_results, self.batch_size, self._training_epochs, self.k, self.taxa, self.kmers, self.verbose)
+    #     serialized_data = (self.classifier, self.dataset, self._workdir, self.outdir_results, self.batch_size, self._training_epochs, self.k, self.taxa, self.kmers, self.verbose)
     #
     #     return deserializer, serialized_data
 
