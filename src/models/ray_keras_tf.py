@@ -263,11 +263,11 @@ def train_func(config):
     results = []
     for epoch in range(epochs):
         tf_train_data = to_tf_dataset(
-            dataset = train_data,
+            data = train_data,
             batch_size = batch_size
         )
         tf_val_data = to_tf_dataset(
-            dataset = val_data,
+            data = val_data,
             batch_size = batch_size
         )
         history = model.fit(
