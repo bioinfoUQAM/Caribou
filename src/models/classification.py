@@ -2,6 +2,7 @@ import os
 import sys
 import ray
 import pickle
+import cloudpickle
 
 import pandas as pd
 
@@ -68,10 +69,10 @@ def bacteria_classification(classified_data, database_k_mers, k, outdirs, datase
                     model.train(X_train, y_train, database_k_mers, cv)
 
                     with open(model_file, 'wb') as handle:
-                        pickle.dump(model, handle)
+                        pickle.dump(cloudpickle.dumps(model), handle)
                 else:
                     with open(model_file, 'rb') as handle:
-                        model = pickle.load(handle)
+                        model = pickle.load(cloudpickle.loads(handle))
 
                 # Classify sequences into taxa and build k-mers profiles for classified and unclassified data
                 # Keep previous taxa to reclassify only unclassified reads at a higher taxonomic level

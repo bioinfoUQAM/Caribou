@@ -106,7 +106,7 @@ class SklearnModel(ModelsUtils):
         for label, encoded in self._labels_map:
             decoded[predict == encoded] = label
         return decoded
-        
+
     def _cross_validation(self, df, kmers_ds):
         print('_cross_validation')
 
@@ -194,7 +194,5 @@ class SklearnModel(ModelsUtils):
         self._predictor = BatchPredictor.from_checkpoint(self._model_ckpt, SklearnPredictor)
         # Make predictions
         predictions = self._predictor.predict(df, batch_size = self.batch_size)
-        if cv:
-            return predictions
-        else:
-            return self._label_decode(predictions, threshold)
+
+        return self._label_decode(predictions, threshold)

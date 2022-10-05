@@ -2,6 +2,7 @@ import os
 import ray
 import warnings
 import numpy as np
+import pandas as pd
 
 from glob import glob
 from shutil import rmtree
@@ -150,7 +151,7 @@ class KerasTFModel(ModelsUtils):
         else:
             predict = predict.map_batches(map_predicted_label)
             predict = np.ravel(np.array(predict.to_pandas()))
-        
+
         decoded = pd.Series(np.empty(len(predict), dtype=object))
         for label, encoded in self._labels_map:
             decoded[predict == encoded] = label
@@ -222,7 +223,6 @@ class KerasTFModel(ModelsUtils):
     def predict(self, df, threshold = 0.8, cv = False):
         print('predict')
         df = self._preprocessor.transform(df)
-        print(df.to_pandas())
         # Define predictor
         self._predictor = BatchPredictor.from_checkpoint(
             self._model_ckpt,
