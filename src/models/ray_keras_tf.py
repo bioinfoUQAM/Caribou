@@ -144,16 +144,16 @@ class KerasTFModel(ModelsUtils):
 
     def _label_decode(self, predict, threshold, nb_cls):
         print('_label_decode')
-        predict = np.array(predict.to_pandas())
-        decoded = pd.Series(np.empty(len(predict), dtype=object))
         if nb_cls == 1:
+            predict = np.array(predict.to_pandas()['predictions'])
             decoded = np.round(predict)
         else:
-# TODO: DECODE THE LABELS WHEN OUTPUTED BY KERAS (PROBABILITIES)
-    # OUTPUT FROM keras_multiclas.py FOR TESTING IN LOCAL
-
-            for label, encoded in self._labels_map:
-                decoded[predict == encoded] = label
+            predict = predict.map_batches(map_predicted_label)
+            predict = np.ravel(np.array(predict.to_pandas()))
+        
+        decoded = pd.Series(np.empty(len(predict), dtype=object))
+        for label, encoded in self._labels_map:
+            decoded[predict == encoded] = label
 
         return decoded
 
@@ -327,3 +327,11 @@ def build_model(classifier, nb_cls, nb_kmers):
         print('Training multiclass classifier based on Wide CNN Network')
         clf = build_wideCNN(nb_kmers, nb_cls)
     return clf
+
+
+def map_predicted_label(df):
+    threshold = 0.8
+    predict = pd.DataFrame({'best_proba': [df['predictions'][i][np.argmax(df['predictions'][i])] for i in range(len(df))],
+                            'predicted_label': [np.argmax(df['predictions'][i]) for i in range(len(df))]})
+    predict.loc[predict['best_proba'] < threshold, 'predicted_label'] = -1
+    return pd.DataFrame(predict['predicted_label'])
