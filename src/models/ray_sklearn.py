@@ -148,7 +148,7 @@ class SklearnModel(ModelsUtils):
                 'alpha' : '0.045',
                 'eta0' : '0.045',
                 'learning_rate' : 'constant',
-                'loss' : 'epsilon_insensitive',
+                'loss' : 'hinge',
                 'penalty' : 'elasticnet'
             }
         elif self.classifier == 'sgd':
