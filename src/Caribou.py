@@ -21,6 +21,8 @@ __author__ = 'Nicolas de Montigny'
 
 __all__ = ['caribou']
 
+# TODO: RAISE ERRORS INSTEAD OF PRINT + SYS.EXIT
+
 # Suppress Tensorflow warnings
 ################################################################################
 logging.set_verbosity(logging.ERROR)
