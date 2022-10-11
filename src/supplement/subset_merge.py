@@ -4,6 +4,8 @@ import os
 import ray
 import argparse
 
+import numpy as np
+
 from glob import glob
 from pathlib import Path
 from shutil import rmtree
