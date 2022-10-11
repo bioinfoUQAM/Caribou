@@ -143,15 +143,17 @@ class KerasTFModel(ModelsUtils):
         )
         self._encoder.fit(df)
 
-    def _label_decode(self, predict, threshold, nb_cls):
-        print('_label_decode')
-        if nb_cls == 1:
-            predict = np.array(predict.to_pandas()['predictions'])
-            decoded = np.round(predict)
+    def _prob_2_cls(self, predict, nb_cls):
+        print('_prob_2_cls')
+        if nb_cls == 1 and self.classifier != 'lstm':
+            predict = np.round(abs(np.concatenate(predict.to_pandas()['predictions'])))
         else:
             predict = predict.map_batches(map_predicted_label)
             predict = np.ravel(np.array(predict.to_pandas()))
+        return self._label_decode(predict)
 
+    def _label_decode(self, predict):
+        print('_label_decode')
         decoded = pd.Series(np.empty(len(predict), dtype=object))
         for label, encoded in self._labels_map:
             decoded[predict == encoded] = label
@@ -235,15 +237,7 @@ class KerasTFModel(ModelsUtils):
             feature_columns = ['features'],
             batch_size = self.batch_size
         )
-        return self._label_decode(predictions, threshold, self._nb_classes)
-
-
-    # Overcharge to serialize class
-    # def __reduce__(self):
-    #     deserializer = self.__class__
-    #     serialized_data = (self.classifier, self.dataset, self._workdir, self.outdir_results, self.batch_size, self._training_epochs, self.k, self.taxa, self.kmers, self.verbose)
-    #
-    #     return deserializer, serialized_data
+        return self._prob_2_cls(predictions, self._nb_classes)
 
 # Training function outside of the class as mentioned on the Ray discussion
 # https://discuss.ray.io/t/statuscode-resource-exhausted/4379/16
