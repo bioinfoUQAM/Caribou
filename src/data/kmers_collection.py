@@ -8,7 +8,6 @@ import pandas as pd
 from glob import glob
 from shutil import rmtree
 from subprocess import run
-from copy import deepcopy
 from joblib import Parallel, delayed, parallel_backend
 
 __author__ = ['Amine Remita', 'Nicolas de Montigny']

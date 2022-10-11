@@ -5,7 +5,6 @@ from models.extraction import bacteria_extraction
 from tensorflow.compat.v1 import logging
 
 import os
-import sys
 import ray
 import argparse
 
@@ -26,34 +25,29 @@ def bacteria_extraction_train_cv(opt):
     ray.init()
     # Verify existence of files and load data
     if not os.path.isfile(opt['data_bacteria']):
-        print("Cannot find file {} ! Exiting".format(opt['data_bacteria']))
-        sys.exit()
+        raise ValueError("Cannot find file {} ! Exiting".format(opt['data_bacteria']))
     else:
         data_bacteria = load_Xy_data(opt['data_bacteria'])
         # Infer k-mers length from the extracted bacteria profile
         k_length = len(data_bacteria['kmers'][0])
         # Verify that kmers profile file exists
         if not os.path.isdir(data_bacteria['profile']):
-            print("Cannot find data folder {} ! Exiting".format(data_bacteria['profile']))
-            sys.exit()
+            raise ValueError("Cannot find data folder {} ! Exiting".format(data_bacteria['profile']))
 
     # Verify existence of files for host data + concordance and load
     if opt['data_host'] is not None:
         if not os.path.isfile(opt['data_host']):
-            print("Cannot find file {} ! Exiting".format(opt['data_host']))
-            sys.exit()
+            raise ValueError("Cannot find file {} ! Exiting".format(opt['data_host']))
         else:
             data_host = load_Xy_data(opt['data_host'])
             # Verify concordance of k length between datasets
             if k_length != len(data_host['kmers'][0]):
-                print("K length of bacteria dataset is {} while K length from host is {}").format(k_length, len(data_host['kmers'][0]))
-                print("K length between datasets is inconsistent ! Exiting")
-                sys.exit()
+                raise ValueError("K length between datasets is inconsistent ! Exiting\n" +
+                "K length of bacteria dataset is {} while K length from host is {}").format(k_length, len(data_host['kmers'][0]))
             else:
                 # Verify that kmers profile file exists
                 if not os.path.isdir(data_host['profile']):
-                    print("Cannot find data folder {} ! Exiting".format(data_host['profile']))
-                    sys.exit()
+                    raise ValueError("Cannot find data folder {} ! Exiting".format(data_host['profile']))
 
     # Verify that model type is valid / choose default depending on host presence
     if opt['host_name'] is None:
@@ -63,13 +57,11 @@ def bacteria_extraction_train_cv(opt):
 
     # Validate batch size
     if opt['batch_size'] <= 0:
-        print("Invalid batch size ! Exiting")
-        sys.exit()
+        raise ValueError("Invalid batch size ! Exiting")
 
     # Validate number of epochs
     if opt['training_epochs'] <= 0:
-        print("Invalid number of training iterations for neural networks")
-        sys.exit()
+        raise ValueError("Invalid number of training iterations for neural networks")
 
     # Validate path for saving
     outdir_path, outdir_folder = os.path.split(opt['outdir'])
@@ -77,8 +69,7 @@ def bacteria_extraction_train_cv(opt):
         print("Created output folder")
         os.makedirs(opt['outdir'])
     elif not os.path.exists(outdir_path):
-        print("Cannot find where to create output folder ! Exiting")
-        sys.exit()
+        raise ValueError("Cannot find where to create output folder ! Exiting")
 
     # Folders creation for output
     outdirs = {}

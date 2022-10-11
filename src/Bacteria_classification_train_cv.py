@@ -5,7 +5,6 @@ from models.classification import bacteria_classification
 from tensorflow.compat.v1 import logging
 
 import os
-import sys
 import ray
 import argparse
 
@@ -26,16 +25,14 @@ def bacteria_classification_train_cv(opt):
     ray.init()
     # Verify existence of files and load data
     if not os.path.isfile(opt['data_bacteria']):
-        print("Cannot find file {} ! Exiting".format(opt['data_bacteria']))
-        sys.exit()
+        raise ValueError("Cannot find file {} ! Exiting".format(opt['data_bacteria']))
     else:
         data_bacteria = load_Xy_data(opt['data_bacteria'])
         # Infer k-mers length from the extracted bacteria profile
         k_length = len(data_bacteria['kmers'][0])
         # Verify that kmers profile file exists
         if not os.path.isdir(data_bacteria['profile']):
-            print("Cannot find data folder {} ! Exiting".format(data_bacteria['profile']))
-            sys.exit()
+            raise ValueError("Cannot find data folder {} ! Exiting".format(data_bacteria['profile']))
 
     # Verify that model type is valid / choose default depending on host presence
     if opt['model_type'] is None:
@@ -43,13 +40,11 @@ def bacteria_classification_train_cv(opt):
 
     # Validate batch size
     if opt['batch_size'] <= 0:
-        print("Invalid batch size ! Exiting")
-        sys.exit()
+        raise ValueError("Invalid batch size ! Exiting")
 
     # Validate number of epochs
     if opt['training_epochs'] <= 0:
-        print("Invalid number of training iterations for neural networks")
-        sys.exit()
+        raise ValueError("Invalid number of training iterations for neural networks")
 
     # Validate path for saving
     outdir_path, outdir_folder = os.path.split(opt['outdir'])
@@ -57,8 +52,7 @@ def bacteria_classification_train_cv(opt):
         print("Created output folder")
         os.makedirs(opt['outdir'])
     elif not os.path.exists(outdir_path):
-        print("Cannot find where to create output folder ! Exiting")
-        sys.exit()
+        raise ValueError("Cannot find where to create output folder ! Exiting")
 
     # Folders creation for output
     outdirs = {}

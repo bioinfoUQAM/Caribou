@@ -24,7 +24,7 @@ def verify_extract_ids(file):
             for record in SeqIO.parse(handle, 'fasta'):
                 ids.append(record.id)
     elif ext in ['.zip']:
-        with ZipFile.open(file, 'rt') as handle:
+        with zipfile.open(file, 'rt') as handle:
             for record in SeqIO.parse(handle, 'fasta'):
                 ids.append(record.id)
     elif ext in ['.gz','.gzip']:

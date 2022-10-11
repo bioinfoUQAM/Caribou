@@ -1,6 +1,5 @@
 #!/usr/bin python3
 import os
-import sys
 import ray
 import argparse
 import configparser
@@ -20,8 +19,6 @@ from tensorflow.config import list_physical_devices
 __author__ = 'Nicolas de Montigny'
 
 __all__ = ['caribou']
-
-# TODO: RAISE ERRORS INSTEAD OF PRINT + SYS.EXIT
 
 # Suppress Tensorflow warnings
 ################################################################################
@@ -75,14 +72,12 @@ def caribou(opt):
     # io
     for file in [database_seq_file, database_cls_file, metagenome_seq_file]:
         if not os.path.isfile(file):
-            print('Cannot find file {} ! Exiting'.format(file))
-            sys.exit()
+            raise ValueError('Cannot find file {} ! Exiting\n'.format(file))
 
     if host not in ['none', 'None', None]:
         for file in [host_seq_file, host_cls_file]:
             if not os.path.isfile(file):
-                print('Cannot find file {} ! Exiting'.format(file))
-                sys.exit()
+                raise ValueError('Cannot find file {} ! Exiting\n'.format(file))
 
     # Verify path for saving
     outdir_path, outdir_folder = os.path.split(outdir)
@@ -90,64 +85,63 @@ def caribou(opt):
         print("Created output folder")
         os.makedirs(outdir)
     elif not os.path.exists(outdir_path):
-        print("Cannot find where to create output folder ! Exiting")
-        sys.exit()
+        raise ValueError("Cannot find where to create output folder ! Exiting")
 
     # settings
     if type(k_length) != int or k_length <= 0:
-        print('Invalid kmers length ! Please enter a positive integer ! Exiting')
-        print('Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
-        sys.exit()
+        raise ValueError(
+            'Invalid kmers length ! Please enter a positive integer ! Exiting\n' +
+            'Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
     if binary_classifier not in ['onesvm','linearsvm','attention','lstm','deeplstm']:
-        print('Invalid host extraction classifier ! Exiting')
-        print('Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
-        sys.exit()
+        raise ValueError(
+            'Invalid host extraction classifier ! Exiting\n' +
+            'Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
     if multi_classifier not in ['ridge','svm','mlr','mnb','lstm_attention','cnn','widecnn']:
-        print('Invalid multiclass bacterial classifier ! Exiting')
-        print('Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
-        sys.exit()
+        raise ValueError(
+            'Invalid multiclass bacterial classifier ! Exiting\n' +
+            'Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
     if cv not in [True, False, None]:
-        print('Invalid value for cross_validation ! Please use boolean values ! Exiting')
-        print('Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
-        sys.exit()
+        raise ValueError(
+            'Invalid value for cross_validation ! Please use boolean values ! Exiting\n' +
+            'Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
     if type(n_cvJobs) != int or n_cvJobs <= 0:
-        print('Invalid number of cross validation jobs ! Please enter a positive integer ! Exiting')
-        print('Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
-        sys.exit()
+        raise ValueError(
+            'Invalid number of cross validation jobs ! Please enter a positive integer ! Exiting\n' +
+            'Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
     if verbose not in [True, False, None]:
-        print('Invalid value for verbose parameter ! Please use boolean values ! Exiting')
-        print('Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
-        sys.exit()
+        raise ValueError(
+            'Invalid value for verbose parameter ! Please use boolean values ! Exiting\n' +
+            'Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
     if type(training_batch_size) != int or training_batch_size <= 0:
-        print('Invalid number of training batch size ! Please enter a positive integer ! Exiting')
-        print('Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
-        sys.exit()
+        raise ValueError(
+            'Invalid number of training batch size ! Please enter a positive integer ! Exiting\n' +
+            'Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
     if training_epochs <= 0:
-        print('Invalid number of iterations for training neural networks ! Please enter a value bigger than 0 ! Exiting')
-        print('Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
-        sys.exit()
+        raise ValueError(
+            'Invalid number of iterations for training neural networks ! Please enter a value bigger than 0 ! Exiting\n' +
+            'Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
     if not 0 < classifThreshold <= 1 or type(classifThreshold) != float:
-        print('Invalid confidence threshold for classifying bacterial sequences ! Please enter a value between 0 and 1 ! Exiting')
-        print('Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
-        sys.exit()
+        raise ValueError(
+            'Invalid confidence threshold for classifying bacterial sequences ! Please enter a value between 0 and 1 ! Exiting\n' +
+            'Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
 
     # outputs
     if abundance_stats not in [True, False, None]:
-        print('Invalid value for output in abundance table form ! Please use boolean values ! Exiting')
-        print('Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
-        sys.exit()
+        raise ValueError(
+            'Invalid value for output in abundance table form ! Please use boolean values ! Exiting\n' + 
+            'Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
     if kronagram not in [True, False, None]:
-        print('Invalid value for output in Kronagram form ! Please use boolean values ! Exiting')
-        print('Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
-        sys.exit()
+        raise ValueError(
+            'Invalid value for output in Kronagram form ! Please use boolean values ! Exiting\n' +
+            'Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
     if full_report not in [True, False, None]:
-        print('Invalid value for output in full report form ! Please use boolean values ! Exiting')
-        print('Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
-        sys.exit()
+        raise ValueError(
+            'Invalid value for output in full report form ! Please use boolean values ! Exiting\n' +
+            'Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
     if extract_fasta not in [True, False, None]:
-        print('Invalid value for output in fasta extraction form ! Please use boolean values ! Exiting')
-        print('Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
-        sys.exit()
+        raise ValueError(
+            'Invalid value for output in fasta extraction form ! Please use boolean values ! Exiting\n' +
+            'Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
 
     # Adjust classifier based on host presence or not
     if host in ['none', 'None', None]:

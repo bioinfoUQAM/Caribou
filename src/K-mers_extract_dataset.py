@@ -4,7 +4,6 @@ from data.build_data import build_load_save_data
 
 from tensorflow.compat.v1 import logging
 
-import sys
 import ray
 import os.path
 import argparse
@@ -31,14 +30,12 @@ def kmers_dataset(opt):
 
     # Verify there are files to analyse
     if opt['seq_file'] is None and opt['seq_file_host'] is None:
-        print("No file to extract K-mers from ! Exiting")
-        sys.exit()
+        raise ValueError("No file to extract K-mers from ! Exiting")
 
     # Verification of existence of files
     for file in [opt['seq_file'],opt['cls_file'],opt['seq_file_host'],opt['cls_file_host'],opt['kmers_list']]:
         if file is not None and not os.path.isfile(file):
-            print("Cannot find file {} ! Exiting".format(file))
-            sys.exit()
+            raise ValueError("Cannot find file {} ! Exiting".format(file))
 
     # Verification of k length
     if opt['kmers_list'] is not None:
@@ -53,8 +50,7 @@ def kmers_dataset(opt):
             print("Invalid K-mers length but K-mers list file was found ! Setting K-mers length to correspond to previously extracted length !")
             opt['k_length'] = len(kmers_list[0])
     elif opt['k_length'] <= 0 and kmers_list is None:
-        print("Invalid K-mers length ! Exiting")
-        sys.exit()
+        raise ValueError("Invalid K-mers length ! Exiting")
 
     # Verify path for saving
     outdir_path, outdir_folder = os.path.split(opt['outdir'])
@@ -62,8 +58,7 @@ def kmers_dataset(opt):
         print("Created output folder")
         os.makedirs(outdir_folder)
     elif not os.path.exists(outdir_path):
-        print("Cannot find where to create output folder ! Exiting")
-        sys.exit()
+        raise ValueError("Cannot find where to create output folder ! Exiting")
 
     # Folders creation for output
     outdirs = {}
@@ -140,8 +135,9 @@ def kmers_dataset(opt):
             print("Caribou finished extracting k-mers of {}".format(opt['dataset_name']))
 
         else:
-            print("Caribou cannot extract k-mers because there are missing parameters !")
-            print("Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
+            raise ValueError(
+                "Caribou cannot extract k-mers because there are missing parameters !\n" +
+                "Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki")
 
 # Argument parsing from CLI
 ################################################################################
