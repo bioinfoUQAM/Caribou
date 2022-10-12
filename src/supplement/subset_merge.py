@@ -54,12 +54,14 @@ subsets = []
 list_sub_dir = []
 
 list_profiles = []
-list_classes = []
+classes = []
 list_kmers = []
 list_taxas = []
 list_fasta = []
 
 empty = True
+
+opt = {'fasta' : '/mnt/GTDB.fna.gz', 'dir' : '/mnt/output/data/','out' : '/mnt/output/data/Xy_genome_GTDB_data_K20.npz'}
 
 parent_dir = os.path.split(opt['out'])[0]
 ds_dir = os.path.splitext(opt['out'])[0]
@@ -77,20 +79,12 @@ for subset in subsets:
     if empty is True:
         list_sub_dir.append(data['profile'])
         list_profiles = np.array(glob(os.path.join(data['profile'],'*.parquet')))
-        list_classes = np.array(data['classes'])
-        list_kmers = np.array(data['kmers'])
         list_taxas = np.array(data['taxas'])
         empty = False
     else:
         list_profiles = np.append(list_profiles, np.array(glob(os.path.join(data['profile'],'*.parquet'))))
-        list_classes = np.append(list_classes, data['classes'])
-        list_kmers = np.append(list_kmers, data['kmers'])
 
-# Flatten lists
-list_profiles = np.ravel(list_profiles)
-list_classes = np.ravel(list_classes)
-list_kmers = np.unique(np.ravel(list_kmers))
-
+list_profiles = list(list_profiles)
 # Read/concatenate files with Ray by batches
 nb_batch = 0
 while np.ceil(len(list_profiles)/1000) > 1:
@@ -105,6 +99,10 @@ while np.ceil(len(list_profiles)/1000) > 1:
 # Read/concatenate batches and save with Ray
 df = ray.data.read_parquet(list_profiles)
 df.write_parquet(ds_dir)
+
+# Extract kmers list
+
+# Generate classes array
 
 # Save merged dataset
 ################################################################################
@@ -122,5 +120,11 @@ for file in subsets:
     os.remove(file)
 for dir in list_sub_dir:
     rmtree(dir)
+
+# Recreate k-mers list file
+################################################################################
+kmers_list = data['kmers']
+with open(os.path.join(parent_dir, 'kmers_list.txt'), 'w') as handle:
+    handle.writelines("%s\n" % item for item in kmers_list)
 
 print('Datasets merged successfully')
