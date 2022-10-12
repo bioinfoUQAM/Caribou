@@ -147,10 +147,6 @@ class ModelsUtils(ABC):
     def _cv_score(self, y_true, y_pred):
         print('_cv_score')
 
-
-        # if isinstance(y_pred, ray.data.dataset.Dataset):
-        #     y_pred = y_pred.to_pandas()['predictions']
-
         support = precision_recall_fscore_support(y_true, y_pred, average = 'weighted')
 
         scores = pd.DataFrame({'Classifier':self.classifier,'Precision':support[0],'Recall':support[1],'F-score':support[2]}, index = [1]).T

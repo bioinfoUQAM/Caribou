@@ -145,13 +145,21 @@ class SklearnModel(ModelsUtils):
             print('Training bacterial / host classifier with SGD')
             self._clf = SGDClassifier()
             self._train_params = {
-                'loss' : 'squared_error'
+                'alpha' : '0.045',
+                'eta0' : '0.045',
+                'learning_rate' : 'constant',
+                'loss' : 'hinge',
+                'penalty' : 'elasticnet'
             }
         elif self.classifier == 'sgd':
             print('Training multiclass SGD classifier')
             self._clf = SGDClassifier()
             self._train_params = {
-                'loss' : 'squared_error'
+                'alpha' : '0.045',
+                'eta0' : '0.045',
+                'learning_rate' : 'constant',
+                'loss' : 'epsilon_insensitive',
+                'penalty' : 'elasticnet'
             }
         elif self.classifier == 'mnb':
             print('Training multiclass Multinomial Naive Bayes classifier')
