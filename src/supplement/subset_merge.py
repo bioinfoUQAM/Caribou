@@ -27,6 +27,8 @@ parser = argparse.ArgumentParser(
 
 parser.add_argument('-f', '--fasta', required=True, type=Path,
                     help='Path to the original fasta file')
+parser.add_argument('-c', '--cls', required=True, type=Path,
+                    help='Path to the original class file')
 parser.add_argument('-d', '--dir', required=True, type=Path,
                     help='Path to a folder containing all the subsets to merge')
 parser.add_argument('-o', '--out', required=True, type=Path,
@@ -41,6 +43,10 @@ if not os.path.isdir(opt['dir']):
     raise ValueError('Cannot find folder {}'.format(opt['dir']))
 if not os.path.isfile(opt['fasta']):
     raise ValueError('Cannot find file {}'.format(opt['fasta']))
+if not os.path.isdir(opt['cls']):
+    raise ValueError('Cannot find file {}'.format(opt['cls']))
+if os.path.splitext(opt['cls'])[1] != '.csv':
+    raise ValueError('Class file must be a .csv file')
 if os.path.splitext(opt['out'])[1] != '.npz':
     raise ValueError('Output file must be a .npz file')
 
@@ -60,8 +66,6 @@ list_taxas = []
 list_fasta = []
 
 empty = True
-
-opt = {'fasta' : '/mnt/GTDB.fna.gz', 'dir' : '/mnt/output/data/','out' : '/mnt/output/data/Xy_genome_GTDB_data_K20.npz'}
 
 parent_dir = os.path.split(opt['out'])[0]
 ds_dir = os.path.splitext(opt['out'])[0]
@@ -101,14 +105,18 @@ df = ray.data.read_parquet(list_profiles)
 df.write_parquet(ds_dir)
 
 # Extract kmers list
-
+list_kmers = list(df.to_pandas().columns)
 # Generate classes array
+ids = pd.DataFrame(df.to_pandas().index, columns = ['id'])
+cls = pd.read_csv(opt['cls'])
+cls = pd.merge(cls,ids, on = 'id', how = 'inner')
+cls = cls.drop(columns = ['id'])
 
 # Save merged dataset
 ################################################################################
 data['profile'] = ds_dir  # Kmers profile
-data['classes'] = list_classes  # Class labels
-data['kmers'] = list_kmers  # Features
+data['classes'] =  np.array(cls) # Class labels
+data['kmers'] = list_kmers # Features
 data['taxas'] = list_taxas  # Known taxas for classification
 data['fasta'] = opt['fasta']  # Fasta file -> simulate reads if cv
 
@@ -123,8 +131,7 @@ for dir in list_sub_dir:
 
 # Recreate k-mers list file
 ################################################################################
-kmers_list = data['kmers']
 with open(os.path.join(parent_dir, 'kmers_list.txt'), 'w') as handle:
-    handle.writelines("%s\n" % item for item in kmers_list)
+    handle.writelines("%s\n" % item for item in list_kmers)
 
 print('Datasets merged successfully')
