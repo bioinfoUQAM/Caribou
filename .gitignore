@@ -5,3 +5,4 @@ src/outputs/__pycache__/
 src/supplement/__pycache__/
 build/
 src/Caribou.egg-info/
+.vscode/
