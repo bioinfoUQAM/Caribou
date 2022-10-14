@@ -1,24 +1,30 @@
-import modin.pandas as pd
-import numpy as np
-
 import os
 import sys
+import ray
+import pickle
+import cloudpickle
 
-from utils import *
-from models_classes import SklearnModel, KerasTFModel
+import pandas as pd
+
+from models.ray_sklearn import SklearnModel
+from models.ray_keras_tf import KerasTFModel
+from utils import load_Xy_data, save_Xy_data
 
 __author__ = 'Nicolas de Montigny'
 
-__all__ = ['bacterial_classification','classify']
+__all__ = ['bacteria_classification','classify']
 
-# TODO: FINISH CONVERTING TO CLASSES FOR MODELS
-def bacterial_classification(classified_data, database_k_mers, k, outdirs, dataset, training_epochs, classifier = 'lstm_attention', batch_size = 32, threshold = 0.8, verbose = 1, cv = 1, n_jobs = 1):
+def bacteria_classification(classified_data, database_k_mers, k, outdirs, dataset, training_epochs = 100, classifier = 'lstm_attention', batch_size = 32, threshold = 0.8, verbose = True, cv = True, classifying = False):
+    if classified_data is None:
+        classified_data = {}
+        classified_data['order'] = []
     previous_taxa_unclassified = None
 
     taxas = database_k_mers['taxas'].copy()
 
     for taxa in taxas:
         train = False
+        model_file = '{}{}_{}.pkl'.format(outdirs['models_dir'], classifier, taxa)
         classified_kmers_file = '{}Xy_classified_{}_K{}_{}_database_{}_data'.format(outdirs['data_dir'], taxa, k, classifier, dataset)
         unclassified_kmers_file = '{}Xy_unclassified_{}_K{}_{}_database_{}_data'.format(outdirs['data_dir'], taxa, k, classifier, dataset)
 
@@ -26,23 +32,22 @@ def bacterial_classification(classified_data, database_k_mers, k, outdirs, datas
             classified_data[taxa] = previous_taxa_unclassified
             classified_data['order'].append(taxa)
         else:
-            if classifier in ['sgd','svm','mlr','mnb']:
-                model = Sklearn_model(classifier, clf_file, outdirs['results_dir'], batch_size, k, verbose)
+            if classifier in ['sgd','mnb']:
+                model = SklearnModel(classifier, dataset, outdirs['models_dir'], outdirs['results_dir'], batch_size, k, taxa, database_k_mers['kmers'], verbose)
             elif classifier in ['lstm_attention','cnn','widecnn']:
-                model = Keras_TF_model(classifier, clf_file, outdirs['results_dir'], nb_classes, batch_size, k, verbose)
+                model = KerasTFModel(classifier, dataset, outdirs['models_dir'], outdirs['results_dir'], batch_size, training_epochs, k, taxa, database_k_mers['kmers'], verbose)
             else:
                 print('Bacteria classifier type unknown !!!\n\tModels implemented at this moment are :\n\tLinear models :  Ridge regressor (sgd), Linear SVM (svm), Multiple Logistic Regression (mlr)\n\tProbability classifier : Multinomial Bayes (mnb)\n\tNeural networks : Deep hybrid between LSTM and Attention (lstm_attention), CNN (cnn) and Wide CNN (widecnn)')
                 sys.exit()
 
-            if not os.path.isfile(model.clf_file):
+            if not os.path.isfile(model_file):
                 train = True
 
             # Load extracted data if already exists or train and classify bacteria depending on chosen method and taxonomic rank
-            if os.path.isfile(classified_kmers_file) and os.path.isfile(unclassified_kmers_file):
+            if os.path.isdir(classified_kmers_file) and os.path.isdir(unclassified_kmers_file):
                 if verbose:
                     print('Bacteria sequences at {} level already classified'.format(taxa))
-                classified_data[taxa] = load_Xy_data(classified_kmers_file)
-                previous_taxa_unclassified = load_Xy_data(unclassified_kmers_file)
+                previous_taxa_unclassified = ray.data.read_parquet(unclassified_kmers_file)
                 classified_data['order'].append(taxa)
             else:
                 if verbose:
@@ -50,26 +55,41 @@ def bacterial_classification(classified_data, database_k_mers, k, outdirs, datas
                 # If classifier exists load it or train if not
                 if train is True:
                     # Get training dataset and assign to variables
+                    # Keep only classes of sequences that were not removed in kmers extraction
                     X_train = ray.data.read_parquet(database_k_mers['profile'])
-                    y_train = pd.DataFrame(database_k_mers['classes'], columns = database_k_mers['taxas']).loc[:,taxa]
+                    ids = []
+                    for row in X_train.iter_rows():
+                        ids.append(row['__index_level_0__'])
+                    y_train = pd.DataFrame(
+                        {taxa : pd.DataFrame(database_k_mers['classes'], columns = database_k_mers['taxas']).loc[:,taxa].astype('string').str.lower(),
+                        'id' : ids}
+                    )
+                    y_train.index = ids
 
-                    model.train(X_train, y_train, cv)
+                    model.train(X_train, y_train, database_k_mers, cv)
+
+                    with open(model_file, 'wb') as handle:
+                        pickle.dump(cloudpickle.dumps(model), handle)
+                else:
+                    with open(model_file, 'rb') as handle:
+                        model = pickle.load(cloudpickle.loads(handle))
 
                 # Classify sequences into taxa and build k-mers profiles for classified and unclassified data
                 # Keep previous taxa to reclassify only unclassified reads at a higher taxonomic level
-                if previous_taxa_unclassified is None:
-                    if verbose:
-                        print('Classifying bacteria sequences at {} level'.format(taxa))
-                    df = ray.data.read_parquet(classified_data['bacteria']['profile'])
-                    classified_data[taxa], previous_taxa_unclassified = classify(df, clf_file, label_encoder, taxa, classified_kmers_file, unclassified_kmers_file, threshold = threshold, verbose = verbose)
-                else:
-                    if verbose:
-                        print('Classifying bacteria sequences at {} level'.format(taxa))
-                    classified_data[taxa], previous_taxa_unclassified = classify(previous_taxa_unclassified['profile'], model, threshold, verbose)
+                if classifying is True:
+                    if previous_taxa_unclassified is None:
+                        if verbose:
+                            print('Classifying bacteria sequences at {} level'.format(taxa))
+                        df = ray.data.read_parquet(classified_data['bacteria']['profile'])
+                        classified_data[taxa], previous_taxa_unclassified = classify(df, model, taxa, classified_kmers_file, unclassified_kmers_file, threshold = threshold, verbose = verbose)
+                    else:
+                        if verbose:
+                            print('Classifying bacteria sequences at {} level'.format(taxa))
+                        classified_data[taxa], previous_taxa_unclassified = classify(previous_taxa_unclassified['profile'], model, threshold, verbose)
 
-                save_Xy_data(classified_data[taxa], classified_kmers_file)
-                save_Xy_data(previous_taxa_unclassified, unclassified_kmers_file)
-                classified_data['order'].append(taxa)
+                    save_Xy_data(classified_data[taxa], classified_kmers_file)
+                    save_Xy_data(previous_taxa_unclassified, unclassified_kmers_file)
+                    classified_data['order'].append(taxa)
 
     return classified_data
 
@@ -83,11 +103,13 @@ def classify(df_file, model, threshold = 0.8, verbose = True):
 
     pred = model.predict(df, threshold)
 
-    # Make sure classes are writen in lowercase
-    pred = pred.str.lower()
+    df = df.to_pandas()
 
-    df_classified = df[pred.str.notequals('unknown')]
-    df_unclassified = df[pred.str.match('unknown')]
+    # Make sure classes are writen in lowercase
+    pred['class'] = pred['class'].str.lower()
+
+    df_classified = df[pred['class'].str.notequals('unknown')]
+    df_unclassified = df[pred['class'].str.match('unknown')]
 
     # Save / add to classified/unclassified data
     try:

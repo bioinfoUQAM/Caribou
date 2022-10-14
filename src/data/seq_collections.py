@@ -8,7 +8,7 @@ from collections import UserList, defaultdict
 from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
 
-import modin.pandas as pd
+import pandas as pd
 
 # From mlr_kgenomvir
 __author__ = ['Amine Remita', 'Nicolas de Montigny']
@@ -32,7 +32,7 @@ class SeqCollection(UserList):
     data : string
         Path to a file containing sequences in fasta format
 
-    labels : list
+    labels : list of strings
         Collection of labels of the sequences
         The order of label needs to be the same as
         the sequences in data

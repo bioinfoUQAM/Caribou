@@ -13,4 +13,4 @@
 
 __author__ = "Nicolas de Montigny"
 
-__all__ = ['build_data', 'kmer_collections', 'seq_collections', 'generators','KMC','extract_fasta.sh','faSplit']
+__all__ = ['build_data', 'kmers_collection', 'seq_collections','KMC','faSplit']

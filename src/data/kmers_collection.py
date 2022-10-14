@@ -3,7 +3,7 @@ import ray
 import warnings
 
 import numpy as np
-import modin.pandas as pd
+import pandas as pd
 
 from glob import glob
 from shutil import rmtree
@@ -27,6 +27,7 @@ warnings.filterwarnings("ignore")
 
 class KmersCollection():
     """
+    ----------
     Attributes
     ----------
 
@@ -79,9 +80,12 @@ class KmersCollection():
         self.classes = []
         self.method = None
         self.kmers_list = None
-        # Get informations from seq_data if not empty
+        self._schema = None
+        self._labels = None
+        # Get labels from seq_data
         if len(seq_data.labels) > 0:
-            self.classes = np.array(seq_data.labels)
+            self._labels = pd.DataFrame(seq_data.labels, columns = seq_data.taxas, index = seq_data.ids)
+        # Get taxas from seq_data if not empty
         if len(seq_data.taxas) > 0:
             self.taxas = seq_data.taxas
         # Infer method from presence of already extracted kmers or not
@@ -101,7 +105,7 @@ class KmersCollection():
         self._kmc_path = os.path.join(os.path.dirname(os.path.realpath(__file__)),"KMC","bin")
         self._faSplit = os.path.join(os.path.dirname(os.path.realpath(__file__)),"faSplit")
         # Initialize empty
-        self._csv_list = None
+        self._pq_list = None
         self._fasta_list = None
 
         ## Extraction
@@ -110,7 +114,13 @@ class KmersCollection():
         # Get informations from extracted data
         if self.kmers_list is None:
             self.kmers_list = list(self.df.limit(1).to_pandas().columns)
-            self.kmers_list.remove('id')
+        # Get labels that match K-mers extracted sequences
+        if len(seq_data.labels) > 0:
+            ids = []
+            for row in self.df.iter_rows():
+                ids.append(row['__index_level_0__'])
+            msk = np.array([True if id in ids else False for id in seq_data.ids])
+            self.classes = seq_data.labels[msk]
         # Delete global tmp dir
         rmtree(self._tmp_dir)
 
@@ -122,16 +132,21 @@ class KmersCollection():
         self._fasta_list = glob(os.path.join(self._tmp_dir,'*.fa'))
         # Extract kmers in parallel using KMC3
         self._parallel_extraction()
+        # Delete tmp fasta files
+        for file in self._fasta_list:
+            os.remove(file)
         # build kmers matrix
         self._construct_data()
 
     def _parallel_extraction(self):
         if self.method == 'seen':
+            print('seen_kmers')
             with parallel_backend('threading'):
                 Parallel(n_jobs = -1, prefer = 'threads', verbose = 100)(
                 delayed(self._extract_seen_kmers)
                 (i, file) for i, file in enumerate(self._fasta_list))
         elif self.method == 'given':
+            print('given_kmers')
             with parallel_backend('threading'):
                 Parallel(n_jobs = -1, prefer = 'threads', verbose = 100)(
                 delayed(self._extract_given_kmers)
@@ -143,15 +158,16 @@ class KmersCollection():
         id = os.path.splitext(os.path.basename(file))[0]
         os.mkdir(tmp_folder)
         # Count k-mers with KMC
-        cmd_count = os.path.join(self._kmc_path,"kmc -k{} -fm -ci5 -cs1000000000 -m10 -hp {} {} {}".format(self.k, file, os.path.join(tmp_folder, str(ind)), tmp_folder))
+        cmd_count = os.path.join(self._kmc_path,"kmc -k{} -fm -ci1 -cs1000000000 -m10 -hp {} {} {}".format(self.k, file, os.path.join(tmp_folder, str(ind)), tmp_folder))
         run(cmd_count, shell = True, capture_output=True)
         # Transform k-mers db with KMC
         cmd_transform = os.path.join(self._kmc_path,"kmc_tools transform {} dump {}".format(os.path.join(tmp_folder, str(ind)), os.path.join(self._tmp_dir, "{}.txt".format(ind))))
         run(cmd_transform, shell = True, capture_output=True)
         # Transpose kmers profile
-        profile = pd.read_table(os.path.join(self._tmp_dir,"{}.txt".format(ind)), sep = '\t', header = None, names = ['id', str(id)])
-        # Save seen kmers profile to csv file
-        profile.T.to_csv(os.path.join(self._tmp_dir,"{}.csv".format(ind)), header = False)
+        profile = pd.read_table(os.path.join(self._tmp_dir,"{}.txt".format(ind)), sep = '\t', index_col = 0, header = None, names = ['id', str(id)]).T
+        # Save seen kmers profile to parquet file
+        if len(profile.columns) > 0:
+            profile.to_parquet(os.path.join(self._tmp_dir,"{}.parquet".format(ind)))
         # Delete tmp dir and file
         rmtree(tmp_folder)
         os.remove(os.path.join(self._tmp_dir,"{}.txt".format(ind)))
@@ -162,38 +178,49 @@ class KmersCollection():
         id = os.path.splitext(os.path.basename(file))[0]
         os.mkdir(tmp_folder)
         # Count k-mers with KMC
-        cmd_count = os.path.join(self._kmc_path,"kmc -k{} -fm -ci4 -cs1000000000 -m10 -hp {} {} {}".format(self.k, file, os.path.join(tmp_folder, str(ind)), tmp_folder))
+        cmd_count = os.path.join(self._kmc_path,"kmc -k{} -fm -ci1 -cs1000000000 -m10 -hp {} {} {}".format(self.k, file, os.path.join(tmp_folder, str(ind)), tmp_folder))
         run(cmd_count, shell = True, capture_output=True)
         # Transform k-mers db with KMC
         cmd_transform = os.path.join(self._kmc_path,"kmc_tools transform {} dump {}".format(os.path.join(tmp_folder, str(ind)), os.path.join(self._tmp_dir, "{}.txt".format(ind))))
         run(cmd_transform, shell = True, capture_output=True)
         # Transpose kmers profile
-        seen_profile = pd.read_table(os.path.join(self._tmp_dir,"{}.txt".format(ind)), sep = '\t', header = None, names = ['id', str(id)]).T
+        seen_profile = pd.read_table(os.path.join(self._tmp_dir,"{}.txt".format(ind)), sep = '\t', index_col = 0, header = None, names = ['id', str(id)]).T
         # List of seen kmers
         seen_kmers = list(seen_profile.columns)
-        # Tmp df to write given kmers to file
-        given_profile = pd.DataFrame(np.zeros((1,len(self.kmers_list))), columns = self.kmers_list, index = [id])
-        # Keep only given kmers that were found
-        for kmer in self.kmers_list:
-            if kmer in seen_kmers:
-                given_profile.at[id,kmer] = seen_profile.loc[id,kmer]
-            else:
-                given_profile.at[id,kmer] = 0
-        # Save given kmers profile to csv file
-        given_profile.to_csv(os.path.join(self._tmp_dir,"{}.csv".format(ind)), header = False, index_label = 'id')
+        if len(seen_kmers) > 0:
+            # Tmp df to write given kmers to file
+            given_profile = pd.DataFrame(np.zeros((1,len(self.kmers_list))), columns = self.kmers_list, index = [id])
+            # Keep only given kmers that were found
+            for kmer in self.kmers_list:
+                if kmer in seen_kmers:
+                    given_profile.at[id,kmer] = seen_profile.loc[id,kmer]
+                else:
+                    given_profile.at[id,kmer] = 0
+            # Save given kmers profile to csv file
+            given_profile.to_parquet(os.path.join(self._tmp_dir,"{}.parquet".format(ind)))
         # Delete temp dir and file
         rmtree(tmp_folder)
         os.remove(os.path.join(self._tmp_dir,"{}.txt".format(ind)))
 
     def _construct_data(self):
-        self._csv_list = glob(os.path.join(self._tmp_dir,'*.csv'))
-        # Read/concatenate files with Ray
-        self.df = ray.data.read_csv(self._csv_list)
-        # Fill NAs with 0
-        self.df = self.df.map_batches(self._na_2_zero, batch_format = 'pandas')
+        self._pq_list = glob(os.path.join(self._tmp_dir,'*.parquet'))
+        # Read/concatenate files with Ray by batches
+        nb_batch = 0
+        while np.ceil(len(self._pq_list)/1000) > 1:
+            batches_list = np.array_split(self._pq_list, np.ceil(len(self._pq_list)/1000))
+            batch_dir = os.path.join(self._tmp_dir, 'batch_{}'.format(nb_batch))
+            os.mkdir(batch_dir)
+            for batch in batches_list:
+                self._batch_read_write(list(batch), batch_dir)
+            self._pq_list = glob(os.path.join(batch_dir,'*.parquet'))
+            nb_batch += 1
+        # Read/concatenate batches with Ray
+        self.df = ray.data.read_parquet(self._pq_list)
         # Save dataset
         self.df.write_parquet(self.Xy_file)
 
-    def _na_2_zero(self, df):
-        df = df.fillna(0)
-        return df
+    def _batch_read_write(self, batch, dir):
+        df = ray.data.read_parquet(batch)
+        df.write_parquet(dir)
+        for file in batch:
+            os.remove(file)

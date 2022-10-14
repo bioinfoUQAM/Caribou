@@ -1,41 +1,33 @@
 #!/usr/bin python3
-
-from data.build_data import build_load_save_data
-from models.bacteria_extraction import bacteria_extraction
-from models.classification import bacterial_classification
-from outputs.out import to_user
-
-from tensorflow.compat.v1 import ConfigProto, Session
-from tensorflow.compat.v1.keras.backend import set_session
-from tensorflow.config import list_physical_devices
-
 import os
-import sys
 import ray
 import argparse
 import configparser
 
-import modin.pandas as pd
 from pathlib import Path
+
+from data.build_data import build_load_save_data
+from models.extraction import bacteria_extraction
+from models.classification import bacteria_classification
+from outputs.out import Outputs
+
+from tensorflow.compat.v1 import ConfigProto, Session, logging
+from tensorflow.compat.v1.keras.backend import set_session
+from tensorflow.config import list_physical_devices
+
 
 __author__ = 'Nicolas de Montigny'
 
 __all__ = ['caribou']
 
-# GPU & CPU setup
+# Suppress Tensorflow warnings
 ################################################################################
-gpus = list_physical_devices('GPU')
-if gpus:
-    config = ConfigProto(device_count={'GPU': len(gpus), 'CPU': os.cpu_count()})
-    sess = Session(config=config)
-    set_session(sess);
-
-ray.init(num_cpus = os.cpu_count())
+logging.set_verbosity(logging.ERROR)
 
 # Part 0 - Initialisation / extraction of parameters from config file
 ################################################################################
 def caribou(opt):
-
+    ray.init()
     # Get argument values from config file
     config_file = opt['config']
     config = configparser.ConfigParser(
@@ -80,14 +72,12 @@ def caribou(opt):
     # io
     for file in [database_seq_file, database_cls_file, metagenome_seq_file]:
         if not os.path.isfile(file):
-            print('Cannot find file {} ! Exiting'.format(file))
-            sys.exit()
+            raise ValueError('Cannot find file {} ! Exiting\n'.format(file))
 
     if host not in ['none', 'None', None]:
         for file in [host_seq_file, host_cls_file]:
             if not os.path.isfile(file):
-                print('Cannot find file {} ! Exiting'.format(file))
-                sys.exit()
+                raise ValueError('Cannot find file {} ! Exiting\n'.format(file))
 
     # Verify path for saving
     outdir_path, outdir_folder = os.path.split(outdir)
@@ -95,64 +85,63 @@ def caribou(opt):
         print("Created output folder")
         os.makedirs(outdir)
     elif not os.path.exists(outdir_path):
-        print("Cannot find where to create output folder ! Exiting")
-        sys.exit()
+        raise ValueError("Cannot find where to create output folder ! Exiting")
 
     # settings
     if type(k_length) != int or k_length <= 0:
-        print('Invalid kmers length ! Please enter a positive integer ! Exiting')
-        print('Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
-        sys.exit()
+        raise ValueError(
+            'Invalid kmers length ! Please enter a positive integer ! Exiting\n' +
+            'Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
     if binary_classifier not in ['onesvm','linearsvm','attention','lstm','deeplstm']:
-        print('Invalid host extraction classifier ! Exiting')
-        print('Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
-        sys.exit()
+        raise ValueError(
+            'Invalid host extraction classifier ! Exiting\n' +
+            'Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
     if multi_classifier not in ['ridge','svm','mlr','mnb','lstm_attention','cnn','widecnn']:
-        print('Invalid multiclass bacterial classifier ! Exiting')
-        print('Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
-        sys.exit()
+        raise ValueError(
+            'Invalid multiclass bacterial classifier ! Exiting\n' +
+            'Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
     if cv not in [True, False, None]:
-        print('Invalid value for cross_validation ! Please use boolean values ! Exiting')
-        print('Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
-        sys.exit()
+        raise ValueError(
+            'Invalid value for cross_validation ! Please use boolean values ! Exiting\n' +
+            'Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
     if type(n_cvJobs) != int or n_cvJobs <= 0:
-        print('Invalid number of cross validation jobs ! Please enter a positive integer ! Exiting')
-        print('Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
-        sys.exit()
+        raise ValueError(
+            'Invalid number of cross validation jobs ! Please enter a positive integer ! Exiting\n' +
+            'Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
     if verbose not in [True, False, None]:
-        print('Invalid value for verbose parameter ! Please use boolean values ! Exiting')
-        print('Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
-        sys.exit()
+        raise ValueError(
+            'Invalid value for verbose parameter ! Please use boolean values ! Exiting\n' +
+            'Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
     if type(training_batch_size) != int or training_batch_size <= 0:
-        print('Invalid number of training batch size ! Please enter a positive integer ! Exiting')
-        print('Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
-        sys.exit()
+        raise ValueError(
+            'Invalid number of training batch size ! Please enter a positive integer ! Exiting\n' +
+            'Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
     if training_epochs <= 0:
-        print('Invalid number of iterations for training neural networks ! Please enter a value bigger than 0 ! Exiting')
-        print('Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
-        sys.exit()
+        raise ValueError(
+            'Invalid number of iterations for training neural networks ! Please enter a value bigger than 0 ! Exiting\n' +
+            'Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
     if not 0 < classifThreshold <= 1 or type(classifThreshold) != float:
-        print('Invalid confidence threshold for classifying bacterial sequences ! Please enter a value between 0 and 1 ! Exiting')
-        print('Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
-        sys.exit()
+        raise ValueError(
+            'Invalid confidence threshold for classifying bacterial sequences ! Please enter a value between 0 and 1 ! Exiting\n' +
+            'Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
 
     # outputs
     if abundance_stats not in [True, False, None]:
-        print('Invalid value for output in abundance table form ! Please use boolean values ! Exiting')
-        print('Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
-        sys.exit()
+        raise ValueError(
+            'Invalid value for output in abundance table form ! Please use boolean values ! Exiting\n' + 
+            'Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
     if kronagram not in [True, False, None]:
-        print('Invalid value for output in Kronagram form ! Please use boolean values ! Exiting')
-        print('Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
-        sys.exit()
+        raise ValueError(
+            'Invalid value for output in Kronagram form ! Please use boolean values ! Exiting\n' +
+            'Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
     if full_report not in [True, False, None]:
-        print('Invalid value for output in full report form ! Please use boolean values ! Exiting')
-        print('Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
-        sys.exit()
+        raise ValueError(
+            'Invalid value for output in full report form ! Please use boolean values ! Exiting\n' +
+            'Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
     if extract_fasta not in [True, False, None]:
-        print('Invalid value for output in fasta extraction form ! Please use boolean values ! Exiting')
-        print('Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
-        sys.exit()
+        raise ValueError(
+            'Invalid value for output in fasta extraction form ! Please use boolean values ! Exiting\n' +
+            'Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
 
     # Adjust classifier based on host presence or not
     if host in ['none', 'None', None]:
@@ -241,31 +230,36 @@ def caribou(opt):
         k_profile_database,
         k_length,
         outdirs,
-        database,
+        metagenome,
         training_epochs,
         classifier = multi_classifier,
         batch_size = training_batch_size,
         threshold = classifThreshold,
         verbose = verbose,
         cv = cv,
-        n_jobs = n_cvJobs)
+        n_jobs = n_cvJobs,
+        classifying = True)
 
 # Part 4 - Outputs for biological analysis of bacterial population
 ################################################################################
 
-    outputs(k_profile_database,
-            outdirs['results_dir'],
-            k_length,
-            multi_classifier,
-            database,
-            host,
-            classified_data,
-            '{}_seqdata_db_{}.txt'.format(outdirs['data_dir'], database),
-            metagenome_seq_file,
-            abundance_stats = abundance_stats,
-            kronagram = kronagram,
-            full_report = full_report,
-            extract_fasta = extract_fasta)
+    outputs = Outputs(k_profile_database,
+                      results_dir,
+                      k_length,
+                      multi_classifier,
+                      metagenome,
+                      host,
+                      classified_data)
+
+    # Output desired files according to parameters
+    if abundance_stats is True:
+        outputs.abundances()
+    if kronagram is True:
+        outputs.kronagram()
+    if full_report is True:
+        outputs.report()
+    if extract_fasta is True:
+        outputs.fasta()
 
     print('Caribou finished executing without faults and all results were outputed in the designated folders')
 

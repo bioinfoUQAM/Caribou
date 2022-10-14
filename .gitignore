@@ -1,6 +1,8 @@
 __pycache__/
-Caribou/__pycache__/
-Caribou/src/data/__pycache__/
-Caribou/src/models/__pycache__/
-Caribou/src/outputs/__pycache__/
-Caribou/src/supplement/__pycache__/
+src/data/__pycache__/
+src/models/__pycache__/
+src/outputs/__pycache__/
+src/supplement/__pycache__/
+build/
+src/Caribou.egg-info/
+.vscode/
