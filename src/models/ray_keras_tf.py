@@ -39,7 +39,6 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 warnings.filterwarnings('ignore')
 
 class KerasTFModel(ModelsUtils):
-    # https://docs.ray.io/en/master/ray-air/examples/tfx_tabular_train_to_serve.html
     """
     Class used to build, train and predict models using Ray with Keras Tensorflow backend
 
@@ -75,14 +74,25 @@ class KerasTFModel(ModelsUtils):
         self._training_epochs = training_epochs
         # Initialize empty
         self._nb_classes = None
-        self._use_gpu = False
         # Computing variables
-        # if len(tf.config.list_physical_devices('GPU')) > 0:
-        #     self._use_gpu = True
-        #     self._n_workers = len(tf.config.list_physical_devices('GPU'))
-        # else:
-        #     self._use_gpu = False
+        if len(tf.config.list_physical_devices('GPU')) > 0:
+            self._use_gpu = True
+            self._n_workers = len(tf.config.list_physical_devices('GPU'))
+        else:
+            self._use_gpu = False
         self._n_workers = int(np.floor(os.cpu_count()*.8))
+        if self.classifier == 'attention':
+            print('Training bacterial / host classifier based on Attention Weighted Neural Network')
+        elif self.classifier == 'lstm':
+            print('Training bacterial / host classifier based on Shallow LSTM Neural Network')
+        elif self.classifier == 'deeplstm':
+            print('Training bacterial / host classifier based on Deep LSTM Neural Network')
+        elif self.classifier == 'lstm_attention':
+            print('Training multiclass classifier based on Deep Neural Network hybrid between LSTM and Attention')
+        elif self.classifier == 'cnn':
+            print('Training multiclass classifier based on CNN Neural Network')
+        elif self.classifier == 'widecnn':
+            print('Training multiclass classifier based on Wide CNN Network')
 
     def _training_preprocess(self, X, y):
         print('_training_preprocess')
@@ -303,22 +313,16 @@ def train_func(config):
 def build_model(classifier, nb_cls, nb_kmers):
     print('build')
     if classifier == 'attention':
-        print('Training bacterial / host classifier based on Attention Weighted Neural Network')
         clf = build_attention(nb_kmers)
     elif classifier == 'lstm':
-        print('Training bacterial / host classifier based on Shallow LSTM Neural Network')
         clf = build_LSTM(nb_kmers)
     elif classifier == 'deeplstm':
-        print('Training bacterial / host classifier based on Deep LSTM Neural Network')
         clf = build_deepLSTM(nb_kmers)
     elif classifier == 'lstm_attention':
-        print('Training multiclass classifier based on Deep Neural Network hybrid between LSTM and Attention')
         clf = build_LSTM_attention(nb_kmers, nb_cls)
     elif classifier == 'cnn':
-        print('Training multiclass classifier based on CNN Neural Network')
         clf = build_CNN(nb_kmers, nb_cls)
     elif classifier == 'widecnn':
-        print('Training multiclass classifier based on Wide CNN Network')
         clf = build_wideCNN(nb_kmers, nb_cls)
     return clf
 

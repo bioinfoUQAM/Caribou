@@ -181,7 +181,7 @@ class SklearnModel(ModelsUtils):
             set_estimator_cpus = True,
             scaling_config = ScalingConfig(
                 trainer_resources = {
-                    'CPU' : 5
+                    'CPU' : 5 if os.cpu_count() > 4 else 3
                 }
             ),
             run_config = RunConfig(
