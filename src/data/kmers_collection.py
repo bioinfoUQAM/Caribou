@@ -158,7 +158,7 @@ class KmersCollection():
         id = os.path.splitext(os.path.basename(file))[0]
         os.mkdir(tmp_folder)
         # Count k-mers with KMC
-        cmd_count = os.path.join(self._kmc_path,"kmc -k{} -fm -ci1 -cs1000000000 -m10 -hp {} {} {}".format(self.k, file, os.path.join(tmp_folder, str(ind)), tmp_folder))
+        cmd_count = os.path.join(self._kmc_path,"kmc -k{} -fm -cs1000000000 -hp {} {} {}".format(self.k, file, os.path.join(tmp_folder, str(ind)), tmp_folder))
         run(cmd_count, shell = True, capture_output=True)
         # Transform k-mers db with KMC
         cmd_transform = os.path.join(self._kmc_path,"kmc_tools transform {} dump {}".format(os.path.join(tmp_folder, str(ind)), os.path.join(self._tmp_dir, "{}.txt".format(ind))))
@@ -178,7 +178,7 @@ class KmersCollection():
         id = os.path.splitext(os.path.basename(file))[0]
         os.mkdir(tmp_folder)
         # Count k-mers with KMC
-        cmd_count = os.path.join(self._kmc_path,"kmc -k{} -fm -ci1 -cs1000000000 -m10 -hp {} {} {}".format(self.k, file, os.path.join(tmp_folder, str(ind)), tmp_folder))
+        cmd_count = os.path.join(self._kmc_path,"kmc -k{} -fm -cs1000000000 -hp {} {} {}".format(self.k, file, os.path.join(tmp_folder, str(ind)), tmp_folder))
         run(cmd_count, shell = True, capture_output=True)
         # Transform k-mers db with KMC
         cmd_transform = os.path.join(self._kmc_path,"kmc_tools transform {} dump {}".format(os.path.join(tmp_folder, str(ind)), os.path.join(self._tmp_dir, "{}.txt".format(ind))))
@@ -215,12 +215,12 @@ class KmersCollection():
             self._pq_list = glob(os.path.join(batch_dir,'*.parquet'))
             nb_batch += 1
         # Read/concatenate batches with Ray
-        self.df = ray.data.read_parquet(self._pq_list)
+        self.df = ray.data.read_parquet_bulk(self._pq_list)
         # Save dataset
         self.df.write_parquet(self.Xy_file)
 
     def _batch_read_write(self, batch, dir):
-        df = ray.data.read_parquet(batch)
+        df = ray.data.read_parquet_bulk(batch)
         df.write_parquet(dir)
         for file in batch:
             os.remove(file)
