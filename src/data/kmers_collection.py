@@ -213,7 +213,7 @@ class KmersCollection():
         try:
             file_out = file.replace('.parquet', '_r.parquet')
             df = pa.concat_tables(
-                [pa.table([pa.nulls(1, pa.uint64) for col in self._lst_columns], names=self._lst_columns),
+                [pa.table([np.zeros(1, dtype = np.int64) for col in self._lst_columns], names=self._lst_columns),
                     pq.read_pandas(file)
                 ], promote=True
             ).take([1, ])
