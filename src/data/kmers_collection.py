@@ -213,11 +213,11 @@ class KmersCollection():
         try:
             file_out = file.replace('.parquet', '_r.parquet')
             df = pa.concat_tables(
-                [pa.table([pa.nulls(1) for col in self._lst_columns], names=self._lst_columns),
+                [pa.table([np.zeros(1) for col in self._lst_columns], names=self._lst_columns),
                     pq.read_pandas(file)
                 ], promote=True
             ).take([1, ])
-            pa.parquet.write_table(df, file_out)
+            ray.data.from_arrow(df).write_parquet(file_out)
             return file_out
         except OSError:
             pass
