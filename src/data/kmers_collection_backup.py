@@ -4,8 +4,6 @@ import warnings
 
 import numpy as np
 import pandas as pd
-import pyarrow as pa
-import pyarrow.parquet as pq
 
 from glob import glob
 from shutil import rmtree
@@ -82,7 +80,7 @@ class KmersCollection():
         self.classes = []
         self.method = None
         self.kmers_list = None
-        self._lst_columns = []
+        self._schema = None
         self._labels = None
         # Get labels from seq_data
         if len(seq_data.labels) > 0:
@@ -124,7 +122,7 @@ class KmersCollection():
             msk = np.array([True if id in ids else False for id in seq_data.ids])
             self.classes = seq_data.labels[msk]
         # Delete global tmp dir
-        # rmtree(self._tmp_dir)
+        rmtree(self._tmp_dir)
 
     def _compute_kmers(self):
         # Split files using faSplit
@@ -141,21 +139,18 @@ class KmersCollection():
         self._construct_data()
 
     def _parallel_extraction(self):
-        lst_col = []
         if self.method == 'seen':
             print('seen_kmers')
             with parallel_backend('threading'):
-                lst_col = Parallel(n_jobs = -1, prefer = 'threads', verbose = 1)(
-                    delayed(self._extract_seen_kmers)
-                    (i, file) for i, file in enumerate(self._fasta_list))
+                Parallel(n_jobs = -1, prefer = 'threads', verbose = 100)(
+                delayed(self._extract_seen_kmers)
+                (i, file) for i, file in enumerate(self._fasta_list))
         elif self.method == 'given':
             print('given_kmers')
             with parallel_backend('threading'):
-                lst_col = Parallel(n_jobs = -1, prefer = 'threads', verbose = 1)(
-                    delayed(self._extract_given_kmers)
-                    (i, file) for i, file in enumerate(self._fasta_list))
-        # Get list of all columns in files in parallel
-        self._lst_columns = np.unique(np.concatenate(lst_col))
+                Parallel(n_jobs = -1, prefer = 'threads', verbose = 100)(
+                delayed(self._extract_given_kmers)
+                (i, file) for i, file in enumerate(self._fasta_list))
 
     def _extract_seen_kmers(self, ind, file):
         # Make tmp folder per sequence
@@ -163,7 +158,7 @@ class KmersCollection():
         id = os.path.splitext(os.path.basename(file))[0]
         os.mkdir(tmp_folder)
         # Count k-mers with KMC
-        cmd_count = os.path.join(self._kmc_path,"kmc -k{} -fm -cs1000000000 -hp {} {} {}".format(self.k, file, os.path.join(tmp_folder, str(ind)), tmp_folder))
+        cmd_count = os.path.join(self._kmc_path,"kmc -k{} -fm -ci1 -cs1000000000 -m10 -hp {} {} {}".format(self.k, file, os.path.join(tmp_folder, str(ind)), tmp_folder))
         run(cmd_count, shell = True, capture_output=True)
         # Transform k-mers db with KMC
         cmd_transform = os.path.join(self._kmc_path,"kmc_tools transform {} dump {}".format(os.path.join(tmp_folder, str(ind)), os.path.join(self._tmp_dir, "{}.txt".format(ind))))
@@ -176,7 +171,6 @@ class KmersCollection():
         # Delete tmp dir and file
         rmtree(tmp_folder)
         os.remove(os.path.join(self._tmp_dir,"{}.txt".format(ind)))
-        return list(profile.columns)
 
     def _extract_given_kmers(self, ind, file):
         # Make tmp folder per sequence
@@ -184,7 +178,7 @@ class KmersCollection():
         id = os.path.splitext(os.path.basename(file))[0]
         os.mkdir(tmp_folder)
         # Count k-mers with KMC
-        cmd_count = os.path.join(self._kmc_path,"kmc -k{} -fm -cs1000000000 -hp {} {} {}".format(self.k, file, os.path.join(tmp_folder, str(ind)), tmp_folder))
+        cmd_count = os.path.join(self._kmc_path,"kmc -k{} -fm -ci1 -cs1000000000 -m10 -hp {} {} {}".format(self.k, file, os.path.join(tmp_folder, str(ind)), tmp_folder))
         run(cmd_count, shell = True, capture_output=True)
         # Transform k-mers db with KMC
         cmd_transform = os.path.join(self._kmc_path,"kmc_tools transform {} dump {}".format(os.path.join(tmp_folder, str(ind)), os.path.join(self._tmp_dir, "{}.txt".format(ind))))
@@ -207,27 +201,9 @@ class KmersCollection():
         # Delete temp dir and file
         rmtree(tmp_folder)
         os.remove(os.path.join(self._tmp_dir,"{}.txt".format(ind)))
-        return list(profile.columns)
-
-    def _populate_data(self, file):
-        try:
-            file_out = file.replace('.parquet', '_r.parquet')
-            df = pa.concat_tables(
-                [pa.table([pa.nulls(1) for col in self._lst_columns], names=self._lst_columns),
-                    pq.read_pandas(file)
-                ], promote=True
-            ).take([1, ])
-            pa.parquet.write_table(df, file_out)
-            return file_out
-        except OSError:
-            pass
 
     def _construct_data(self):
         self._pq_list = glob(os.path.join(self._tmp_dir,'*.parquet'))
-        # Create empty dataframe with all columns and populate them in parallel
-        with parallel_backend('threading'):
-            self._pq_list = Parallel(n_jobs = -1, verbose = 1)(
-                delayed(self._populate_data)(file) for file in self._pq_list)
         # Read/concatenate files with Ray by batches
         nb_batch = 0
         while np.ceil(len(self._pq_list)/1000) > 1:
@@ -239,12 +215,12 @@ class KmersCollection():
             self._pq_list = glob(os.path.join(batch_dir,'*.parquet'))
             nb_batch += 1
         # Read/concatenate batches with Ray
-        self.df = ray.data.read_parquet_bulk(self._pq_list)
+        self.df = ray.data.read_parquet(self._pq_list)
         # Save dataset
         self.df.write_parquet(self.Xy_file)
 
     def _batch_read_write(self, batch, dir):
-        df = ray.data.read_parquet_bulk(batch)
+        df = ray.data.read_parquet(batch)
         df.write_parquet(dir)
         for file in batch:
             os.remove(file)
