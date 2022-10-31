@@ -217,7 +217,8 @@ class KmersCollection():
                     pq.read_pandas(file)
                 ], promote=True
             ).take([1, ])
-            ray.data.from_arrow(df).write_parquet(file_out)
+            pq.write_table(df, file_out)
+            #ray.data.from_arrow(df).write_parquet(file_out)
             return file_out
         except OSError:
             pass
