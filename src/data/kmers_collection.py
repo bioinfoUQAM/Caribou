@@ -5,6 +5,7 @@ import warnings
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+import modin.pandas as mpd
 import pyarrow.parquet as pq
 
 from glob import glob
@@ -84,6 +85,7 @@ class KmersCollection():
         self.kmers_list = None
         self._lst_columns = []
         self._labels = None
+        self._ids = []
         # Get labels from seq_data
         if len(seq_data.labels) > 0:
             self._labels = pd.DataFrame(seq_data.labels, columns = seq_data.taxas, index = seq_data.ids)
@@ -163,7 +165,7 @@ class KmersCollection():
         id = os.path.splitext(os.path.basename(file))[0]
         os.mkdir(tmp_folder)
         # Count k-mers with KMC
-        cmd_count = os.path.join(self._kmc_path,"kmc -k{} -fm -cs1000000000 -hp {} {} {}".format(self.k, file, os.path.join(tmp_folder, str(ind)), tmp_folder))
+        cmd_count = os.path.join(self._kmc_path,"kmc -k{} -fm -ci5 -cs1000000000 -hp {} {} {}".format(self.k, file, os.path.join(tmp_folder, str(ind)), tmp_folder))
         run(cmd_count, shell = True, capture_output=True)
         # Transform k-mers db with KMC
         cmd_transform = os.path.join(self._kmc_path,"kmc_tools transform {} dump {}".format(os.path.join(tmp_folder, str(ind)), os.path.join(self._tmp_dir, "{}.txt".format(ind))))
@@ -184,7 +186,7 @@ class KmersCollection():
         id = os.path.splitext(os.path.basename(file))[0]
         os.mkdir(tmp_folder)
         # Count k-mers with KMC
-        cmd_count = os.path.join(self._kmc_path,"kmc -k{} -fm -cs1000000000 -hp {} {} {}".format(self.k, file, os.path.join(tmp_folder, str(ind)), tmp_folder))
+        cmd_count = os.path.join(self._kmc_path,"kmc -k{} -fm -ci5 -cs1000000000 -hp {} {} {}".format(self.k, file, os.path.join(tmp_folder, str(ind)), tmp_folder))
         run(cmd_count, shell = True, capture_output=True)
         # Transform k-mers db with KMC
         cmd_transform = os.path.join(self._kmc_path,"kmc_tools transform {} dump {}".format(os.path.join(tmp_folder, str(ind)), os.path.join(self._tmp_dir, "{}.txt".format(ind))))
@@ -209,26 +211,52 @@ class KmersCollection():
         os.remove(os.path.join(self._tmp_dir,"{}.txt".format(ind)))
         return list(profile.columns)
 
+    """
     def _populate_data(self, file):
         try:
             file_out = file.replace('.parquet', '_r.parquet')
             df = pa.concat_tables(
-                [pa.table([np.zeros(1, dtype = np.int64) for col in self._lst_columns], names=self._lst_columns),
+                [pa.table([pa.nulls(1) for col in self._lst_columns], names=self._lst_columns),
                     pq.read_pandas(file)
                 ], promote=True
             ).take([1, ])
-            pq.write_table(df, file_out)
-            #ray.data.from_arrow(df).write_parquet(file_out)
+            pa.parquet.write_table(df, file_out)
             return file_out
         except OSError:
             pass
-
+    """
+    
     def _construct_data(self):
-        self._pq_list = glob(os.path.join(self._tmp_dir,'*.parquet'))
-        # Create empty dataframe with all columns and populate them in parallel
-        with parallel_backend('threading'):
-            self._pq_list = Parallel(n_jobs = -1, verbose = 1)(
-                delayed(self._populate_data)(file) for file in self._pq_list)
+        self._lst_columns # list of all columns
+        self._pq_list # list of all parquet files
+        self._ids # list of all ids
+
+        if len(self._pq_list) > 100:
+            batches_lst = np.array_split(self._pq_list, len(self._pq_list)/100)
+        else:
+            batches_lst = [self._pq_list]
+        
+        construct_dir = os.path.join(self._tmp_dir, 'construct')
+        os.mkdir(construct_dir)
+
+        # Batch populate iterativelly dataframe in modin
+        for batch in batches_lst:
+            rows = []
+            df = mpd.DataFrame(np.zeros((len(batch), len(self._lst_columns)), dtype = np.int64), columns = self._lst_columns)
+            for i, file in enumerate(batch):
+                try:
+                    file_df = pd.read_parquet(file)
+                    rows.append(file_df.index[0])
+                    for col in file_df.columns:
+                        df.loc[i, col] = file_df.at[rows[i], col]
+                except OSError:
+                    pass
+            df.index = rows
+            self._ids.append(rows)
+            ray.data.from_modin(df).write_parquet(construct_dir)
+
+        self._pq_list = glob(os.path.join(construct_dir, '*.parquet'))
+
         # Read/concatenate files with Ray by batches
         nb_batch = 0
         while np.ceil(len(self._pq_list)/1000) > 1:
