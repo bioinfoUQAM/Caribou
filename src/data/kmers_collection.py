@@ -117,10 +117,9 @@ class KmersCollection():
         self._compute_kmers()
         # Get informations from extracted data
         if self.kmers_list is None:
-            self.kmers_list = list(self.df.limit(1).to_pandas().columns)
+            self.kmers_list = list(self._lst_columns)
         # Get labels that match K-mers extracted sequences
         if len(seq_data.labels) > 0:
-            ids = []
             for row in self.df.iter_rows():
                 ids.append(row['__index_level_0__'])
             msk = np.array([True if id in ids else False for id in seq_data.ids])
@@ -234,8 +233,11 @@ class KmersCollection():
                 except OSError:
                     pass
             df.index = rows
+            print(df)
             self._ids.append(rows)
+            print(self._ids)
             ray.data.from_modin(df).write_parquet(construct_dir)
+        sys.exit()
 
         self._pq_list = glob(os.path.join(construct_dir, '*.parquet'))
 
