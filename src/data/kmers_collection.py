@@ -235,8 +235,11 @@ class KmersCollection():
             df.index = rows
             print(df)
             self._ids.append(rows)
-            print(self._ids)
-            ray.data.from_modin(df).write_parquet(construct_dir)
+            print(ray.data.from_modin(df))
+            # .write_parquet(construct_dir)
+        print(self._ids)
+        print(np.ravel(self._ids))
+        print(np.concatenate(self._ids))
         sys.exit()
 
         self._pq_list = glob(os.path.join(construct_dir, '*.parquet'))
