@@ -225,8 +225,13 @@ class KmersCollection():
         # Iterative batch populate modin dataframe + write to parquet with Ray
         for batch in batches_lst:
             rows = []
-            df = mpd.DataFrame(np.zeros((len(batch), len(self._lst_columns) + 1), dtype = np.int64), columns = ['id'].extend(self._lst_columns))
-            df['id'] = df['id'].astype('object')
+            # self._lst_columns.extend(['id'])
+            # df = mpd.DataFrame(np.zeros((len(batch), len(self._lst_columns)), dtype = np.int64), columns = self._lst_columns)
+            dct_df = {'id': np.empty((len(batch)), dtype = 'object')}
+            for col in self._lst_columns:
+                dct_df[col] = np.zeros((len(batch),), dtype = np.int64)
+            df = mpd.DataFrame(dct_df)
+            # df['id'] = df['id'].astype('object')
             for i, file in enumerate(batch):
                 try:
                     file_df = pd.read_parquet(file)
