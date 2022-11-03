@@ -211,26 +211,8 @@ class KmersCollection():
         os.remove(os.path.join(self._tmp_dir,"{}.txt".format(ind)))
         return list(profile.columns)
 
-    """
-    def _populate_data(self, file):
-        try:
-            file_out = file.replace('.parquet', '_r.parquet')
-            df = pa.concat_tables(
-                [pa.table([pa.nulls(1) for col in self._lst_columns], names=self._lst_columns),
-                    pq.read_pandas(file)
-                ], promote=True
-            ).take([1, ])
-            pa.parquet.write_table(df, file_out)
-            return file_out
-        except OSError:
-            pass
-    """
-    
     def _construct_data(self):
-        self._lst_columns # list of all columns
-        self._pq_list # list of all parquet files
-        self._ids # list of all ids
-
+        self._pq_list = glob(os.path.join(self._tmp_dir,'*.parquet'))
         if len(self._pq_list) > 100:
             batches_lst = np.array_split(self._pq_list, len(self._pq_list)/100)
         else:
@@ -239,7 +221,7 @@ class KmersCollection():
         construct_dir = os.path.join(self._tmp_dir, 'construct')
         os.mkdir(construct_dir)
 
-        # Batch populate iterativelly dataframe in modin
+        # Iterative batch populate modin dataframe + write to parquet with Ray
         for batch in batches_lst:
             rows = []
             df = mpd.DataFrame(np.zeros((len(batch), len(self._lst_columns)), dtype = np.int64), columns = self._lst_columns)
