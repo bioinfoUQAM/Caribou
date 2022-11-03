@@ -226,6 +226,7 @@ class KmersCollection():
         for batch in batches_lst:
             rows = []
             df = mpd.DataFrame(np.zeros((len(batch), len(self._lst_columns) + 1), dtype = np.int64), columns = ['id'].extend(self._lst_columns))
+            df['ids'] = df['ids'].astype('object')
             for i, file in enumerate(batch):
                 try:
                     file_df = pd.read_parquet(file)
