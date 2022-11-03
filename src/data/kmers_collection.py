@@ -4,9 +4,7 @@ import warnings
 
 import numpy as np
 import pandas as pd
-import pyarrow as pa
 import modin.pandas as mpd
-import pyarrow.parquet as pq
 
 from glob import glob
 from shutil import rmtree

@@ -11,6 +11,7 @@ keras
 pyarrow<7.0.0,>=6.0.1
 ray[default]>=2.0.0
 ray[tune]
+modin[ray]
 insilicoseq
 tqdm
 cloudpickle
