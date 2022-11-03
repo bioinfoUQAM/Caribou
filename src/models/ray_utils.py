@@ -101,7 +101,7 @@ class ModelsUtils(ABC):
     def _predict_preprocess(self, df):
         print('_predict_preprocess')
         for row in df.iter_rows():
-            self._predict_ids.append(row['__index_level_0__'])
+            self._predict_ids.append(row['id'])
         self._preprocessor = Chain(SimpleImputer(
             self.kmers, strategy='constant', fill_value=0), MinMaxScaler(self.kmers))
         df = self._preprocessor.fit_transform(df)
@@ -137,10 +137,7 @@ class ModelsUtils(ABC):
         cv_sim = readsSimulation(kmers_ds['fasta'], cls, sim_genomes, 'miseq', sim_outdir, name)
         sim_data = cv_sim.simulation(self.k, self.kmers)
         df = ray.data.read_parquet(sim_data['profile'])
-        ids = []
-        for row in df.iter_rows():
-            ids.append(row['__index_level_0__'])
-        labels = pd.DataFrame(sim_data['classes'], index = ids)
+        labels = pd.DataFrame(sim_data['classes'], index = kmers_ds['ids'])
         df = df.add_column(self.taxa, lambda x : labels)
         return df
 

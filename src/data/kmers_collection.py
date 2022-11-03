@@ -82,13 +82,13 @@ class KmersCollection():
         self.fasta = seq_data.data
         # Initialize empty
         self.df = None
+        self.ids = []
         self.taxas = []
         self.classes = []
         self.method = None
         self.kmers_list = None
         self._lst_columns = []
         self._labels = None
-        self.ids = []
         # Get labels from seq_data
         if len(seq_data.labels) > 0:
             self._labels = pd.DataFrame(seq_data.labels, columns = seq_data.taxas, index = seq_data.ids)
@@ -225,13 +225,10 @@ class KmersCollection():
         # Iterative batch populate modin dataframe + write to parquet with Ray
         for batch in batches_lst:
             rows = []
-            # self._lst_columns.extend(['id'])
-            # df = mpd.DataFrame(np.zeros((len(batch), len(self._lst_columns)), dtype = np.int64), columns = self._lst_columns)
             dct_df = {'id': np.empty((len(batch)), dtype = 'object')}
             for col in self._lst_columns:
                 dct_df[col] = np.zeros((len(batch),), dtype = np.int64)
             df = mpd.DataFrame(dct_df)
-            # df['id'] = df['id'].astype('object')
             for i, file in enumerate(batch):
                 try:
                     file_df = pd.read_parquet(file)
@@ -241,10 +238,8 @@ class KmersCollection():
                         df.loc[i, col] = file_df.at[rows[i], col]
                 except OSError:
                     pass
-            print(df)
             self.ids.append(rows)
             ray.data.from_modin(df).write_parquet(construct_dir)
-        sys.exit()
 
         self._pq_list = glob(os.path.join(construct_dir, '*.parquet'))
 

@@ -57,14 +57,11 @@ def bacteria_classification(classified_data, database_k_mers, k, outdirs, datase
                     # Get training dataset and assign to variables
                     # Keep only classes of sequences that were not removed in kmers extraction
                     X_train = ray.data.read_parquet(database_k_mers['profile'])
-                    ids = []
-                    for row in X_train.iter_rows():
-                        ids.append(row['__index_level_0__'])
                     y_train = pd.DataFrame(
                         {taxa : pd.DataFrame(database_k_mers['classes'], columns = database_k_mers['taxas']).loc[:,taxa].astype('string').str.lower(),
-                        'id' : ids}
+                        'id' : database_k_mers['ids']}
                     )
-                    y_train.index = ids
+                    y_train.index = database_k_mers['ids']
 
                     model.train(X_train, y_train, database_k_mers, cv)
 

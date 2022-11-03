@@ -89,6 +89,7 @@ def build_Xy_data(seq_data, k, Xy_file, dataset, kmers_list = None):
 
     # Data in a dictionnary
     data['profile'] = collection.Xy_file # Kmers profile
+    data['ids'] = collection.ids # Ids of profiles
     data['classes'] = collection.classes # Class labels
     data['kmers'] = collection.kmers_list # Features
     data['taxas'] = collection.taxas # Known taxas for classification
@@ -104,6 +105,7 @@ def build_X_data(seq_data, k, X_file, dataset, kmers_list):
 
     # Data in a dictionnary
     data['profile'] = collection.Xy_file
+    data['ids'] = collection.ids
     data['kmers'] = collection.kmers
 
     return data

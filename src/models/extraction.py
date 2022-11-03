@@ -47,14 +47,11 @@ def bacteria_extraction(metagenome_k_mers, database_k_mers, k, outdirs, dataset,
             elif classifier == 'onesvm' and not isinstance(database_k_mers, tuple):
                 model = SklearnModel(classifier, dataset, outdirs['models_dir'], outdirs['results_dir'], batch_size, k, 'domain', database_k_mers['kmers'], verbose)
                 X_train = ray.data.read_parquet(database_k_mers['profile'])
-                ids = []
-                for row in X_train.iter_rows():
-                    ids.append(row['__index_level_0__'])
                 y_train = pd.DataFrame(
                     {'domain': pd.DataFrame(database_k_mers['classes'], columns=database_k_mers['taxas']).loc[:, 'domain'].astype('string').str.lower(),
-                    'id': ids}
+                    'id': database_k_mers['ids']}
                 )
-                y_train.index = ids
+                y_train.index = database_k_mers['ids']
             elif classifier != 'onesvm' and isinstance(database_k_mers, tuple):
                 database_k_mers = merge_database_host(database_k_mers[0], database_k_mers[1])
                 if classifier in ['attention','lstm','deeplstm']:
@@ -65,14 +62,11 @@ def bacteria_extraction(metagenome_k_mers, database_k_mers, k, outdirs, dataset,
                     print('Bacteria extractor unknown !!!\n\tModels implemented at this moment are :\n\tBacteria isolator :  One Class SVM (onesvm)\n\tBacteria/host classifiers : Linear SVM (linearsvm)\n\tNeural networks : Attention (attention), Shallow LSTM (lstm) and Deep LSTM (deeplstm)')
                     sys.exit()
                 X_train = ray.data.read_parquet(database_k_mers['profile'])
-                ids = []
-                for row in X_train.iter_rows():
-                    ids.append(row['__index_level_0__'])
                 y_train = pd.DataFrame(
                     {'domain': pd.DataFrame(database_k_mers['classes'], columns=database_k_mers['taxas']).loc[:, 'domain'].astype('string').str.lower(),
-                    'id': ids}
+                     'id': database_k_mers['ids']}
                 )
-                y_train.index = ids
+                y_train.index = database_k_mers['ids']
             else:
                 print('Only classifier One Class SVM can be used without host data!\nEither add host data in config file or choose classifier One Class SVM.')
                 sys.exit()
