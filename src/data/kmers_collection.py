@@ -51,6 +51,9 @@ class KmersCollection():
     df : ray.data.Dataset
         A Ray dataset containing the K-mers abundance profiles of each sequences
 
+    ids : list
+        A list of all sequences ids
+
     taxas : list of strings
         A list containing the taxas contained in the dataset if they were present
         Returns None if no taxas were present in the dataset
@@ -85,7 +88,7 @@ class KmersCollection():
         self.kmers_list = None
         self._lst_columns = []
         self._labels = None
-        self._ids = []
+        self.ids = []
         # Get labels from seq_data
         if len(seq_data.labels) > 0:
             self._labels = pd.DataFrame(seq_data.labels, columns = seq_data.taxas, index = seq_data.ids)
@@ -120,9 +123,8 @@ class KmersCollection():
             self.kmers_list = list(self._lst_columns)
         # Get labels that match K-mers extracted sequences
         if len(seq_data.labels) > 0:
-            for row in self.df.iter_rows():
-                ids.append(row['__index_level_0__'])
-            msk = np.array([True if id in ids else False for id in seq_data.ids])
+            self.ids = np.concatenate(self.ids)
+            msk = np.array([True if id in self.ids else False for id in seq_data.ids])
             self.classes = seq_data.labels[msk]
         # Delete global tmp dir
         # rmtree(self._tmp_dir)
@@ -223,23 +225,19 @@ class KmersCollection():
         # Iterative batch populate modin dataframe + write to parquet with Ray
         for batch in batches_lst:
             rows = []
-            df = mpd.DataFrame(np.zeros((len(batch), len(self._lst_columns)), dtype = np.int64), columns = self._lst_columns)
+            df = mpd.DataFrame(np.zeros((len(batch), len(self._lst_columns) + 1), dtype = np.int64), columns = np.concatenate(['id'], self._lst_columns))
             for i, file in enumerate(batch):
                 try:
                     file_df = pd.read_parquet(file)
                     rows.append(file_df.index[0])
+                    df.loc[i, 'id'] = file_df.index[0]
                     for col in file_df.columns:
                         df.loc[i, col] = file_df.at[rows[i], col]
                 except OSError:
                     pass
-            df.index = rows
             print(df)
-            self._ids.append(rows)
-            print(ray.data.from_modin(df))
-            # .write_parquet(construct_dir)
-        print(self._ids)
-        print(np.ravel(self._ids))
-        print(np.concatenate(self._ids))
+            self.ids.append(rows)
+            ray.data.from_modin(df).write_parquet(construct_dir)
         sys.exit()
 
         self._pq_list = glob(os.path.join(construct_dir, '*.parquet'))
