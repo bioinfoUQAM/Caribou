@@ -254,20 +254,12 @@ class KmersCollection():
             self._pq_list = glob(os.path.join(batch_dir,'*.parquet'))
             nb_batch += 1
         # Read/concatenate batches with Ray
-        self.df = ray.data.read_parquet_bulk(
-            self._pq_list,
-            thrift_container_size_limit=1e9,
-            thrift_string_size_limit = 1e9
-        )
+        self.df = ray.data.read_parquet_bulk(self._pq_list)
         # Save dataset
         self.df.write_parquet(self.Xy_file)
 
     def _batch_read_write(self, batch, dir):
-        df = ray.data.read_parquet_bulk(
-            batch,
-            thrift_container_size_limit=1e9,
-            thrift_string_size_limit = 1e9
-        )
+        df = ray.data.read_parquet_bulk(batch)
         df.write_parquet(dir)
         for file in batch:
             os.remove(file)
