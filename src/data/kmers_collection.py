@@ -40,7 +40,7 @@ class KmersCollection():
 
     Xy_file : string
         Path to a folder containing the Ray Dataset of K-mers abundance profiles
-        The folder contains a number of files in Apache parquet format
+        The folder contains a number of files in Apache csv format
         The number of files is equivalent to the number of blocks in the dataset
 
     fasta : string
@@ -171,9 +171,9 @@ class KmersCollection():
         run(cmd_transform, shell = True, capture_output=True)
         # Transpose kmers profile
         profile = pd.read_table(os.path.join(self._tmp_dir,"{}.txt".format(ind)), sep = '\t', index_col = 0, header = None, names = ['id', str(id)]).T
-        # Save seen kmers profile to parquet file
+        # Save seen kmers profile to csv file
         if len(profile.columns) > 0:
-            profile.to_parquet(os.path.join(self._tmp_dir,"{}.parquet".format(ind)))
+            profile.to_csv(os.path.join(self._tmp_dir,"{}.csv".format(ind)))
         # Delete tmp dir and file
         rmtree(tmp_folder)
         os.remove(os.path.join(self._tmp_dir,"{}.txt".format(ind)))
@@ -204,14 +204,14 @@ class KmersCollection():
                 else:
                     given_profile.at[id,kmer] = 0
             # Save given kmers profile to csv file
-            given_profile.to_parquet(os.path.join(self._tmp_dir,"{}.parquet".format(ind)))
+            given_profile.to_csv(os.path.join(self._tmp_dir,"{}.csv".format(ind)))
         # Delete temp dir and file
         rmtree(tmp_folder)
         os.remove(os.path.join(self._tmp_dir,"{}.txt".format(ind)))
         return list(profile.columns)
 
     def _construct_data(self):
-        self._pq_list = glob(os.path.join(self._tmp_dir,'*.parquet'))
+        self._pq_list = glob(os.path.join(self._tmp_dir,'*.csv'))
         if len(self._pq_list) > 100:
             batches_lst = np.array_split(self._pq_list, len(self._pq_list)/100)
         else:
@@ -220,7 +220,7 @@ class KmersCollection():
         construct_dir = os.path.join(self._tmp_dir, 'construct')
         os.mkdir(construct_dir)
 
-        # Iterative batch populate modin dataframe + write to parquet with Ray
+        # Iterative batch populate modin dataframe + write to csv with Ray
         for batch in batches_lst:
             rows = []
             dct_df = {'id': np.empty((len(batch)), dtype = 'object')}
@@ -229,7 +229,7 @@ class KmersCollection():
             df = mpd.DataFrame(dct_df)
             for i, file in enumerate(batch):
                 try:
-                    file_df = pd.read_parquet(file)
+                    file_df = pd.read_csv(file)
                     rows.append(file_df.index[0])
                     df.loc[i, 'id'] = file_df.index[0]
                     for col in file_df.columns:
@@ -237,9 +237,9 @@ class KmersCollection():
                 except OSError:
                     pass
             self.ids.append(rows)
-            ray.data.from_modin(df).write_parquet(construct_dir)
+            ray.data.from_modin(df).write_csv(construct_dir)
 
-        self._pq_list = glob(os.path.join(construct_dir, '*.parquet'))
+        self._pq_list = glob(os.path.join(construct_dir, '*.csv'))
 
         # Read/concatenate files with Ray by batches
         nb_batch = 0
@@ -249,15 +249,15 @@ class KmersCollection():
             os.mkdir(batch_dir)
             for batch in batches_list:
                 self._batch_read_write(list(batch), batch_dir)
-            self._pq_list = glob(os.path.join(batch_dir,'*.parquet'))
+            self._pq_list = glob(os.path.join(batch_dir,'*.csv'))
             nb_batch += 1
         # Read/concatenate batches with Ray
-        self.df = ray.data.read_parquet_bulk(self._pq_list)
+        self.df = ray.data.read_csv(self._pq_list)
         # Save dataset
-        self.df.write_parquet(self.Xy_file)
+        self.df.write_csv(self.Xy_file)
 
     def _batch_read_write(self, batch, dir):
-        df = ray.data.read_parquet_bulk(batch)
-        df.write_parquet(dir)
+        df = ray.data.read_csv(batch)
+        df.write_csv(dir)
         for file in batch:
             os.remove(file)
