@@ -240,8 +240,8 @@ class KmersCollection():
         arr = np.zeros((1,len(self._lst_columns)), dtype=np.int64)
         id = tmp.index[0]
         for col in tmp.columns:
-            arr[0, lst_columns.index(col)] = tmp.at[id, col]
-        df = pd.DataFrame(arr, columns=lst_columns, index=[id], dtype=np.int64)
+            arr[0, self._lst_columns.index(col)] = tmp.at[id, col]
+        df = pd.DataFrame(arr, columns=self._lst_columns, index=[id], dtype=np.int64)
         df.to_parquet(file)
 
     def _batch_read_write(self, batch, dir):
