@@ -212,15 +212,9 @@ class KmersCollection():
 
     def _construct_data(self):
         self._files_list = glob(os.path.join(self._tmp_dir,'*.parquet'))
+
+        self._map_write_first_file
         
-        # Parallel extract data to TFRecord
-        with parallel_backend('threading'):
-            Parallel(n_jobs=-1, verbose=1)(
-                delayed(self._map_write_rows)(file) for file in self._files_list
-            )
-
-        self._files_list = glob(os.path.join(construct_dir, '*.tfrecord'))
-
         # Read/concatenate files with Ray by batches
         nb_batch = 0
         while np.ceil(len(self._files_list)/1000) > 1:
@@ -228,47 +222,27 @@ class KmersCollection():
             batch_dir = os.path.join(self._tmp_dir, 'batch_{}'.format(nb_batch))
             os.mkdir(batch_dir)
             for batch in batches_list:
+                if nb_batch == 0:
+                    self._map_write_first_file(batch[0])
                 self._batch_read_write(list(batch), batch_dir)
             self._files_list = glob(os.path.join(batch_dir,'*.parquet'))
             nb_batch += 1
         # Read/concatenate batches with Ray
-        self.df = ray.data.read_parquet(self._files_list)
+        self.df = ray.data.read_parquet_bulk(self._files_list)
         # Save dataset
         self.df.write_parquet(self.Xy_file)
 
-    def _map_write_rows(self, file):
-        file_out = file.replace('.parquet', '.tfrecord')
-        df = pd.read_parquet(file, index_col=0)
-        id = df.index[0]
-        feat = {'id': _bytes_feature(bytes(id, 'utf-8'))}
-        for col in self._lst_columns:
-            feat[col] = _int64_feature(0)
-        for col in df.columns:
-            feat[col] = _int64_feature(df.at[id,col])
-        # Create feature message
-        with tf.io.TFRecordWriter(file_out) as writer:
-            writer.write(
-                tf.train.Example(
-                    features=tf.train.Features(
-                        feature=feat
-                    )
-                ).SerializeToString()
-            )
+    def _map_write_first_file(self, file):
+        tmp = pd.read_parquet(file)
+        arr = np.zeros((1,len(self._lst_columns)), dtype=np.int64)
+        id = tmp.index[0]
+        for col in tmp.columns:
+            arr[0, lst_columns.index(col)] = tmp.at[id, col]
+        df = pd.DataFrame(arr, columns=lst_columns, index=[id], dtype=np.int64)
+        df.to_parquet(file)
 
     def _batch_read_write(self, batch, dir):
-        df = ray.data.read_parquet(batch)
+        df = ray.data.read_parquet_bulk(batch)
         df.write_parquet(dir)
         for file in batch:
             os.remove(file)
-
-# Serialization helper functions from tensorflow documentation https://www.tensorflow.org/tutorials/load_data/tfrecord#tftrainexample
-###################################################################################################
-def _int64_feature(value):
-    """Returns an int64_list from a bool / enum / int / uint."""
-    return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
-
-def _bytes_feature(value):
-    """Returns a bytes_list from a string / byte."""
-    if isinstance(value, type(tf.constant(0))):
-        value = value.numpy()
-    return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
