@@ -173,6 +173,8 @@ class KmersCollection():
         profile = pd.read_table(os.path.join(self._tmp_dir,"{}.txt".format(ind)), sep = '\t', index_col = 0, header = None, names = ['id', str(id)]).T
         # Save seen kmers profile to csv file
         if len(profile.columns) > 0:
+            profile.reset_index(inplace=True)
+            profile = profile.rename(columns = {'index':'id'})
             profile.to_csv(os.path.join(self._tmp_dir,"{}.csv".format(ind)))
         # Delete tmp dir and file
         rmtree(tmp_folder)
@@ -204,6 +206,8 @@ class KmersCollection():
                 else:
                     given_profile.at[id,kmer] = 0
             # Save given kmers profile to csv file
+            given_profile.reset_index(inplace=True)
+            given_profile = given_profile.rename(columns = {'index':'id'})
             given_profile.to_csv(os.path.join(self._tmp_dir,"{}.csv".format(ind)))
         # Delete temp dir and file
         rmtree(tmp_folder)
@@ -234,7 +238,7 @@ class KmersCollection():
         self.df.write_csv(self.Xy_file)
 
     def _map_write_first_file(self, file):
-        tmp = pd.read_csv(file, index_col = 0)
+        tmp = pd.read_csv(file)
         arr = np.zeros((1,len(self._lst_columns)), dtype=np.int64)
         id = tmp.index[0]
         for col in tmp.columns:
@@ -243,7 +247,7 @@ class KmersCollection():
         df.to_csv(file)
 
     def _batch_read_write(self, batch, dir):
-        df = ray.data.read_csv(batch, index_col = 0)
+        df = ray.data.read_csv(batch)
         df.write_csv(dir)
         for file in batch:
             os.remove(file)
