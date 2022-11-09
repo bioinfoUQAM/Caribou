@@ -227,6 +227,9 @@ class KmersCollection():
                 self._batch_read_write(list(batch), batch_dir)
             self._files_list = glob(os.path.join(batch_dir,'*.parquet'))
             nb_batch += 1
+        
+        if nb_batch == 0:
+            self._map_write_first_file(self._files_list[0])
         # Read/concatenate batches with Ray
         self.df = ray.data.read_parquet_bulk(self._files_list)
         # Save dataset
