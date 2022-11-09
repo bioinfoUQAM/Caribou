@@ -4,7 +4,7 @@ import warnings
 
 import numpy as np
 import pandas as pd
-import modin.pandas as mpd
+import tensorflow as tf
 
 from glob import glob
 from shutil import rmtree
@@ -40,7 +40,7 @@ class KmersCollection():
 
     Xy_file : string
         Path to a folder containing the Ray Dataset of K-mers abundance profiles
-        The folder contains a number of files in Apache csv format
+        The folder contains a number of files in Apache parquet format
         The number of files is equivalent to the number of blocks in the dataset
 
     fasta : string
@@ -110,7 +110,7 @@ class KmersCollection():
         self._kmc_path = os.path.join(os.path.dirname(os.path.realpath(__file__)),"KMC","bin")
         self._faSplit = os.path.join(os.path.dirname(os.path.realpath(__file__)),"faSplit")
         # Initialize empty
-        self._pq_list = None
+        self._files_list = None
         self._fasta_list = None
 
         ## Extraction
@@ -164,16 +164,16 @@ class KmersCollection():
         id = os.path.splitext(os.path.basename(file))[0]
         os.mkdir(tmp_folder)
         # Count k-mers with KMC
-        cmd_count = os.path.join(self._kmc_path,"kmc -k{} -fm -ci5 -cs1000000000 -hp {} {} {}".format(self.k, file, os.path.join(tmp_folder, str(ind)), tmp_folder))
+        cmd_count = os.path.join(self._kmc_path,"kmc -k{} -fm -ci10 -cs1000000000 -hp {} {} {}".format(self.k, file, os.path.join(tmp_folder, str(ind)), tmp_folder))
         run(cmd_count, shell = True, capture_output=True)
         # Transform k-mers db with KMC
         cmd_transform = os.path.join(self._kmc_path,"kmc_tools transform {} dump {}".format(os.path.join(tmp_folder, str(ind)), os.path.join(self._tmp_dir, "{}.txt".format(ind))))
         run(cmd_transform, shell = True, capture_output=True)
         # Transpose kmers profile
         profile = pd.read_table(os.path.join(self._tmp_dir,"{}.txt".format(ind)), sep = '\t', index_col = 0, header = None, names = ['id', str(id)]).T
-        # Save seen kmers profile to csv file
+        # Save seen kmers profile to parquet file
         if len(profile.columns) > 0:
-            profile.to_csv(os.path.join(self._tmp_dir,"{}.csv".format(ind)))
+            profile.to_parquet(os.path.join(self._tmp_dir,"{}.parquet".format(ind)))
         # Delete tmp dir and file
         rmtree(tmp_folder)
         os.remove(os.path.join(self._tmp_dir,"{}.txt".format(ind)))
@@ -185,7 +185,7 @@ class KmersCollection():
         id = os.path.splitext(os.path.basename(file))[0]
         os.mkdir(tmp_folder)
         # Count k-mers with KMC
-        cmd_count = os.path.join(self._kmc_path,"kmc -k{} -fm -ci5 -cs1000000000 -hp {} {} {}".format(self.k, file, os.path.join(tmp_folder, str(ind)), tmp_folder))
+        cmd_count = os.path.join(self._kmc_path,"kmc -k{} -fm -cs1000000000 -hp {} {} {}".format(self.k, file, os.path.join(tmp_folder, str(ind)), tmp_folder))
         run(cmd_count, shell = True, capture_output=True)
         # Transform k-mers db with KMC
         cmd_transform = os.path.join(self._kmc_path,"kmc_tools transform {} dump {}".format(os.path.join(tmp_folder, str(ind)), os.path.join(self._tmp_dir, "{}.txt".format(ind))))
@@ -203,61 +203,72 @@ class KmersCollection():
                     given_profile.at[id,kmer] = seen_profile.loc[id,kmer]
                 else:
                     given_profile.at[id,kmer] = 0
-            # Save given kmers profile to csv file
-            given_profile.to_csv(os.path.join(self._tmp_dir,"{}.csv".format(ind)))
+            # Save given kmers profile to parquet file
+            given_profile.to_parquet(os.path.join(self._tmp_dir,"{}.parquet".format(ind)))
         # Delete temp dir and file
         rmtree(tmp_folder)
         os.remove(os.path.join(self._tmp_dir,"{}.txt".format(ind)))
         return list(profile.columns)
 
     def _construct_data(self):
-        self._pq_list = glob(os.path.join(self._tmp_dir,'*.csv'))
-        if len(self._pq_list) > 100:
-            batches_lst = np.array_split(self._pq_list, len(self._pq_list)/100)
-        else:
-            batches_lst = [self._pq_list]
+        self._files_list = glob(os.path.join(self._tmp_dir,'*.parquet'))
         
-        construct_dir = os.path.join(self._tmp_dir, 'construct')
-        os.mkdir(construct_dir)
+        # Parallel extract data to TFRecord
+        with parallel_backend('threading'):
+            Parallel(n_jobs=-1, verbose=1)(
+                delayed(self._map_write_rows)(file) for file in self._files_list
+            )
 
-        # Iterative batch populate modin dataframe + write to csv with Ray
-        for batch in batches_lst:
-            rows = []
-            dct_df = {'id': np.empty((len(batch)), dtype = 'object')}
-            for col in self._lst_columns:
-                dct_df[col] = np.zeros((len(batch),), dtype = np.int64)
-            df = mpd.DataFrame(dct_df)
-            for i, file in enumerate(batch):
-                try:
-                    file_df = pd.read_csv(file)
-                    rows.append(file_df.index[0])
-                    df.loc[i, 'id'] = file_df.index[0]
-                    for col in file_df.columns:
-                        df.loc[i, col] = file_df.at[rows[i], col]
-                except OSError:
-                    pass
-            self.ids.append(rows)
-            ray.data.from_modin(df).write_csv(construct_dir)
-
-        self._pq_list = glob(os.path.join(construct_dir, '*.csv'))
+        self._files_list = glob(os.path.join(construct_dir, '*.tfrecord'))
 
         # Read/concatenate files with Ray by batches
         nb_batch = 0
-        while np.ceil(len(self._pq_list)/1000) > 1:
-            batches_list = np.array_split(self._pq_list, np.ceil(len(self._pq_list)/1000))
+        while np.ceil(len(self._files_list)/1000) > 1:
+            batches_list = np.array_split(self._files_list, np.ceil(len(self._files_list)/1000))
             batch_dir = os.path.join(self._tmp_dir, 'batch_{}'.format(nb_batch))
             os.mkdir(batch_dir)
             for batch in batches_list:
                 self._batch_read_write(list(batch), batch_dir)
-            self._pq_list = glob(os.path.join(batch_dir,'*.csv'))
+            self._files_list = glob(os.path.join(batch_dir,'*.parquet'))
             nb_batch += 1
         # Read/concatenate batches with Ray
-        self.df = ray.data.read_csv(self._pq_list)
+        self.df = ray.data.read_parquet(self._files_list)
         # Save dataset
-        self.df.write_csv(self.Xy_file)
+        self.df.write_parquet(self.Xy_file)
+
+    def _map_write_rows(self, file):
+        file_out = file.replace('.parquet', '.tfrecord')
+        df = pd.read_parquet(file, index_col=0)
+        id = df.index[0]
+        feat = {'id': _bytes_feature(bytes(id, 'utf-8'))}
+        for col in self._lst_columns:
+            feat[col] = _int64_feature(0)
+        for col in df.columns:
+            feat[col] = _int64_feature(df.at[id,col])
+        # Create feature message
+        with tf.io.TFRecordWriter(file_out) as writer:
+            writer.write(
+                tf.train.Example(
+                    features=tf.train.Features(
+                        feature=feat
+                    )
+                ).SerializeToString()
+            )
 
     def _batch_read_write(self, batch, dir):
-        df = ray.data.read_csv(batch)
-        df.write_csv(dir)
+        df = ray.data.read_parquet(batch)
+        df.write_parquet(dir)
         for file in batch:
             os.remove(file)
+
+# Serialization helper functions from tensorflow documentation https://www.tensorflow.org/tutorials/load_data/tfrecord#tftrainexample
+###################################################################################################
+def _int64_feature(value):
+    """Returns an int64_list from a bool / enum / int / uint."""
+    return tf.train.Feature(int64_list=tf.train.Int64List(value=[value]))
+
+def _bytes_feature(value):
+    """Returns a bytes_list from a string / byte."""
+    if isinstance(value, type(tf.constant(0))):
+        value = value.numpy()
+    return tf.train.Feature(bytes_list=tf.train.BytesList(value=[value]))
