@@ -175,7 +175,7 @@ class KmersCollection():
         if len(profile.columns) > 0:
             profile.reset_index(inplace=True)
             profile = profile.rename(columns = {'index':'id'})
-            profile.to_csv(os.path.join(self._tmp_dir,"{}.csv".format(ind)))
+            profile.to_csv(os.path.join(self._tmp_dir,"{}.csv".format(ind)), index = False)
         # Delete tmp dir and file
         rmtree(tmp_folder)
         os.remove(os.path.join(self._tmp_dir,"{}.txt".format(ind)))
@@ -208,7 +208,7 @@ class KmersCollection():
             # Save given kmers profile to csv file
             given_profile.reset_index(inplace=True)
             given_profile = given_profile.rename(columns = {'index':'id'})
-            given_profile.to_csv(os.path.join(self._tmp_dir,"{}.csv".format(ind)))
+            given_profile.to_csv(os.path.join(self._tmp_dir,"{}.csv".format(ind)), index = False)
         # Delete temp dir and file
         rmtree(tmp_folder)
         os.remove(os.path.join(self._tmp_dir,"{}.txt".format(ind)))
@@ -239,6 +239,7 @@ class KmersCollection():
 
     def _map_write_first_file(self, file):
         tmp = pd.read_csv(file)
+        print(tmp)
         arr = np.zeros((1,len(self._lst_columns)), dtype=np.int64)
         id = tmp.index[0]
         for col in tmp.columns:
