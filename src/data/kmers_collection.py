@@ -245,7 +245,7 @@ class KmersCollection():
                 pass
             else:
                 arr[0, self._lst_columns.index(col)] = tmp.at[0, col]
-        df = pd.DataFrame({'id':tmp.at[0,'id']},index = 0)
+        df = pd.DataFrame({'id':[tmp.at[0,'id']]})
         for col in self._lst_columns:
             df[col] = arr[0,self._lst_columns.index(col)]
         df.to_csv(file, index = False)
