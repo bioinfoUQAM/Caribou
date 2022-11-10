@@ -10,6 +10,7 @@ from glob import glob
 from shutil import rmtree
 from subprocess import run
 from joblib import Parallel, delayed, parallel_backend
+from ray.data.datasource import FastFileMetadataProvider
 
 __author__ = ['Amine Remita', 'Nicolas de Montigny']
 
@@ -233,22 +234,21 @@ class KmersCollection():
         if nb_batch == 0:
             self._map_write_first_file(self._files_list[0])
         # Read/concatenate batches with Ray
-        self.df = ray.data.read_csv(self._files_list)
+        self.df = ray.data.read_csv(self._files_list, meta_provider=FastFileMetadataProvider())
         # Save dataset
         self.df.write_csv(self.Xy_file)
 
     def _map_write_first_file(self, file):
         tmp = pd.read_csv(file)
-        print(tmp)
         arr = np.zeros((1,len(self._lst_columns)), dtype=np.int64)
-        # id = tmp.index[0]
         for col in tmp.columns:
             if col == 'id':
                 pass
             else:
                 arr[0, self._lst_columns.index(col)] = tmp.at[0, col]
         df = pd.DataFrame(arr, columns=self._lst_columns)
-        df.to_csv(file)
+        df.loc[0'id'] = tmp.at[0, 'id']
+        df.to_csv(file, index = False)
 
     def _batch_read_write(self, batch, dir):
         df = ray.data.read_csv(batch)
