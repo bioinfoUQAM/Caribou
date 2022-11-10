@@ -157,7 +157,8 @@ class KmersCollection():
                     delayed(self._extract_given_kmers)
                     (i, file) for i, file in enumerate(self._fasta_list))
         # Get list of all columns in files in parallel
-        self._lst_columns = list(np.unique(np.concatenate(lst_col))).insert(0,'id')
+        self._lst_columns = list(np.unique(np.concatenate(lst_col)))
+        self._lst_columns.insert(0, 'id')
 
     def _extract_seen_kmers(self, ind, file):
         # Make tmp folder per sequence
@@ -239,12 +240,12 @@ class KmersCollection():
 
     def _map_write_first_file(self, file):
         tmp = pd.read_csv(file)
-        arr = np.zeros((1,len(self._lst_columns)), dtype=np.int64)
+        arr = np.zeros((1,len(self._lst_columns)-1), dtype=np.int64)
         for col in tmp.columns:
             if col == 'id':
                 pass
             else:
-                arr[0, self._lst_columns.index(col)] = tmp.at[0, col]
+                arr[0, self._lst_columns.index(col)-1] = tmp.at[0, col]
         df = pd.DataFrame(columns = self._lst_columns, index = [0])
         df.loc[0, 'id'] = tmp.at[0, 'id']
         df.iloc[0, 1:] = arr[0]
