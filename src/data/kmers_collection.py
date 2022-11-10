@@ -217,7 +217,6 @@ class KmersCollection():
 
     def _construct_data(self):
         self._files_list = glob(os.path.join(self._tmp_dir,'*.csv'))
-        
         # Read/concatenate files with Ray by batches
         nb_batch = 0
         while np.ceil(len(self._files_list)/1000) > 1:
@@ -246,8 +245,9 @@ class KmersCollection():
                 pass
             else:
                 arr[0, self._lst_columns.index(col)] = tmp.at[0, col]
-        df = pd.DataFrame(arr, columns=self._lst_columns)
-        df.loc[0'id'] = tmp.at[0, 'id']
+        df = pd.DataFrame({'id':tmp.at[0,'id']},index = 0)
+        for col in self._lst_columns:
+            df[col] = arr[0,self._lst_columns.index(col)]
         df.to_csv(file, index = False)
 
     def _batch_read_write(self, batch, dir):
