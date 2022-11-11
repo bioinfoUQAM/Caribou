@@ -233,12 +233,12 @@ class KmersCollection():
         if nb_batch == 0:
             self._map_write_first_file(self._files_list[0])
         # Read/concatenate batches with Ray
-        self.df = ray.data.read_parquet_bulk(self._files_list, buffer_size = 1e9)
+        self.df = ray.data.read_parquet_bulk(self._files_list, thrift_string_size_limit = 1e9, thrift_container_size_limit = 1e9)
         # Save dataset
         self.df.write_parquet(self.Xy_file)
 
     def _map_write_first_file(self, file):
-        tmp = pd.read_parquet(file)
+        tmp = pd.read_parquet(file, thrift_string_size_limit = 1e9, thrift_container_size_limit = 1e9)
         arr = np.zeros((1,len(self._lst_columns)-1), dtype=np.int64)
         for col in tmp.columns:
             if col == 'id':
@@ -251,7 +251,7 @@ class KmersCollection():
         df.to_parquet(file, index = False)
 
     def _batch_read_write(self, batch, dir):
-        df = ray.data.read_parquet_bulk(batch)
+        df = ray.data.read_parquet_bulk(batch, thrift_string_size_limit = 1e9, thrift_container_size_limit = 1e9)
         df.write_parquet(dir)
         for file in batch:
             os.remove(file)
