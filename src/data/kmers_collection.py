@@ -228,6 +228,9 @@ class KmersCollection():
             self.ids.append(id)
             self._files_list.append(file)
 
+        print(self.ids)
+        print(self._files_list)
+
         # Read/concatenate files with Ray by batches
         nb_batch = 0
         while np.ceil(len(self._files_list)/1000) > 1:
@@ -253,7 +256,7 @@ class KmersCollection():
             self.df.write_parquet(self.Xy_file)
 
     def _map_write_file_np(self, file):
-        file_out = file.replace('.parquet', '.npy')
+        file_out = file.replace('.csv', '.npy')
         df = pd.read_csv(file)
         arr = np.zeros((1,len(self._lst_columns)))
         id = df.loc[0,'id']
