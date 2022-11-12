@@ -219,8 +219,8 @@ class KmersCollection():
 
         # Read/concatenate files with Ray by batches
         nb_batch = 0
-        while np.ceil(len(self._files_list)/100) > 1:
-            batches_list = np.array_split(self._files_list, np.ceil(len(self._files_list)/100))
+        while np.ceil(len(self._files_list)/200) > 1:
+            batches_list = np.array_split(self._files_list, np.ceil(len(self._files_list)/200))
             batch_dir = os.path.join(self._tmp_dir, 'batch_{}'.format(nb_batch))
             os.mkdir(batch_dir)
             if nb_batch == 0:
@@ -258,7 +258,7 @@ class KmersCollection():
         df.write_parquet(dir)
 
     def _batch_read_write(self, batch, dir):
-        df = ray.data.read_parquet_bulk(batch)
+        df = ray.data.read_parquet_bulk(batch, parallelism = 200)
         df.write_parquet(dir)
         for file in batch:
             os.remove(file)
