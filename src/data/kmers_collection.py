@@ -247,7 +247,7 @@ class KmersCollection():
             tmp = pd.read_csv(file)
             lst_ids.append(tmp.loc[0,'id'])
             arr = np.zeros((1, len(self._lst_columns)))
-            for col in self._lst_columns:
+            for col in tmp.columns:
                     arr[self._lst_columns.index(col)] = tmp.at[0, col]            
             lst_arr.append(ray.put(arr))
             os.remove(file)
