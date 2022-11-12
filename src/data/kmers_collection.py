@@ -215,33 +215,17 @@ class KmersCollection():
         return list(profile.columns)
 
     def _construct_data(self):
-        self._files_list = glob(os.path.join(self._tmp_dir,'*.csv'))
-
-        # Convert all parquet to numpy tensor files
-        with parallel_backend('threading'):
-            ids_files = Parallel(n_jobs=-1, verbose=1)(
-                delayed(self._map_write_file_np)(file) for file in self._files_list
-        )
-
-        self._files_list = []
-        for id, file in ids_files:
-            self.ids.append(id)
-            self._files_list.append(file)
-
-        print(self.ids)
-        print(self._files_list)
+        self._files_list = glob(os.path.join(self._tmp_dir,'*.csv')) # List csv files
 
         # Read/concatenate files with Ray by batches
         nb_batch = 0
-        while np.ceil(len(self._files_list)/1000) > 1:
-            if nb_batch == 0:
-                batches_ids = np.array_split(self.ids, np.ceil(len(self._files_list)/1000))
-            batches_list = np.array_split(self._files_list, np.ceil(len(self._files_list)/1000))
+        while np.ceil(len(self._files_list)/100) > 1:
+            batches_list = np.array_split(self._files_list, np.ceil(len(self._files_list)/100))
             batch_dir = os.path.join(self._tmp_dir, 'batch_{}'.format(nb_batch))
             os.mkdir(batch_dir)
             if nb_batch == 0:
-                for batch, ids_batch in zip(batches_list, batches_ids):
-                    self._batch_read_write_first(list(batch), batch_dir, ids_batch)
+                for batch in batches_list:
+                    self._batch_read_write_first(list(batch), batch_dir)
             else:
                 for batch in batches_list:
                     self._batch_read_write(list(batch), batch_dir)
@@ -255,25 +239,21 @@ class KmersCollection():
             self.df = ray.data.read_parquet_bulk(self._files_list)
             self.df.write_parquet(self.Xy_file)
 
-    def _map_write_file_np(self, file):
-        file_out = file.replace('.csv', '.npy')
-        df = pd.read_csv(file)
-        arr = np.zeros((1,len(self._lst_columns)))
-        id = df.loc[0,'id']
-        cols = list(df.columns)
-        cols.remove('id')
-        for col in cols:
-            arr[0,self._lst_columns.index(col)] = df.at[0, col]
-        np.save(file_out, arr)
-        os.remove(file)
-        return (id, file_out)
-
-    def _batch_read_write_first(self, batch, dir, ids2map):
-        df = ray.data.read_numpy(batch)
-        df = df.add_column('id', lambda ds : pd.DataFrame(ids2map))
-        df.write_parquet(dir)
+    # Map csv files to numpy array refs then write to parquet file with Ray
+    def _batch_read_write_first(self, batch, dir):
+        lst_ids = []
+        lst_arr = []
         for file in batch:
+            tmp = pd.read_csv(file)
+            lst_ids.append(tmp.loc[0,'id'])
+            arr = np.zeros((1, len(self._lst_columns)))
+            for col in self._lst_columns:
+                    arr[self._lst_columns.index(col)] = df.at[0, col]            
+            lst_arr.append(ray.put(arr))
             os.remove(file)
+        df = ray.data.from_numpy_refs(lst_arr)
+        df = df.add_column('id', lambda ds : pd.DataFrame(lst_ids))
+        df.write_parquet(dir)
 
     def _batch_read_write(self, batch, dir):
         df = ray.data.read_parquet_bulk(batch)
