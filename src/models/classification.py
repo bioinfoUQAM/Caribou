@@ -8,7 +8,7 @@ import pandas as pd
 
 from models.ray_sklearn import SklearnModel
 from models.ray_keras_tf import KerasTFModel
-from utils import load_Xy_data, save_Xy_data
+from utils import load_Xy_data, save_Xy_data, unpack_kmers
 
 __author__ = 'Nicolas de Montigny'
 
@@ -57,6 +57,7 @@ def bacteria_classification(classified_data, database_k_mers, k, outdirs, datase
                     # Get training dataset and assign to variables
                     # Keep only classes of sequences that were not removed in kmers extraction
                     X_train = ray.data.read_parquet(database_k_mers['profile'])
+                    X_train = unpack_kmers(X_train, database_k_mers['kmers'])
                     y_train = pd.DataFrame(
                         {taxa : pd.DataFrame(database_k_mers['classes'], columns = database_k_mers['taxas']).loc[:,taxa].astype('string').str.lower(),
                         'id' : database_k_mers['ids']}

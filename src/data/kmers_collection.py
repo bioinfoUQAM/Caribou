@@ -125,7 +125,7 @@ class KmersCollection():
             msk = np.array([True if id in self.ids else False for id in seq_data.ids])
             self.classes = seq_data.labels[msk]
         # Delete global tmp dir
-        # rmtree(self._tmp_dir)
+        rmtree(self._tmp_dir)
 
     def _compute_kmers(self):
         # Split files using faSplit
@@ -212,7 +212,7 @@ class KmersCollection():
         # Delete temp dir and file
         rmtree(tmp_folder)
         os.remove(os.path.join(self._tmp_dir,"{}.txt".format(ind)))
-        return list(profile.columns)
+        return list(given_profile.columns)
 
     def _construct_data(self):
         self._files_list = glob(os.path.join(self._tmp_dir,'*.csv')) # List csv files

@@ -8,7 +8,7 @@ import pandas as pd
 
 from models.ray_sklearn import SklearnModel
 from models.ray_keras_tf import KerasTFModel
-from utils import load_Xy_data, save_Xy_data, merge_database_host
+from utils import load_Xy_data, save_Xy_data, merge_database_host, unpack_kmers
 
 __author__ = 'Nicolas de Montigny'
 
@@ -18,7 +18,6 @@ def bacteria_extraction(metagenome_k_mers, database_k_mers, k, outdirs, dataset,
     # classified_data is a dictionnary containing data dictionnaries at each classified level:
     # {taxa:{'X':path to ray dataset in parquet format}}
     classified_data = {'order' : ['bacteria','host','unclassified']}
-    train = False
     model = None
 
     model_file = '{}{}_{}.pkl'.format(outdirs['models_dir'], classifier, 'domain')
@@ -47,6 +46,7 @@ def bacteria_extraction(metagenome_k_mers, database_k_mers, k, outdirs, dataset,
             elif classifier == 'onesvm' and not isinstance(database_k_mers, tuple):
                 model = SklearnModel(classifier, dataset, outdirs['models_dir'], outdirs['results_dir'], batch_size, k, 'domain', database_k_mers['kmers'], verbose)
                 X_train = ray.data.read_parquet(database_k_mers['profile'])
+                X_train = unpack_kmers(X_train, database_k_mers['kmers'])
                 y_train = pd.DataFrame(
                     {'domain': pd.DataFrame(database_k_mers['classes'], columns=database_k_mers['taxas']).loc[:, 'domain'].astype('string').str.lower(),
                     'id': database_k_mers['ids']}
@@ -62,6 +62,7 @@ def bacteria_extraction(metagenome_k_mers, database_k_mers, k, outdirs, dataset,
                     print('Bacteria extractor unknown !!!\n\tModels implemented at this moment are :\n\tBacteria isolator :  One Class SVM (onesvm)\n\tBacteria/host classifiers : Linear SVM (linearsvm)\n\tNeural networks : Attention (attention), Shallow LSTM (lstm) and Deep LSTM (deeplstm)')
                     sys.exit()
                 X_train = ray.data.read_parquet(database_k_mers['profile'])
+                X_train = unpack_kmers(X_train, database_k_mers['kmers'])
                 y_train = pd.DataFrame(
                     {'domain': pd.DataFrame(database_k_mers['classes'], columns=database_k_mers['taxas']).loc[:, 'domain'].astype('string').str.lower(),
                      'id': database_k_mers['ids']}

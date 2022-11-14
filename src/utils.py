@@ -17,6 +17,7 @@ def load_Xy_data(Xy_file):
 def save_Xy_data(df, Xy_file):
     np.savez(Xy_file, data = df)
 
+# Merge database and host data
 def merge_database_host(database_data, host_data):
     merged_data = {}
 
@@ -39,3 +40,13 @@ def merge_database_host(database_data, host_data):
     df_merged.write_parquet(merged_file)
 
     return merged_data
+
+# Unpack numpy tensor column to kmers columns
+def unpack_kmers(df_file, lst_kmers):
+    ray.data.set_progress_bars(False)
+    df = ray.data.readd_parquet(df_file)
+    for i, col in enumerate(lst_kmers):
+        df = df.add_column(col, lambda df: df['__value__'].to_numpy()[0][i])
+    df = df.drop_columns(['__value__'])
+    ray.data.set_progress_bars(True)
+    return df
