@@ -11,6 +11,7 @@ from shutil import rmtree
 from abc import ABC, abstractmethod
 
 # Data preprocessing
+from utils import unpack_kmers
 from ray.data.preprocessors import MinMaxScaler, Chain, SimpleImputer
 
 # CV metrics
@@ -137,6 +138,7 @@ class ModelsUtils(ABC):
         cv_sim = readsSimulation(kmers_ds['fasta'], cls, sim_genomes, 'miseq', sim_outdir, name)
         sim_data = cv_sim.simulation(self.k, self.kmers)
         df = ray.data.read_parquet(sim_data['profile'])
+        unpack_kmers(df, self.kmers)
         labels = pd.DataFrame(sim_data['classes'], index = kmers_ds['ids'])
         df = df.add_column(self.taxa, lambda x : labels)
         return df
