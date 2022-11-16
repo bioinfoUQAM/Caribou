@@ -217,27 +217,30 @@ class KmersCollection():
     def _construct_data(self):
         self._files_list = glob(os.path.join(self._tmp_dir,'*.csv')) # List csv files
 
+        # Read/concatenate files with Ray all at ounce
+        self._batch_read_write_first(self._files_list, self.Xy_file)
+
         # Read/concatenate files with Ray by batches
-        nb_batch = 0
-        while len(self._files_list) > 1000:
-            batches_list = np.array_split(self._files_list, np.ceil(len(self._files_list)/1000))
-            batch_dir = os.path.join(self._tmp_dir, 'batch_{}'.format(nb_batch))
-            os.mkdir(batch_dir)
-            if nb_batch == 0:
-                for batch in batches_list:
-                    self._batch_read_write_first(list(batch), batch_dir)
-            else:
-                for batch in batches_list:
-                    self._batch_read_write(list(batch), batch_dir)
-            self._files_list = glob(os.path.join(batch_dir,'*.parquet'))
-            nb_batch += 1
+        # nb_batch = 0
+        # while len(self._files_list) > 1000:
+        #     batches_list = np.array_split(self._files_list, np.ceil(len(self._files_list)/1000))
+        #     batch_dir = os.path.join(self._tmp_dir, 'batch_{}'.format(nb_batch))
+        #     os.mkdir(batch_dir)
+        #     if nb_batch == 0:
+        #         for batch in batches_list:
+        #             self._batch_read_write_first(list(batch), batch_dir)
+        #     else:
+        #         for batch in batches_list:
+        #             self._batch_read_write(list(batch), batch_dir)
+        #     self._files_list = glob(os.path.join(batch_dir,'*.parquet'))
+        #     nb_batch += 1
         
         # Read/concatenate batches with Ray -> save to file
-        if nb_batch == 0:
-            self._batch_read_write_first(self._files_list, self.Xy_file)
-        else:
-            self.df = ray.data.read_parquet_bulk(self._files_list)
-            self.df.write_parquet(self.Xy_file)
+        # if nb_batch == 0:
+        #     self._batch_read_write_first(self._files_list, self.Xy_file)
+        # else:
+        #     self.df = ray.data.read_parquet_bulk(self._files_list)
+        #     self.df.write_parquet(self.Xy_file)
 
     # Map csv files to numpy array refs then write to parquet file with Ray
     def _batch_read_write_first(self, batch, dir):

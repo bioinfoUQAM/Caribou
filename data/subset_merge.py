@@ -1,5 +1,4 @@
 #!/usr/bin python3
-
 import os
 import ray
 import argparse
@@ -112,10 +111,6 @@ merged_profile_df = ray.data.from_numpy_refs(rows_full)
 merged_profile_df = merged_profile_df.add_column('id', lambda ds : pd.DataFrame(lst_ids))
 # Write new profile to file
 merged_profile_df.write_parquet(merged_profile_file)
-
-
-
-
 
 # Generate classes array
 ids = pd.DataFrame({'id': lst_ids})
