@@ -22,7 +22,7 @@ parser.add_argument('-f', '--fasta', required=True, type=Path,
 parser.add_argument('-c', '--cls', required=True, type=Path,
                     help='Path to the original class file')
 parser.add_argument('-l', '--list_file', required=True, type=Path,
-                    help='Path to a .txt file containing one folder data file to merge per line')
+                    help='Path to a .txt file containing one data file to merge per line')
 parser.add_argument('-o', '--out', required=True, type=Path,
                     help='Name of a .npz file to output the merged dataset')
 args = parser.parse_args()
@@ -33,7 +33,7 @@ opt = vars(args)
 ################################################################################
 files_lst = []
 if not os.path.isfile(opt['list_file']):
-    raise ValueError('Cannot find folder {}'.format(opt['list_file']))
+    raise ValueError('Cannot find file {}'.format(opt['list_file']))
 else:
     with open(opt['list_file'], 'r') as f:
         for line in f:
@@ -44,7 +44,7 @@ else:
                 raise ValueError('Cannot find data file {}'.format(line))
 if not os.path.isfile(opt['fasta']):
     raise ValueError('Cannot find file {}'.format(opt['fasta']))
-if not os.path.isdir(opt['cls']):
+if not os.path.isfile(opt['cls']):
     raise ValueError('Cannot find file {}'.format(opt['cls']))
 if os.path.splitext(opt['cls'])[1] != '.csv':
     raise ValueError('Class file must be a .csv file')
@@ -80,7 +80,8 @@ cls = None
 ################################################################################
 # Load data from each files
 with parallel_backend('threading'):
-    subsets = Parallel(n_jobs=-1, verbose=1)(delayed(load_Xy_data)(file) for file in files_lst)
+    subsets = Parallel(n_jobs=-1, verbose=1)(delayed(load_Xy_data)(file)
+                                             for file in files_lst)
 
 # Extract data per file in lists
 for subset in subsets:
@@ -100,29 +101,30 @@ for subset in subsets:
     sub_cols = subset['kmers']
     sub_df = ray.data.read_parquet(subset['profile'])
     for row in sub_df.iter_rows():
-        row = row.to_pandas().loc[0,'__value__']
+        row = row['__value__']
         for col in sub_cols:
-            row_full[0, lst_kmers.index(col)] = row[0, sub_cols.index(col)]
+            row_full[0, lst_kmers.index(col)] = row[sub_cols.index(col)]
         rows_full.append(ray.put(row_full))
 
 # Build merged profile dataframe
 merged_profile_df = ray.data.from_numpy_refs(rows_full)
 # Add ID column
-merged_profile_df = merged_profile_df.add_column('id', lambda ds : pd.DataFrame(lst_ids))
+merged_profile_df = merged_profile_df.add_column(
+    'id', lambda ds: pd.DataFrame(lst_ids))
 # Write new profile to file
 merged_profile_df.write_parquet(merged_profile_file)
 
 # Generate classes array
 ids = pd.DataFrame({'id': lst_ids})
 cls = pd.read_csv(opt['cls'])
-cls = pd.merge(cls,ids, on = 'id', how = 'inner')
-cls = cls.drop(columns = ['id'])
+cls = pd.merge(cls, ids, on='id', how='inner')
+cls = cls.drop(columns=['id'])
 
 # Save merged dataset
 ################################################################################
 data['profile'] = merged_profile_file  # Kmers profile
-data['classes'] = np.array(cls) # Class labels
-data['kmers'] = lst_kmers # Features
+data['classes'] = np.array(cls)  # Class labels
+data['kmers'] = lst_kmers  # Features
 data['taxas'] = lst_taxas  # Known taxas for classification
 data['fasta'] = opt['fasta']  # Fasta file -> simulate reads if cv
 
