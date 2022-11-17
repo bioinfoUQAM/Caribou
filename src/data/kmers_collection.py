@@ -98,6 +98,7 @@ class KmersCollection():
         if isinstance(kmers_list, list):
             self.method = 'given'
             self.kmers_list = kmers_list
+            self._lst_columns = kmers_list
         else:
             self.method = 'seen'
 
@@ -149,14 +150,14 @@ class KmersCollection():
                 lst_col = Parallel(n_jobs = -1, prefer = 'threads', verbose = 1)(
                     delayed(self._extract_seen_kmers)
                     (i, file) for i, file in enumerate(self._fasta_list))
+            self._lst_columns = list(np.unique(np.concatenate(lst_col)))
         elif self.method == 'given':
             print('given_kmers')
             with parallel_backend('threading'):
-                lst_col = Parallel(n_jobs = -1, prefer = 'threads', verbose = 1)(
+                Parallel(n_jobs = -1, prefer = 'threads', verbose = 1)(
                     delayed(self._extract_given_kmers)
                     (i, file) for i, file in enumerate(self._fasta_list))
         # Get list of all columns in files in parallel
-        self._lst_columns = list(np.unique(np.concatenate(lst_col)))
 
     def _extract_seen_kmers(self, ind, file):
         # Make tmp folder per sequence
@@ -212,13 +213,12 @@ class KmersCollection():
         # Delete temp dir and file
         rmtree(tmp_folder)
         os.remove(os.path.join(self._tmp_dir,"{}.txt".format(ind)))
-        return list(given_profile.columns)
 
     def _construct_data(self):
         self._files_list = glob(os.path.join(self._tmp_dir,'*.csv')) # List csv files
 
         # Read/concatenate files with Ray all at ounce
-        self._batch_read_write_first(self._files_list, self.Xy_file)
+        self._batch_read_write_np(self._files_list, self.Xy_file)
 
         # Read/concatenate files with Ray by batches
         # nb_batch = 0
@@ -243,7 +243,7 @@ class KmersCollection():
         #     self.df.write_parquet(self.Xy_file)
 
     # Map csv files to numpy array refs then write to parquet file with Ray
-    def _batch_read_write_first(self, batch, dir):
+    def _batch_read_write_np(self, batch, dir):
         lst_ids = []
         lst_arr = []
         for file in batch:
