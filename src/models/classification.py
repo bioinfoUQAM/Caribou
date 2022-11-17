@@ -62,7 +62,6 @@ def bacteria_classification(classified_data, database_k_mers, k, outdirs, datase
                         {taxa : pd.DataFrame(database_k_mers['classes'], columns = database_k_mers['taxas']).loc[:,taxa].astype('string').str.lower(),
                         'id' : database_k_mers['ids']}
                     )
-                    y_train.index = database_k_mers['ids']
 
                     model.train(X_train, y_train, database_k_mers, cv)
 

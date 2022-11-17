@@ -10,7 +10,6 @@ from glob import glob
 from shutil import rmtree
 from subprocess import run
 from joblib import Parallel, delayed, parallel_backend
-from ray.data.datasource import FastFileMetadataProvider
 
 __author__ = ['Amine Remita', 'Nicolas de Montigny']
 
@@ -70,6 +69,12 @@ class KmersCollection():
     kmers_list : list of strings
         List of given K-mers if one was passed in parameters
         List of K-mers extracted if none was passed in parameters
+
+    ----------
+    Methods
+    ----------
+
+    unpack_kmers()
 
     """
     def __init__(self, seq_data, Xy_file, k, dataset, kmers_list = None):
@@ -143,13 +148,14 @@ class KmersCollection():
         self._construct_data()
 
     def _parallel_extraction(self):
-        lst_col = []
         if self.method == 'seen':
             print('seen_kmers')
+            lst_col = []
             with parallel_backend('threading'):
                 lst_col = Parallel(n_jobs = -1, prefer = 'threads', verbose = 1)(
                     delayed(self._extract_seen_kmers)
                     (i, file) for i, file in enumerate(self._fasta_list))
+            # Get list of all columns in files in parallel
             self._lst_columns = list(np.unique(np.concatenate(lst_col)))
         elif self.method == 'given':
             print('given_kmers')
@@ -157,7 +163,6 @@ class KmersCollection():
                 Parallel(n_jobs = -1, prefer = 'threads', verbose = 1)(
                     delayed(self._extract_given_kmers)
                     (i, file) for i, file in enumerate(self._fasta_list))
-        # Get list of all columns in files in parallel
 
     def _extract_seen_kmers(self, ind, file):
         # Make tmp folder per sequence
@@ -256,12 +261,24 @@ class KmersCollection():
                     arr[0, self._lst_columns.index(col)] = tmp.at[0, col]            
             lst_arr.append(ray.put(arr))
             os.remove(file)
-        df = ray.data.from_numpy_refs(lst_arr)
-        df = df.add_column('id', lambda ds : pd.DataFrame(lst_ids))
-        df.write_parquet(dir)
+        self.df = ray.data.from_numpy_refs(lst_arr)
+        self.df = self.df.add_column('id', lambda ds : pd.DataFrame(lst_ids))
+        self.df.write_parquet(dir)
 
     def _batch_read_write(self, batch, dir):
         df = ray.data.read_parquet_bulk(batch, parallelism = 200)
         df.write_parquet(dir)
         for file in batch:
             os.remove(file)
+
+    # Unpack numpy tensor column to kmers columns
+    def unpack_kmers(self):
+        if not os.path.isdir(self.Xy_file):
+            raise ValueError("K-mers were not extracted yet. Please instantiate the object first.")
+        if self.df is None:
+            self.df = ray.data.read_parquet(self.Xy_file)
+        ray.data.set_progress_bars(False)
+        for i, col in enumerate(self.kmers_list):
+            self.df = self.df.add_column(col, lambda df: df['__value__'].to_numpy()[0][i])
+        self.df = self.df.drop_columns(['__value__'])
+        ray.data.set_progress_bars(True)

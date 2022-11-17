@@ -37,7 +37,7 @@ warnings.filterwarnings('ignore')
 
 # Function from class function models.ray_sklearn.SklearnModel._training_preprocess
 def preprocess(X, y, cols, taxa):
-    df = X.add_column([taxa, 'id'], lambda x : y)
+    df = X.add_column([taxa], lambda x : y)
     preprocessor = Chain(
         SimpleImputer(
             cols,
@@ -50,7 +50,7 @@ def preprocess(X, y, cols, taxa):
     labels = np.unique(y[taxa])
     encoder = LabelEncoder(taxa)
     df = encoder.fit_transform(df)
-    return df
+    return (df, labels)
 
 # Function from class models.ray_utils.ModelsUtils
 def sim_4_cv(df, kmers_ds, name, taxa, cols, k):
@@ -62,12 +62,22 @@ def sim_4_cv(df, kmers_ds, name, taxa, cols, k):
         cv_sim = readsSimulation(kmers_ds['fasta'], cls, sim_genomes, 'miseq', sim_outdir, name)
         sim_data = cv_sim.simulation(k, cols)
         df = ray.data.read_parquet(sim_data['profile'])
-        ids = []
+        unpack_kmers(df, cols)
         for row in df.iter_rows():
             ids.append(row['__index_level_0__'])
-        labels = pd.DataFrame(sim_data['classes'], index = ids)
+        labels = pd.DataFrame(sim_data['classes'], index = kmers_ds['ids'])
         df = df.add_column(taxa, lambda x : labels)
         return df
+
+# Unpack numpy tensor column to kmers columns
+def unpack_kmers(df_file, lst_kmers):
+    ray.data.set_progress_bars(False)
+    df = ray.data.read_parquet(df_file)
+    for i, col in enumerate(lst_kmers):
+        df = df.add_column(col, lambda df: df['__value__'].to_numpy()[0][i])
+    df = df.drop_columns(['__value__'])
+    ray.data.set_progress_bars(True)
+    return df
 
 # CLI argument
 ################################################################################
@@ -102,15 +112,15 @@ else:
     data = load_Xy_data(opt['data'])
 
 X = ray.data.read_parquet(data['profile'])
+X = unpack_kmers(X, data['kmers'])
 cols = list(X.limit(1).to_pandas().columns)
-ids = list(X.to_pandas().index)
 y = pd.DataFrame(
     {opt['taxa']:pd.DataFrame(data['classes'], columns = data['taxas']).loc[:,opt['taxa']].astype('string').str.lower(),
-    'id' : ids}
+    'id' : data['ids']}
 )
-y.index = ids
-df = preprocess(X, y, cols, opt['taxa'])
-labels_list = np.unique(df.to_pandas()[opt['taxa']])
+df_label = preprocess(X, y, cols, opt['taxa'])
+df = df_label[0]
+labels = df_label[1]
 
 df_train, df_val = df.train_test_split(0.2, shuffle = True)
 df_train = df_train.drop_columns(['id'])
@@ -183,7 +193,6 @@ trainer = SklearnPartialTrainer(
 
 # Tuning parallelisation
 ################################################################################
-
 tuner = Tuner(
     trainer,
     param_space = tune_params,

@@ -51,7 +51,6 @@ def bacteria_extraction(metagenome_k_mers, database_k_mers, k, outdirs, dataset,
                     {'domain': pd.DataFrame(database_k_mers['classes'], columns=database_k_mers['taxas']).loc[:, 'domain'].astype('string').str.lower(),
                     'id': database_k_mers['ids']}
                 )
-                y_train.index = database_k_mers['ids']
             elif classifier != 'onesvm' and isinstance(database_k_mers, tuple):
                 database_k_mers = merge_database_host(database_k_mers[0], database_k_mers[1])
                 if classifier in ['attention','lstm','deeplstm']:
@@ -67,7 +66,6 @@ def bacteria_extraction(metagenome_k_mers, database_k_mers, k, outdirs, dataset,
                     {'domain': pd.DataFrame(database_k_mers['classes'], columns=database_k_mers['taxas']).loc[:, 'domain'].astype('string').str.lower(),
                      'id': database_k_mers['ids']}
                 )
-                y_train.index = database_k_mers['ids']
             else:
                 print('Only classifier One Class SVM can be used without host data!\nEither add host data in config file or choose classifier One Class SVM.')
                 sys.exit()
