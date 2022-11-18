@@ -85,6 +85,8 @@ def bacteria_extraction(metagenome_k_mers, database_k_mers, k, outdirs, dataset,
     return classified_data
 
 def extract(df_file, model, verbose = True):
+# TO DO: CONSERVATION DES CLASSIFICATIONS DANS DES DOSSIERS RAY DS EN FICHIERS PARQUET POUR CHAQUE NIVEAU TAXONOMIQUE
+# TO DO: CRÉATION + APPEND DE RAY DS POUR LES CLASSES IDENTIFIÉES PAR NIVEAU TAXONOMIQUE -> FACILITE OUTPUTS
     if verbose:
         print('Extracting predicted bacteria sequences')
 

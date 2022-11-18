@@ -13,13 +13,13 @@ from joblib import Parallel, delayed, parallel_backend
 
 __author__ = ['Amine Remita', 'Nicolas de Montigny']
 
-__all__ = ['KmersCollection','build_kmers_Xy_data','build_kmers_X_data']
+__all__ = ['KmersCollection']
 
 """
 Module adapted from module kmer_collections.py of
 mlr_kgenomvir package [Remita et al. 2022]
 
-Save kmers profiles directly to drive instead of memory and adapted / added functions to do so.
+Save kmers profiles into tensors then directly to drive and adapted / added functions to do so.
 Using Ray datasets for I/O and to scale cluster to available computing ressources.
 """
 

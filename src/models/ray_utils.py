@@ -101,11 +101,11 @@ class ModelsUtils(ABC):
 
     def _predict_preprocess(self, df):
         print('_predict_preprocess')
-        for row in df.iter_rows():
-            self._predict_ids.append(row['id'])
-        self._preprocessor = Chain(SimpleImputer(
-            self.kmers, strategy='constant', fill_value=0), MinMaxScaler(self.kmers))
-        df = self._preprocessor.fit_transform(df)
+        # for row in df.iter_rows():
+        #     self._predict_ids.append(row['id'])
+        # self._preprocessor = Chain(SimpleImputer(
+        #     self.kmers, strategy='constant', fill_value=0), MinMaxScaler(self.kmers))
+        df = self._preprocessor.transform(df)
         return df
 
     def train(self, X, y, kmers_ds, cv = True):
