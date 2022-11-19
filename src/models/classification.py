@@ -56,7 +56,8 @@ def bacteria_classification(classified_data, database_k_mers, k, outdirs, datase
                 if train is True:
                     # Get training dataset and assign to variables
                     # Keep only classes of sequences that were not removed in kmers extraction
-                    X_train = ray.data.read_parquet(database_k_mers['profile'])
+                    X_train = ray.data.read_parquet(
+                        database_k_mers['profile']).window(blocks_per_window=10)
                     X_train = unpack_kmers(X_train, database_k_mers['kmers'])
                     y_train = pd.DataFrame(
                         {taxa : pd.DataFrame(database_k_mers['classes'], columns = database_k_mers['taxas']).loc[:,taxa].astype('string').str.lower(),
@@ -96,7 +97,7 @@ def classify(df_file, model, threshold = 0.8, verbose = True):
     if verbose:
         print('Extracting predicted sequences at {} taxonomic level'.format(taxa))
 
-    df = ray.data.read_parquet(df_file)
+    df = ray.data.read_parquet(df_file).window(blocks_per_window=10)
 
     classified_data = {}
 
@@ -107,8 +108,8 @@ def classify(df_file, model, threshold = 0.8, verbose = True):
     # Make sure classes are writen in lowercase
     pred['class'] = pred['class'].str.lower()
 
-    df_classified = df[pred['class'].str.notequals('unknown')]
-    df_unclassified = df[pred['class'].str.match('unknown')]
+    df_classified = ray.data.from_pandas(df[pred['class'].str.notequals('unknown')])
+    df_unclassified = ray.data.from_pandas(df[pred['class'].str.match('unknown')])
 
     # Save / add to classified/unclassified data
     try:

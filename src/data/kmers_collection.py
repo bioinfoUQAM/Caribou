@@ -78,7 +78,14 @@ class KmersCollection():
     unpack_kmers()
 
     """
-    def __init__(self, seq_data, Xy_file, k, dataset, kmers_list = None):
+    def __init__(
+        self,
+        seq_data,
+        Xy_file,
+        k,
+        dataset,
+        kmers_list = None
+    ):
         ## Public attributes
         # Parameters
         self.k = k
@@ -210,27 +217,11 @@ class KmersCollection():
             id = seen_profile.index[0]
             arr = np.zeros((1,len(kmers_list)))
             for col in seen_kmers:
-                arr[0, kmers_list.index(col)] = seen_profile.at[0, col]
+                arr[0, kmers_list.index(col)] = seen_profile.at[id, col]
         # Delete tmp dir and file
         rmtree(tmp_folder)
         os.remove(os.path.join(self._tmp_dir, "{}.txt".format(ind)))
         return (id, ray.put(arr))
-
-        #     # Tmp df to write given kmers to file
-        #     given_profile = pd.DataFrame(np.zeros((1,len(self.kmers_list))), columns = self.kmers_list, index = [id])
-        #     # Keep only given kmers that were found
-        #     for kmer in self.kmers_list:
-        #         if kmer in seen_kmers:
-        #             given_profile.at[id,kmer] = seen_profile.loc[id,kmer]
-        #         else:
-        #             given_profile.at[id,kmer] = 0
-        #     # Save given kmers profile to parquet file
-        #     given_profile.reset_index(inplace=True)
-        #     given_profile = given_profile.rename(columns = {'index':'id'})
-        #     given_profile.to_csv(os.path.join(self._tmp_dir,"{}.csv".format(ind)), index = False)
-        # # Delete temp dir and file
-        # rmtree(tmp_folder)
-        # os.remove(os.path.join(self._tmp_dir,"{}.txt".format(ind)))
 
     def _construct_data(self):
         if self.method == 'seen':
@@ -240,29 +231,6 @@ class KmersCollection():
         elif self.method == 'given':
             # Read/concatenate memory tensors -> Ray
             self._batch_read_write_given()
-            
-
-        # Read/concatenate files with Ray by batches
-        # nb_batch = 0
-        # while len(self._files_list) > 1000:
-        #     batches_list = np.array_split(self._files_list, np.ceil(len(self._files_list)/1000))
-        #     batch_dir = os.path.join(self._tmp_dir, 'batch_{}'.format(nb_batch))
-        #     os.mkdir(batch_dir)
-        #     if nb_batch == 0:
-        #         for batch in batches_list:
-        #             self._batch_read_write_first(list(batch), batch_dir)
-        #     else:
-        #         for batch in batches_list:
-        #             self._batch_read_write(list(batch), batch_dir)
-        #     self._files_list = glob(os.path.join(batch_dir,'*.parquet'))
-        #     nb_batch += 1
-        
-        # Read/concatenate batches with Ray -> save to file
-        # if nb_batch == 0:
-        #     self._batch_read_write_first(self._files_list, self.Xy_file)
-        # else:
-        #     self.df = ray.data.read_parquet_bulk(self._files_list)
-        #     self.df.write_parquet(self.Xy_file)
 
     # Map csv files to numpy array refs then write to parquet file with Ray
     def _batch_read_write_seen(self):

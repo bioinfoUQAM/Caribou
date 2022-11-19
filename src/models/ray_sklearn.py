@@ -63,14 +63,31 @@ class SklearnModel(ModelsUtils):
             Defaults to 80%
 
     """
-    def __init__(self, classifier, dataset, outdir_model, outdir_results, batch_size, k, taxa, kmers_list, verbose):
-        super().__init__(classifier, dataset, outdir_model, outdir_results, batch_size, k, taxa, kmers_list, verbose)
+    def __init__(
+        self,
+        classifier,
+        dataset,
+        outdir_model,
+        outdir_results,
+        batch_size,
+        k,
+        taxa,
+        kmers_list,
+        verbose
+    ):
+        super().__init__(
+            classifier,
+            dataset,
+            outdir_model,
+            outdir_results,
+            batch_size,
+            k,
+            taxa,
+            kmers_list,
+            verbose
+        )
         # Parameters
         self._encoded = []
-        # if classifier in ['onesvm','linearsvm']:
-        #     self.clf_file = '{}bacteria_binary_classifier_K{}_{}_{}_model.jb'.format(outdir_model, k, classifier, dataset)
-        # else:
-        #     self.clf_file = '{}{}_multiclass_classifier_K{}_{}_{}_model.jb'.format(outdir_model, taxa, k, classifier, dataset)
         # Computes
         self._build()
 

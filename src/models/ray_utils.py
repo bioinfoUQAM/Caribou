@@ -67,7 +67,18 @@ class ModelsUtils(ABC):
     predict : abstract method to predict the classes of a dataset
 
     """
-    def __init__(self, classifier, dataset, outdir_model, outdir_results, batch_size, k, taxa, kmers_list, verbose):
+    def __init__(
+        self,
+        classifier,
+        dataset,
+        outdir_model,
+        outdir_results,
+        batch_size,
+        k,
+        taxa,
+        kmers_list,
+        verbose
+    ):
         # Parameters
         self.classifier = classifier
         self.dataset = dataset

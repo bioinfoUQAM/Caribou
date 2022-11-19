@@ -3,7 +3,6 @@ from data.seq_collections import SeqCollection
 from data.kmers_collection import KmersCollection
 
 import os
-import ray
 import pickle
 
 __author__ = 'Nicolas de Montigny'

@@ -67,8 +67,30 @@ class KerasTFModel(ModelsUtils):
 
     """
 
-    def __init__(self, classifier, dataset, outdir_model, outdir_results, batch_size, training_epochs, k, taxa, kmers_list, verbose):
-        super().__init__(classifier, dataset, outdir_model, outdir_results, batch_size, k, taxa, kmers_list, verbose)
+    def __init__(
+        self,
+        classifier,
+        dataset,
+        outdir_model,
+        outdir_results,
+        batch_size,
+        training_epochs,
+        k,
+        taxa,
+        kmers_list,
+        verbose
+    ):
+        super().__init__(
+            classifier,
+            dataset,
+            outdir_model,
+            outdir_results,
+            batch_size,
+            k,
+            taxa,
+            kmers_list,
+            verbose
+        )
         # Parameters
         # Initialize hidden
         self._training_epochs = training_epochs

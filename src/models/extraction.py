@@ -15,15 +15,8 @@ __author__ = 'Nicolas de Montigny'
 __all__ = ['bacteria_extraction','extract']
 
 def bacteria_extraction(metagenome_k_mers, database_k_mers, k, outdirs, dataset, training_epochs = 100, classifier = 'deeplstm', batch_size = 32, verbose = True, cv = True):
-    # classified_data is a dictionnary containing data dictionnaries at each classified level:
-    # {taxa:{'X':path to ray dataset in parquet format}}
-    classified_data = {'order' : ['bacteria','host','unclassified']}
-    model = None
 
     model_file = '{}{}_{}.pkl'.format(outdirs['models_dir'], classifier, 'domain')
-    bacteria_kmers_file = '{}Xy_bacteria_database_K{}_{}_{}_data'.format(outdirs['data_dir'], k, classifier, dataset)
-    host_kmers_file = '{}Xy_host_database_K{}_{}_{}_data'.format(outdirs['data_dir'], k, classifier, dataset)
-    unclassified_kmers_file = '{}Xy_unclassified_database_K{}_{}_{}_data'.format(outdirs['data_dir'], k, classifier, dataset)
     bacteria_data_file = '{}Xy_bacteria_database_K{}_{}_{}_data.npz'.format(outdirs['data_dir'], k, classifier, dataset)
 
     # Load extracted data if already exists or train and extract bacteria depending on chosen method
@@ -45,7 +38,7 @@ def bacteria_extraction(metagenome_k_mers, database_k_mers, k, outdirs, dataset,
                 sys.exit()
             elif classifier == 'onesvm' and not isinstance(database_k_mers, tuple):
                 model = SklearnModel(classifier, dataset, outdirs['models_dir'], outdirs['results_dir'], batch_size, k, 'domain', database_k_mers['kmers'], verbose)
-                X_train = ray.data.read_parquet(database_k_mers['profile'])
+                X_train = ray.data.read_parquet(database_k_mers['profile']).window(blocks_per_window = 10)
                 X_train = unpack_kmers(X_train, database_k_mers['kmers'])
                 y_train = pd.DataFrame(
                     {'domain': pd.DataFrame(database_k_mers['classes'], columns=database_k_mers['taxas']).loc[:, 'domain'].astype('string').str.lower(),
@@ -60,7 +53,7 @@ def bacteria_extraction(metagenome_k_mers, database_k_mers, k, outdirs, dataset,
                 else:
                     print('Bacteria extractor unknown !!!\n\tModels implemented at this moment are :\n\tBacteria isolator :  One Class SVM (onesvm)\n\tBacteria/host classifiers : Linear SVM (linearsvm)\n\tNeural networks : Attention (attention), Shallow LSTM (lstm) and Deep LSTM (deeplstm)')
                     sys.exit()
-                X_train = ray.data.read_parquet(database_k_mers['profile'])
+                X_train = ray.data.read_parquet(database_k_mers['profile']).window(blocks_per_window = 10)
                 X_train = unpack_kmers(X_train, database_k_mers['kmers'])
                 y_train = pd.DataFrame(
                     {'domain': pd.DataFrame(database_k_mers['classes'], columns=database_k_mers['taxas']).loc[:, 'domain'].astype('string').str.lower(),
@@ -90,7 +83,7 @@ def extract(df_file, model, verbose = True):
     if verbose:
         print('Extracting predicted bacteria sequences')
 
-    df = ray.data.read_parquet(df_file)
+    df = ray.data.read_parquet(df_file).window(blocks_per_window=10)
 
     classified_data = {}
 
@@ -101,9 +94,14 @@ def extract(df_file, model, verbose = True):
     # Make sure classes are writen in lowercase
     pred['class'] = pred['class'].str.lower()
 
-    df_bacteria = df[pred['class'].str.match('bacteria')]
-    df_host = df[pred['class'].str.match('host')]
-    df_unclassified = df[pred['class'].str.match('unknown')]
+    # Loop over classes to extract sequences and k-mers profiles
+    for cls in ['bacteria', 'unclassified', 'host']:
+        classif_kmers_file = '{}Xy_{}_database_K{}_{}_{}_data'.format(outdirs['data_dir'], cls, k, classifier, dataset)
+        classif_data_file = '{}Xy_{}_database_K{}_{}_{}_data.npz'.format(outdirs['data_dir'], cls, k, classifier, dataset)
+        classif_data = {}
+
+        df_classif = ray.data.from_pandas(df[pred['class'].str.match(cls)])
+
 
     # Save / add to classified data
     try:
