@@ -7,6 +7,7 @@ import pandas as pd
 import tensorflow as tf
 
 from glob import glob
+from copy import copy
 from shutil import rmtree
 from subprocess import run
 from joblib import Parallel, delayed, parallel_backend
@@ -158,14 +159,14 @@ class KmersCollection():
             self.kmers_list = list(np.unique(np.concatenate(lst_col)))
         elif self.method == 'given':
             print('given_kmers')
-            # lst_ids_arr = []
+            lst_ids_arr = []
             with parallel_backend('threading'):
-                Parallel(n_jobs = -1, prefer = 'threads', verbose = 1)(
+                lst_ids_arr =  Parallel(n_jobs = -1, prefer = 'threads', verbose = 1)(
                     delayed(self._extract_given_kmers)
-                    (i, file) for i, file in enumerate(self._fasta_list))
-            # for id, arr in lst_ids_arr:
-            #     self.ids.append(id)
-            #     self._lst_arr.append(arr)
+                    (i, file, copy(self.kmers_list)) for i, file in enumerate(self._fasta_list))
+            for id, arr in lst_ids_arr:
+                self.ids.append(id)
+                self._lst_arr.append(arr)
 
     def _extract_seen_kmers(self, ind, file):
         # Make tmp folder per sequence
@@ -190,7 +191,7 @@ class KmersCollection():
         os.remove(os.path.join(self._tmp_dir,"{}.txt".format(ind)))
         return list(profile.columns)
 
-    def _extract_given_kmers(self, ind, file):
+    def _extract_given_kmers(self, ind, file, kmers_list):
         # Make tmp folder per sequence
         tmp_folder = os.path.join(self._tmp_dir,"tmp_{}".format(ind))
         id = os.path.splitext(os.path.basename(file))[0]
@@ -206,15 +207,14 @@ class KmersCollection():
         # List of seen kmers
         seen_kmers = list(seen_profile.columns)
         if len(seen_kmers) > 0:
-            self.ids.append(seen_profile.index[0])
-            arr = np.zeros((1,len(self.kmers_list)))
+            id = seen_profile.index[0]
+            arr = np.zeros((1,len(kmers_list)))
             for col in seen_kmers:
-                arr[0, self.kmers_list.index(col)] = seen_profile.at[0, col]
-            self._lst_arr.append(ray.put(arr))
+                arr[0, kmers_list.index(col)] = seen_profile.at[0, col]
         # Delete tmp dir and file
         rmtree(tmp_folder)
         os.remove(os.path.join(self._tmp_dir, "{}.txt".format(ind)))
-        # return (id, arr)
+        return (id, ray.put(arr))
 
         #     # Tmp df to write given kmers to file
         #     given_profile = pd.DataFrame(np.zeros((1,len(self.kmers_list))), columns = self.kmers_list, index = [id])
