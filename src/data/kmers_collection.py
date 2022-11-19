@@ -202,7 +202,14 @@ class KmersCollection():
         seen_profile = pd.read_table(os.path.join(self._tmp_dir,"{}.txt".format(ind)), sep = '\t', index_col = 0, header = None, names = ['id', str(id)]).T
         # List of seen kmers
         seen_kmers = list(seen_profile.columns)
+        print(seen_kmers)
+        sys.exit()
         if len(seen_kmers) > 0:
+            id = seen_profile.index[0]
+            arr = np.zeros((1,len(self.kmers_list)))
+
+
+
             # Tmp df to write given kmers to file
             given_profile = pd.DataFrame(np.zeros((1,len(self.kmers_list))), columns = self.kmers_list, index = [id])
             # Keep only given kmers that were found
@@ -222,8 +229,13 @@ class KmersCollection():
     def _construct_data(self):
         self._files_list = glob(os.path.join(self._tmp_dir,'*.csv')) # List csv files
 
-        # Read/concatenate files with Ray all at ounce
-        self._batch_read_write_np(self._files_list, self.Xy_file)
+        if self.method == 'seen':
+            # Read/concatenate files csv -> tensor -> Ray
+            self._batch_read_write_seen(self._files_list, self.Xy_file)
+        elif self.method == 'given':
+            # Read/concatenate files tensor -> Ray
+            self._batch_read_write_given
+            
 
         # Read/concatenate files with Ray by batches
         # nb_batch = 0
@@ -248,7 +260,7 @@ class KmersCollection():
         #     self.df.write_parquet(self.Xy_file)
 
     # Map csv files to numpy array refs then write to parquet file with Ray
-    def _batch_read_write_np(self, batch, dir):
+    def _batch_read_write_seen(self, batch, dir):
         lst_ids = []
         lst_arr = []
         for file in batch:
@@ -265,7 +277,7 @@ class KmersCollection():
         self.df = self.df.add_column('id', lambda ds : pd.DataFrame(lst_ids))
         self.df.write_parquet(dir)
 
-    def _batch_read_write(self, batch, dir):
+    def _batch_read_write_given(self, batch, dir):
         df = ray.data.read_parquet_bulk(batch, parallelism = 200)
         df.write_parquet(dir)
         for file in batch:
