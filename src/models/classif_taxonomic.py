@@ -35,6 +35,7 @@ class ClassificationTaxonomic(ClassificationUtils):
     ):
         super().__init__(
             self,
+            classified_data,
             database_k_mers,
             k,
             outdirs,
@@ -46,9 +47,16 @@ class ClassificationTaxonomic(ClassificationUtils):
             cv
         )
         # Parameters
-        self.classified_data = classified_data
         self.threshold = threshold
         self.classifying = classifying
-        # Empty initializations
-
+        self.taxas = database_k_mers['taxas'].copy()
+        self.taxas.remove('domain')
         
+        # Empty initializations
+        self.classify_data = None
+
+        def train_model():
+            print('todo')
+        
+        def classify(self):
+            print('todo')

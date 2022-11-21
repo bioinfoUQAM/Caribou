@@ -199,6 +199,8 @@ class KmersCollection():
         return list(profile.columns)
 
     def _extract_given_kmers(self, ind, file, kmers_list):
+        id = None
+        arr = []
         # Make tmp folder per sequence
         tmp_folder = os.path.join(self._tmp_dir,"tmp_{}".format(ind))
         id = os.path.splitext(os.path.basename(file))[0]
