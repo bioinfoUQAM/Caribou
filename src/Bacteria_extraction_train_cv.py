@@ -1,6 +1,6 @@
 #!/usr/bin python3
 
-from models.extraction import bacteria_extraction
+from models.extraction import ClassificationMethods
 
 from tensorflow.compat.v1 import logging
 
@@ -85,29 +85,31 @@ def bacteria_extraction_train_cv(opt):
 ################################################################################
 
     if opt['host_name'] is None:
-        bacteria_extraction(None,
-            data_bacteria,
-            k_length,
-            outdirs,
-            opt['database_name'],
-            opt['training_epochs'],
-            classifier = opt['model_type'],
+        ClassificationMethods(
+            database_k_mers = data_bacteria,
+            k = k_length,
+            outdirs = outdirs,
+            database = opt['database_name'],
+            classifier_binary = opt['model_type'],
+            taxa = 'domain',
             batch_size = opt['batch_size'],
+            training_epochs = opt['training_epochs'],
             verbose = opt['verbose'],
             cv = True
-            )
+        ).execute_training()
     else:
-        bacteria_extraction(None,
-            (data_bacteria, data_host),
-            k_length,
-            outdirs,
-            opt['database_name'],
-            opt['training_epochs'],
-            classifier = opt['model_type'],
+        ClassificationMethods(
+            database_k_mers=data_bacteria,
+            k = k_length,
+            outdirs = outdirs,
+            database = opt['database_name'],
+            classifier_binary = opt['model_type'],
+            taxa = 'domain',
             batch_size = opt['batch_size'],
+            training_epochs = opt['training_epochs'],
             verbose = opt['verbose'],
             cv = True
-            )
+        )
 
     print("Caribou finished training and cross-validating the {} model without faults".format(opt['model_type']))
 

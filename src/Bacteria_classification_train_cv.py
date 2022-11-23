@@ -1,6 +1,6 @@
 #!/usr/bin python3
 
-from models.classification import bacteria_classification
+from models.classification import ClassificationMethods
 
 from tensorflow.compat.v1 import logging
 
@@ -64,20 +64,24 @@ def bacteria_classification_train_cv(opt):
     os.makedirs(outdirs["models_dir"], mode=0o700, exist_ok=True)
     os.makedirs(outdirs["results_dir"], mode=0o700, exist_ok=True)
 
+    list_taxas = data_bacteria['taxas']
+    list_taxas.remove('domain')
+
 # Training and cross-validation of models for classification of bacterias
 ################################################################################
 
-    classification = bacteria_classification(None,
-        data_bacteria,
-        k_length,
-        outdirs,
-        opt['database_name'],
-        opt['training_epochs'],
-        classifier = opt['model_type'],
+    ClassificationMethods(
+        database_k_mers = data_bacteria,
+        k = k_length,
+        outdirs = outdirs,
+        database = opt['database_name'],
+        classifier_multiclass = opt['model_type'],
+        taxa = list_taxas,
         batch_size = opt['batch_size'],
+        training_epochs = opt['training_epochs'],
         verbose = opt['verbose'],
         cv = True
-        )
+    ).execute_training()
 
     print("Caribou finished training and cross-validating the {} model without faults".format(opt['model_type']))
 

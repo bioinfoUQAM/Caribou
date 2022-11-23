@@ -7,13 +7,10 @@ import configparser
 from pathlib import Path
 
 from data.build_data import build_load_save_data
-from models.extraction import bacteria_extraction
-from models.classification import bacteria_classification
+from models.classification import ClassificationMethods
 from outputs.out import Outputs
 
-from tensorflow.compat.v1 import ConfigProto, Session, logging
-from tensorflow.compat.v1.keras.backend import set_session
-from tensorflow.config import list_physical_devices
+from tensorflow.compat.v1 import logging
 
 
 __author__ = 'Nicolas de Montigny'
@@ -58,7 +55,7 @@ def caribou(opt):
     verbose = config.getboolean('settings', 'verbose', fallback = True)
     training_batch_size = config.getint('settings', 'training_batch_size', fallback = 32)
     training_epochs = config.getint('settings','neural_network_training_iterations', fallback = 100)
-    classifThreshold = config.getfloat('settings', 'classification_threshold', fallback = 0.8)
+    classif_threshold = config.getfloat('settings', 'classification_threshold', fallback = 0.8)
 
     # outputs
     abundance_stats = config.getboolean('outputs', 'abundance_report', fallback = True)
@@ -120,7 +117,7 @@ def caribou(opt):
         raise ValueError(
             'Invalid number of iterations for training neural networks ! Please enter a value bigger than 0 ! Exiting\n' +
             'Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
-    if not 0 < classifThreshold <= 1 or type(classifThreshold) != float:
+    if not 0 < classif_threshold <= 1 or type(classif_threshold) != float:
         raise ValueError(
             'Invalid confidence threshold for classifying bacterial sequences ! Please enter a value between 0 and 1 ! Exiting\n' +
             'Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
@@ -193,58 +190,57 @@ def caribou(opt):
         kmers_list = k_profile_database['kmers']
     )
 
-# Part 2 - Binary classification of bacteria / host sequences
+# Part 2 - Instanciation of the classifiers
 ################################################################################
 
     if host is None:
-        classified_data = bacteria_extraction(k_profile_metagenome,
-            k_profile_database,
-            k_length,
-            outdirs,
-            database,
-            training_epochs,
-            classifier = binary_classifier,
+        recursive_classifier = ClassificationMethods(
+            database_k_mers = k_profile_database,
+            k = k_length,
+            outdirs = outdirs,
+            database = database,
+            classifier_binary = binary_classifier,
+            classifier_multiclass = multi_classifier,
+            taxa = None,
+            threshold = classif_threshold,
             batch_size = training_batch_size,
+            training_epochs = training_epochs,
             verbose = verbose,
-            cv = cv,
-            n_jobs = n_cvJobs
-            )
+            cv = cv
+        )
     else:
-        classified_data = bacteria_extraction(k_profile_metagenome,
-            (k_profile_database, k_profile_host),
-            k_length,
-            outdirs,
-            database,
-            training_epochs,
-            classifier = binary_classifier,
+        recursive_classifier = ClassificationMethods(
+            database_k_mers = (k_profile_database, k_profile_host),
+            k = k_length,
+            outdirs = outdirs,
+            database = database,
+            classifier_binary = binary_classifier,
+            classifier_multiclass = multi_classifier,
+            taxa = None,
+            threshold = classif_threshold,
             batch_size = training_batch_size,
+            training_epochs = training_epochs,
             verbose = verbose,
-            cv = cv,
-            n_jobs = n_cvJobs
-            )
+            cv = cv
+        )
 
-# Part 3 - Multiclass classification of bacterial sequences
+# Part 3 - Recursive classification based on the database data
 ################################################################################
 
-    classified_data = bacterial_classification(classified_data,
-        k_profile_database,
-        k_length,
-        outdirs,
-        metagenome,
-        training_epochs,
-        classifier = multi_classifier,
-        batch_size = training_batch_size,
-        threshold = classifThreshold,
-        verbose = verbose,
-        cv = cv,
-        n_jobs = n_cvJobs,
-        classifying = True)
+    # Train the models
+    recursive_classifier.execute_training()
+
+    # Classify the data from the metagenome
+    recursive_classifier.execute_classication(k_profile_metagenome)
+
+    # Get classification results dictionnary
+    classified_data = recursive_classifier.classified_data
 
 # Part 4 - Outputs for biological analysis of bacterial population
 ################################################################################
 
     outputs = Outputs(k_profile_database,
-                      results_dir,
+                      outdirs['results_dir'],
                       k_length,
                       multi_classifier,
                       metagenome,

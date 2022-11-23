@@ -175,12 +175,12 @@ class KerasTFModel(ModelsUtils):
         )
         self._encoder.fit(df)
 
-    def _prob_2_cls(self, predict, nb_cls):
+    def _prob_2_cls(self, predict, nb_cls, threshold):
         print('_prob_2_cls')
         if nb_cls == 1 and self.classifier != 'lstm':
             predict = np.round(abs(np.concatenate(predict.to_pandas()['predictions'])))
         else:
-            predict = predict.map_batches(map_predicted_label)
+            predict = predict.map_batches(map_predicted_label, threshold)
             predict = np.ravel(np.array(predict.to_pandas()))
         return self._label_decode(predict)
 
@@ -254,7 +254,7 @@ class KerasTFModel(ModelsUtils):
         training_result = self._trainer.fit()
         self._model_ckpt = training_result.best_checkpoints[0][0]
 
-    def predict(self, df, threshold = 0.8, cv = False):
+    def predict(self, df, threshold = 0.8):
         print('predict')
         df = self._preprocessor.transform(df)
         # Define predictor
@@ -269,7 +269,7 @@ class KerasTFModel(ModelsUtils):
             feature_columns = ['features'],
             batch_size = self.batch_size
         )
-        return self._prob_2_cls(predictions, self._nb_classes)
+        return self._prob_2_cls(predictions, self._nb_classes, threshold)
 
 # Training function outside of the class as mentioned on the Ray discussion
 # https://discuss.ray.io/t/statuscode-resource-exhausted/4379/16
@@ -349,8 +349,7 @@ def build_model(classifier, nb_cls, nb_kmers):
     return clf
 
 
-def map_predicted_label(df):
-    threshold = 0.8
+def map_predicted_label(df, threshold):
     predict = pd.DataFrame({'best_proba': [df['predictions'][i][np.argmax(df['predictions'][i])] for i in range(len(df))],
                             'predicted_label': [np.argmax(df['predictions'][i]) for i in range(len(df))]})
     predict.loc[predict['best_proba'] < threshold, 'predicted_label'] = -1

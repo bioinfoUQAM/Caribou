@@ -9,17 +9,18 @@ __author__ = 'Nicolas de Montigny'
 
 __all__ = ['build_load_save_data', 'build_Xy_data', 'build_X_data']
 
-def build_load_save_data(file, hostfile, prefix, dataset, host, kmers_list=None, k=4):
+
+def build_load_save_data(file, hostfile, prefix, dataset, host, kmers_list=None, k=20):
     # Declare data variables as none
     data = None
     data_host = None
     # Generate the names of files
-    Xy_file = os.path.join(prefix,'Xy_genome_{}_data_K{}'.format(dataset,k))
-    data_file = os.path.join(prefix,'Xy_genome_{}_data_K{}.npz'.format(dataset,k))
-    Xy_file_host = os.path.join(prefix,'Xy_genome_{}_data_K{}'.format(host,k))
-    data_file_host = os.path.join(prefix,'Xy_genome_{}_data_K{}.npz'.format(host,k))
-    seqfile = os.path.join(prefix,'seqdata_{}.txt'.format(dataset))
-    seqfile_host = os.path.join(prefix,'seqdata_{}.txt'.format(host))
+    Xy_file = os.path.join(prefix, 'Xy_genome_{}_data_K{}'.format(dataset, k))
+    data_file = os.path.join(prefix, 'Xy_genome_{}_data_K{}.npz'.format(dataset, k))
+    Xy_file_host = os.path.join(prefix, 'Xy_genome_{}_data_K{}'.format(host, k))
+    data_file_host = os.path.join(prefix, 'Xy_genome_{}_data_K{}.npz'.format(host, k))
+    seqfile = os.path.join(prefix, 'seqdata_{}.txt'.format(dataset))
+    seqfile_host = os.path.join(prefix, 'seqdata_{}.txt'.format(host))
 
     # Load file if already exists
     if os.path.isfile(data_file) and os.path.isfile(data_file_host) and isinstance(hostfile, tuple):
@@ -41,7 +42,7 @@ def build_load_save_data(file, hostfile, prefix, dataset, host, kmers_list=None,
 
             # Build Xy_data to drive
             print('Database Xy_data, k = {}'.format(k))
-            data = build_Xy_data(seq_data, k, Xy_file, dataset, kmers_list = None)
+            data = build_Xy_data(seq_data, k, Xy_file,dataset, kmers_list=None)
             save_Xy_data(data, data_file)
 
         # Assign kmers_list to variable ater extracting database data
@@ -72,7 +73,6 @@ def build_load_save_data(file, hostfile, prefix, dataset, host, kmers_list=None,
             data = build_X_data(seq_data, k, Xy_file, dataset, kmers_list)
             save_Xy_data(data, data_file)
 
-
     if data is not None and data_host is None:
         return data
     elif data is None and data_host is not None:
@@ -81,18 +81,18 @@ def build_load_save_data(file, hostfile, prefix, dataset, host, kmers_list=None,
         return data, data_host
 
 # Build kmers collections with known classes and taxas
-def build_Xy_data(seq_data, k, Xy_file, dataset, kmers_list = None):
+def build_Xy_data(seq_data, k, Xy_file, dataset, kmers_list=None):
     data = {}
 
     collection = KmersCollection(seq_data, Xy_file, k, dataset, kmers_list)
 
     # Data in a dictionnary
-    data['profile'] = collection.Xy_file # Kmers profile
-    data['ids'] = collection.ids # Ids of profiles
-    data['classes'] = collection.classes # Class labels
-    data['kmers'] = collection.kmers_list # Features
-    data['taxas'] = collection.taxas # Known taxas for classification
-    data['fasta'] = seq_data.data # Fasta file -> simulate reads if cv
+    data['profile'] = collection.Xy_file  # Kmers profile
+    data['ids'] = collection.ids  # Ids of profiles
+    data['classes'] = collection.classes  # Class labels
+    data['kmers'] = collection.kmers_list  # Features
+    data['taxas'] = collection.taxas  # Known taxas for classification
+    data['fasta'] = seq_data.data  # Fasta file -> simulate reads if cv
 
     return data
 
