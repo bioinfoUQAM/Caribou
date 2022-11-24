@@ -219,7 +219,8 @@ class KmersCollection():
             id = seen_profile.index[0]
             arr = np.zeros((1,len(kmers_list)))
             for col in seen_kmers:
-                arr[0, kmers_list.index(col)] = seen_profile.at[id, col]
+                if col in kmers_list:
+                    arr[0, kmers_list.index(col)] = seen_profile.at[id, col]
         # Delete tmp dir and file
         rmtree(tmp_folder)
         os.remove(os.path.join(self._tmp_dir, "{}.txt".format(ind)))
