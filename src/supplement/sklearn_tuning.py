@@ -58,7 +58,13 @@ def merge_database_host(database_data, host_data):
 
 # Function from class function models.ray_sklearn.SklearnModel._training_preprocess
 def preprocess(X, y, cols, taxa):
+    print(X.take(1).show())
+    print(y)
+    print(cols)
+    print(taxa)
     df = X.add_column([taxa], lambda x : y)
+    print(df.take(1).show())
+    raise ValueError
     df = preprocess_values(df, cols)
     df, labels = preprocess_labels(df, taxa)
    
@@ -141,7 +147,7 @@ else:
     data = load_Xy_data(opt['data'])
 
 X = ray.data.read_parquet(data['profile'])
-cols = list(X.limit(1).to_pandas().columns)
+cols = data['kmers']
 y = pd.DataFrame(
     {opt['taxa']:pd.DataFrame(data['classes'], columns = data['taxas']).loc[:,opt['taxa']].astype('string').str.lower(),
     'id' : data['ids']}
