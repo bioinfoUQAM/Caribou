@@ -35,6 +35,27 @@ warnings.filterwarnings('ignore')
 # Functions
 ################################################################################
 
+# Function from class function models.classification.ClassificationMethods._merge_database_host
+def merge_database_host(database_data, host_data):
+    merged_database_host = {}
+
+    merged_database_host['profile'] = "{}_host_merged".format(os.path.splitext(database_data["profile"])[0]) # Kmers profile
+
+    df_classes = pd.DataFrame(database_data["classes"], columns=database_data["taxas"])
+    if len(np.unique(df_classes['domain'])) != 1:
+        df_classes[df_classes['domain'] != 'bacteria'] = 'bacteria'
+    df_classes = df_classes.append(pd.DataFrame(host_data["classes"], columns=host_data["taxas"]), ignore_index=True)
+    merged_database_host['classes'] = np.array(df_classes)  # Class labels
+    merged_database_host['kmers'] = database_data["kmers"]  # Features
+    merged_database_host['taxas'] = database_data["taxas"]  # Known taxas for classification
+    merged_database_host['fasta'] = (database_data['fasta'], host_data['fasta'])  # Fasta file needed for reads simulation
+
+    df_db = ray.data.read_parquet(database_data["profile"])
+    df_host = ray.data.read_parquet(host_data["profile"])
+    df_merged = df_db.union(df_host)
+    df_merged.write_parquet(merged_database_host['profile'])
+    return merged_database_host
+
 # Function from class function models.ray_sklearn.SklearnModel._training_preprocess
 def preprocess(X, y, cols, taxa):
     df = X.add_column([taxa], lambda x : y)
