@@ -59,21 +59,38 @@ def merge_database_host(database_data, host_data):
 # Function from class function models.ray_sklearn.SklearnModel._training_preprocess
 def preprocess(X, y, cols, taxa):
     df = X.add_column([taxa], lambda x : y)
-    preprocessor = Chain(
-        SimpleImputer(
-            cols,
-            strategy = 'constant',
-            fill_value = 0
-        ),
-        MinMaxScaler(cols)
-    )
-    preprocessor.fit(df)
-    df = preprocessor.transform(df)
+    df = preprocess_values(df, cols)
+    df, labels = preprocess_labels(df, taxa)
+   
+    return (df, labels)
+
+def preprocess_values(df, cols):
+    cols_batches = np.array_split(cols, 1000)
+    for batch in cols_batches:
+        min_pos = cols.index(batch[0])
+        max_pos = cols.index(batch[-1])
+        for col in batch:
+            df = df.add_column(col, lambda df: df['__value__'].to_numpy()[0][cols.index(col)])
+        preprocessor = Chain(
+            SimpleImputer(
+                batch,
+                strategy='constant',
+                fill_value=0
+            ),
+            MinMaxScaler(batch)
+        )
+        df = preprocessor.fit_transform(df)
+        for row in df.iter_rows():
+            row['__value__'][0][min_pos:max_pos+1] = np.array(row[batch])
+            print(row)
+        df = df.drop_columns(batch)
+    MinMaxScaler(cols)
+
+def preprocess_labels(df, taxa):
     labels = np.unique(y[taxa])
     encoder = LabelEncoder(taxa)
     df = encoder.fit_transform(df)
-    
-    return (df, labels)
+    return df, labels
 
 # Function from class models.ray_utils.ModelsUtils
 def sim_4_cv(df, kmers_ds, name, taxa, cols, k):
