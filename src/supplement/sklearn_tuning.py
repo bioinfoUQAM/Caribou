@@ -58,13 +58,12 @@ def merge_database_host(database_data, host_data):
 
 # Function from class function models.ray_sklearn.SklearnModel._training_preprocess
 def preprocess(X, y, cols, taxa):
-    print(X.take(1).show())
-    print(y)
-    print(cols)
-    print(taxa)
+    print:('X : ',X)
+    print('y : ',y)
+    print('taxa : ',taxa)
+    raise ValueError
     df = X.add_column([taxa], lambda x : y)
     print(df.take(1).show())
-    raise ValueError
     df = preprocess_values(df, cols)
     df, labels = preprocess_labels(df, taxa)
    
