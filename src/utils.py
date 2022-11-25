@@ -6,7 +6,7 @@ import ray
 
 __author__ = "Nicolas de Montigny"
 
-__all__ = ['load_Xy_data','save_Xy_data','merge_database_host']
+__all__ = ['load_Xy_data','save_Xy_data']
 
 # Load data from file
 def load_Xy_data(Xy_file):

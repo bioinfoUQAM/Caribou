@@ -67,10 +67,12 @@ def preprocess(X, y, cols, taxa):
         ),
         MinMaxScaler(cols)
     )
-    df = preprocessor.fit_transform(df)
+    preprocessor.fit(df)
+    df = preprocessor.transform(df)
     labels = np.unique(y[taxa])
     encoder = LabelEncoder(taxa)
     df = encoder.fit_transform(df)
+    
     return (df, labels)
 
 # Function from class models.ray_utils.ModelsUtils
@@ -83,22 +85,11 @@ def sim_4_cv(df, kmers_ds, name, taxa, cols, k):
         cv_sim = readsSimulation(kmers_ds['fasta'], cls, sim_genomes, 'miseq', sim_outdir, name)
         sim_data = cv_sim.simulation(k, cols)
         df = ray.data.read_parquet(sim_data['profile'])
-        unpack_kmers(df, cols)
         for row in df.iter_rows():
             ids.append(row['__index_level_0__'])
         labels = pd.DataFrame(sim_data['classes'], index = kmers_ds['ids'])
         df = df.add_column(taxa, lambda x : labels)
         return df
-
-# Unpack numpy tensor column to kmers columns
-def unpack_kmers(df_file, lst_kmers):
-    ray.data.set_progress_bars(False)
-    df = ray.data.read_parquet(df_file)
-    for i, col in enumerate(lst_kmers):
-        df = df.add_column(col, lambda df: df['__value__'].to_numpy()[0][i])
-    df = df.drop_columns(['__value__'])
-    ray.data.set_progress_bars(True)
-    return df
 
 # CLI argument
 ################################################################################
@@ -133,7 +124,6 @@ else:
     data = load_Xy_data(opt['data'])
 
 X = ray.data.read_parquet(data['profile'])
-X = unpack_kmers(X, data['kmers'])
 cols = list(X.limit(1).to_pandas().columns)
 y = pd.DataFrame(
     {opt['taxa']:pd.DataFrame(data['classes'], columns = data['taxas']).loc[:,opt['taxa']].astype('string').str.lower(),
