@@ -65,16 +65,15 @@ class ClassificationMethods():
         self.not_classified_ids = []
         self.merged_database_host = None
         self.previous_taxa_unclassified = None
-        # Automatic executions
-        self._verify_assign_taxas(taxa)
-        
         if isinstance(database_k_mers, tuple):
             self.host = True
             self.database_data = database_k_mers[0]
             self.host_data = database_k_mers[1]
         else:
             self.database_data = database_k_mers
-
+        # Automatic executions
+        self._verify_assign_taxas(taxa)
+        
     # Main functions
     #########################################################################################################
 
@@ -95,13 +94,13 @@ class ClassificationMethods():
                 )
             )
             self._model_file = os.path.join(
-                self.outdirs['model_dir'],
+                self.outdirs['models_dir'],
                 '{}_{}.pkl'.format(
                     clf,
                     taxa
                 )
             )
-            train = self._verify_load_data_model(self._data_file, self._model_file)
+            train = self._verify_load_data_model(self._data_file, self._model_file, taxa)
             if train:
                 self._train_model(taxa)
 
@@ -126,8 +125,7 @@ class ClassificationMethods():
                 self.database_data['kmers'],
                 self.verbose
             )
-            self.X_train = ray.data.read_parquet(self.database_data['profile']).window(blocks_per_window=10)
-            self.X_train = self._unpack_kmers(self.X_train, self.database_data['kmers'])
+            self.X_train = ray.data.read_parquet(self.database_data['profile'])
             self.y_train = pd.DataFrame(
                 {taxa: pd.DataFrame(self.database_data['classes'], columns=self.database_data['taxas']).loc[:, taxa].astype('string').str.lower(),
                  'id': self.database_data['ids']}
@@ -159,8 +157,7 @@ class ClassificationMethods():
                     self.self.merged_database_host['kmers'],
                     self.verbose
                 )
-            self.X_train = ray.data.read_parquet(self.database_data['profile']).window(blocks_per_window=10)
-            self.X_train = self.unpack_kmers(self.X_train, self.database_data['kmers'])
+            self.X_train = ray.data.read_parquet(self.database_data['profile'])
             self.y_train = pd.DataFrame(
                 {taxa: pd.DataFrame(self.database_data['classes'], columns=self.database_data['taxas']).loc[:, taxa].astype('string').str.lower(),
                  'id': self.database_data['ids']}
@@ -195,8 +192,7 @@ class ClassificationMethods():
                 self.database_k_mers['kmers'],
                 self.verbose
             )
-        self.X_train = ray.data.read_parquet(self.database_data['profile']).window(blocks_per_window=10)
-        self.X_train = self.unpack_kmers(self.X_train, self.database_data['kmers'])
+        self.X_train = ray.data.read_parquet(self.database_data['profile'])
         self.y_train = pd.DataFrame(
             {taxa: pd.DataFrame(self.database_data['classes'], columns=self.database_data['taxas']).loc[:, taxa].astype('string').str.lower(),
              'id': self.database_data['ids']}
@@ -207,7 +203,7 @@ class ClassificationMethods():
     # Execute classification using trained model(s)
     def execute_classification(self, data2classify):
         df_file = data2classify['profile']
-        df = ray.data.read_parquet(df_file).window(blocks_per_window=10)
+        df = ray.data.read_parquet(df_file)
         ids = data2classify['ids']
         for i, taxa in enumerate(self.classified_data['order']):
             if i == 0:
@@ -263,7 +259,7 @@ class ClassificationMethods():
     def _extract_subset_not_classified(self, df, df_file, taxa):
         not_classified_file = df_file + '_{}'.format(taxa)
         rows_not_classified = []
-        df = ray.data.read_parquet(df).window(blocks_per_window=10)
+        df = ray.data.read_parquet(df)
         for row in df.iter_rows():
             if row['id'] in self.not_classified_ids:
                 rows_not_classified.append(row)
@@ -295,16 +291,6 @@ class ClassificationMethods():
         df_merged = df_db.union(df_host)
         df_merged.write_parquet(self.merged_database_host['profile'])
 
-    # Unpack numpy tensor column to kmers columns
-    def _unpack_kmers(self, df_file, lst_kmers):
-        ray.data.set_progress_bars(False)
-        df = ray.data.read_parquet(df_file)
-        for i, col in enumerate(lst_kmers):
-            df = df.add_column(col, lambda df: df['__value__'].to_numpy()[0][i])
-        df = df.drop_columns(['__value__'])
-        ray.data.set_progress_bars(True)
-        return df
-
     # Verify taxas and assign to class variable
     def _verify_assign_taxas(self, taxa):
         if taxa is None:
@@ -324,7 +310,7 @@ class ClassificationMethods():
                 raise ValueError("Taxa {} not found in database".format(taxa))
 
     # Caller function for verifying if the data and model already exist
-    def _verify_load_data_model(self, data_file, model_file):
+    def _verify_load_data_model(self, data_file, model_file, taxa):
         self._verify_files(data_file, taxa)
         return self._verify_load_model(model_file, taxa)
         

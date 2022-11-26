@@ -131,6 +131,7 @@ class SklearnModel(ModelsUtils):
         df_train, df_test = df.train_test_split(0.2, shuffle = True)
         df_train, df_val = df_train.train_test_split(0.2, shuffle = True)
 
+        df_train = df_train.window(blocks_per_window=10)
         df_train = df_train.drop_columns(['id'])
 
         df_val = self._sim_4_cv(df_val, kmers_ds, '{}_val'.format(self.dataset))
@@ -214,6 +215,7 @@ class SklearnModel(ModelsUtils):
 
     def predict(self, df, threshold = 0.8, cv = False):
         print('predict')
+        df = df.window(blocks_per_window=10)
         if not cv:
             df = self._predict_preprocess(df)
         # Define predictor

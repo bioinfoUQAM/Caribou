@@ -198,6 +198,8 @@ class KerasTFModel(ModelsUtils):
         df_train, df_test = df.train_test_split(0.2, shuffle = True)
         df_train, df_val = df_train.train_test_split(0.1, shuffle = True)
 
+        df_train = df_train.window(blocks_per_window=10)
+
         df_val = self._sim_4_cv(df_val, kmers_ds, '{}_val'.format(self.dataset))
         df_test = self._sim_4_cv(df_test, kmers_ds, '{}_test'.format(self.dataset))
 
@@ -256,6 +258,7 @@ class KerasTFModel(ModelsUtils):
 
     def predict(self, df, threshold = 0.8):
         print('predict')
+        df = df.window(blocks_per_window=10)
         df = self._preprocessor.transform(df)
         # Define predictor
         self._predictor = BatchPredictor.from_checkpoint(

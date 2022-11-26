@@ -2,6 +2,7 @@
 
 import os
 import ray
+import logging
 import argparse
 import warnings
 import numpy as np
@@ -17,7 +18,7 @@ from models.reads_simulation import readsSimulation
 from models.ray_sklearn_partial_trainer import SklearnPartialTrainer
 
 # Preprocessing
-from ray.data.preprocessors import MinMaxScaler, LabelEncoder, Chain, SimpleImputer
+from ray.data.preprocessors import MinMaxScaler, LabelEncoder, Chain, SimpleImputer, Concatenator
 
 # Training
 from sklearn.naive_bayes import MultinomialNB
@@ -58,24 +59,20 @@ def merge_database_host(database_data, host_data):
 
 # Function from class function models.ray_sklearn.SklearnModel._training_preprocess
 def preprocess(X, y, cols, taxa):
-    print:('X : ',X)
-    print('y : ',y)
-    print('taxa : ',taxa)
-    raise ValueError
-    df = X.add_column([taxa], lambda x : y)
-    print(df.take(1).show())
-    df = preprocess_values(df, cols)
+    df = X.add_column(['id',taxa], lambda x : y)
+    print(df.to_pandas())
+    # df = preprocess_values(df, cols)
     df, labels = preprocess_labels(df, taxa)
-   
     return (df, labels)
 
 def preprocess_values(df, cols):
-    cols_batches = np.array_split(cols, 1000)
-    for batch in cols_batches:
-        min_pos = cols.index(batch[0])
-        max_pos = cols.index(batch[-1])
+    if len(cols) > 1000:
+        cols_batches = np.array_split(cols, int(len(cols)/1000))
+    else:
+        cols_batches = [cols]
+    for i, batch in enumerate(cols_batches):
         for col in batch:
-            df = df.add_column(col, lambda df: df['__value__'].to_numpy()[0][cols.index(col)])
+            df = df.add_column(str(col), lambda df: df['__value__'].to_numpy()[:,cols.index(col)])
         preprocessor = Chain(
             SimpleImputer(
                 batch,
@@ -85,11 +82,8 @@ def preprocess_values(df, cols):
             MinMaxScaler(batch)
         )
         df = preprocessor.fit_transform(df)
-        for row in df.iter_rows():
-            row['__value__'][0][min_pos:max_pos+1] = np.array(row[batch])
-            print(row)
-        df = df.drop_columns(batch)
-    MinMaxScaler(cols)
+        concatenator = Concatenator('concat_{}'.format(i), include = batch)
+        df = concatenator.fit_transform(df)
 
 def preprocess_labels(df, taxa):
     labels = np.unique(y[taxa])
@@ -132,7 +126,7 @@ args = parser.parse_args()
 
 opt = vars(args)
 
-ray.init()
+ray.init(logging_level=logging.ERROR)
 
 # Data
 ################################################################################
@@ -148,8 +142,8 @@ else:
 X = ray.data.read_parquet(data['profile'])
 cols = data['kmers']
 y = pd.DataFrame(
-    {opt['taxa']:pd.DataFrame(data['classes'], columns = data['taxas']).loc[:,opt['taxa']].astype('string').str.lower(),
-    'id' : data['ids']}
+    {'id' : data['ids'],
+    opt['taxa']:pd.DataFrame(data['classes'], columns = data['taxas']).loc[:,opt['taxa']].astype('string').str.lower()}
 )
 df_label = preprocess(X, y, cols, opt['taxa'])
 df = df_label[0]

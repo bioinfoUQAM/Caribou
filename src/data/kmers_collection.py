@@ -248,22 +248,10 @@ class KmersCollection():
             self._lst_arr.append(ray.put(arr))
             os.remove(file)
         self.df = ray.data.from_numpy_refs(self._lst_arr)
-        self.df = self.df.add_column('id', lambda ds : pd.DataFrame(self.ids))
+        self.df = self.df.repartition(os.cpu_count()).add_column('id', lambda ds : pd.DataFrame(self.ids))
         self.df.write_parquet(self.Xy_file)
 
     def _batch_read_write_given(self):
         self.df = ray.data.from_numpy_refs(self._lst_arr)
-        self.df = self.df.add_column('id', lambda ds : pd.DataFrame(self.ids))
+        self.df = self.df.repartition(os.cpu_count()).add_column('id', lambda ds : pd.DataFrame(self.ids))
         self.df.write_parquet(self.Xy_file)
-
-    # Unpack numpy tensor column to kmers columns
-    def unpack_kmers(self):
-        if not os.path.isdir(self.Xy_file):
-            raise ValueError("K-mers were not extracted yet. Please instantiate the object first.")
-        if self.df is None:
-            self.df = ray.data.read_parquet(self.Xy_file)
-        ray.data.set_progress_bars(False)
-        for i, col in enumerate(self.kmers_list):
-            self.df = self.df.add_column(col, lambda df: df['__value__'].to_numpy()[0][i])
-        self.df = self.df.drop_columns(['__value__'])
-        ray.data.set_progress_bars(True)

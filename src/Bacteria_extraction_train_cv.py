@@ -1,6 +1,6 @@
 #!/usr/bin python3
 
-from models.extraction import ClassificationMethods
+from models.classification import ClassificationMethods
 
 from tensorflow.compat.v1 import logging
 
