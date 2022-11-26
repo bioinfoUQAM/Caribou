@@ -59,11 +59,11 @@ def merge_database_host(database_data, host_data):
 
 # Function from class function models.ray_sklearn.SklearnModel._training_preprocess
 def preprocess(X, y, cols, taxa):
-    df = X.add_column(['id',taxa], lambda x : y)
+    df = X.repartition(os.cpu_count()).add_column([taxa, 'id'], lambda x : y)
     print(df.to_pandas())
     # df = preprocess_values(df, cols)
     df, labels = preprocess_labels(df, taxa)
-    return (df, labels)
+    return df, labels
 
 def preprocess_values(df, cols):
     if len(cols) > 1000:
@@ -142,12 +142,10 @@ else:
 X = ray.data.read_parquet(data['profile'])
 cols = data['kmers']
 y = pd.DataFrame(
-    {'id' : data['ids'],
-    opt['taxa']:pd.DataFrame(data['classes'], columns = data['taxas']).loc[:,opt['taxa']].astype('string').str.lower()}
+    {opt['taxa']:pd.DataFrame(data['classes'], columns = data['taxas']).loc[:,opt['taxa']].astype('string').str.lower(),
+     'id': data['ids']}
 )
-df_label = preprocess(X, y, cols, opt['taxa'])
-df = df_label[0]
-labels = df_label[1]
+df, labels_list = preprocess(X, y, cols, opt['taxa'])
 
 df_train, df_val = df.train_test_split(0.2, shuffle = True)
 df_train = df_train.drop_columns(['id'])

@@ -93,8 +93,7 @@ class SklearnModel(ModelsUtils):
 
     def _training_preprocess(self, X, y):
         print('_training_preprocess')
-        # df = X.add_column([self.taxa, 'id'], lambda x: y)
-        df = X.add_column([self.taxa], lambda x: y)
+        df = X.add_column([self.taxa, 'id'], lambda x: y)
         self._preprocessor = Chain(
             SimpleImputer(
                 self.kmers,
