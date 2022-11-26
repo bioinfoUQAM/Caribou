@@ -239,7 +239,9 @@ class KmersCollection():
     def _batch_read_write_seen(self):
         for file in self._files_list:
             tmp = pd.read_csv(file)
+            print(tmp.loc[0, 'id'])
             self.ids.append(tmp.loc[0,'id'])
+            print(self.ids)
             arr = np.zeros((1, len(self.kmers_list)-1))
             cols = list(tmp.columns)
             cols.remove('id')
@@ -248,10 +250,8 @@ class KmersCollection():
             self._lst_arr.append(ray.put(arr))
             os.remove(file)
         self.df = ray.data.from_numpy_refs(self._lst_arr)
-        self.df = self.df.repartition(os.cpu_count()).add_column('id', lambda ds : pd.DataFrame(self.ids))
         self.df.write_parquet(self.Xy_file)
 
     def _batch_read_write_given(self):
         self.df = ray.data.from_numpy_refs(self._lst_arr)
-        self.df = self.df.repartition(os.cpu_count()).add_column('id', lambda ds : pd.DataFrame(self.ids))
         self.df.write_parquet(self.Xy_file)
