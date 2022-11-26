@@ -59,31 +59,10 @@ def merge_database_host(database_data, host_data):
 
 # Function from class function models.ray_sklearn.SklearnModel._training_preprocess
 def preprocess(X, y, cols, taxa):
-    df = X.repartition(os.cpu_count()).add_column([taxa, 'id'], lambda x : y)
+    df = X.repartition(1).add_column([taxa, 'id'], lambda x : y).repartition(os.cpu_count())
     print(df.to_pandas())
-    # df = preprocess_values(df, cols)
     df, labels = preprocess_labels(df, taxa)
     return df, labels
-
-def preprocess_values(df, cols):
-    if len(cols) > 1000:
-        cols_batches = np.array_split(cols, int(len(cols)/1000))
-    else:
-        cols_batches = [cols]
-    for i, batch in enumerate(cols_batches):
-        for col in batch:
-            df = df.add_column(str(col), lambda df: df['__value__'].to_numpy()[:,cols.index(col)])
-        preprocessor = Chain(
-            SimpleImputer(
-                batch,
-                strategy='constant',
-                fill_value=0
-            ),
-            MinMaxScaler(batch)
-        )
-        df = preprocessor.fit_transform(df)
-        concatenator = Concatenator('concat_{}'.format(i), include = batch)
-        df = concatenator.fit_transform(df)
 
 def preprocess_labels(df, taxa):
     labels = np.unique(y[taxa])
