@@ -60,8 +60,8 @@ def merge_database_host(database_data, host_data):
 # Function from class function models.ray_sklearn.SklearnModel._training_preprocess
 def preprocess(X, y, cols, taxa):
     df = X.repartition(1).add_column([taxa, 'id'], lambda x : y).repartition(os.cpu_count())
-    print(df.to_pandas())
     df, labels = preprocess_labels(df, taxa)
+    print(df.to_pandas())
     return df, labels
 
 def preprocess_labels(df, taxa):
@@ -80,9 +80,7 @@ def sim_4_cv(df, kmers_ds, name, taxa, cols, k):
         cv_sim = readsSimulation(kmers_ds['fasta'], cls, sim_genomes, 'miseq', sim_outdir, name)
         sim_data = cv_sim.simulation(k, cols)
         df = ray.data.read_parquet(sim_data['profile'])
-        for row in df.iter_rows():
-            ids.append(row['__index_level_0__'])
-        labels = pd.DataFrame(sim_data['classes'], index = kmers_ds['ids'])
+        labels = pd.DataFrame(sim_data['classes'], index = sim_data['ids'])
         df = df.add_column(taxa, lambda x : labels)
         return df
 
