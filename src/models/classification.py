@@ -282,6 +282,7 @@ class ClassificationMethods():
             df_classes[df_classes['domain'] != 'bacteria'] = 'bacteria'
         df_classes = df_classes.append(pd.DataFrame(host_data["classes"], columns=host_data["taxas"]), ignore_index=True)
         self.merged_database_host['classes'] = np.array(df_classes)  # Class labels
+        self.merged_database_host['ids'] = np.concatenate((database_data["ids"], host_data["ids"]))  # IDs
         self.merged_database_host['kmers'] = database_data["kmers"]  # Features
         self.merged_database_host['taxas'] = database_data["taxas"]  # Known taxas for classification
         self.merged_database_host['fasta'] = (database_data['fasta'], host_data['fasta'])  # Fasta file needed for reads simulation

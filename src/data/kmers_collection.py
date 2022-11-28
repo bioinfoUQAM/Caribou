@@ -133,6 +133,7 @@ class KmersCollection():
         # Get informations from extracted data
         if self.kmers_list is None:
             self.kmers_list = list(self.kmers_list)
+            self.kmers_list.remove('id')
         # Get labels that match K-mers extracted sequences
         if len(seq_data.labels) > 0:
             msk = np.array([True if id in self.ids else False for id in seq_data.ids])

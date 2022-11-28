@@ -47,6 +47,7 @@ def merge_database_host(database_data, host_data):
         df_classes[df_classes['domain'] != 'bacteria'] = 'bacteria'
     df_classes = df_classes.append(pd.DataFrame(host_data["classes"], columns=host_data["taxas"]), ignore_index=True)
     merged_database_host['classes'] = np.array(df_classes)  # Class labels
+    merged_database_host['ids'] = np.concatenate((database_data['ids'], host_data['ids'])) # IDs
     merged_database_host['kmers'] = database_data["kmers"]  # Features
     merged_database_host['taxas'] = database_data["taxas"]  # Known taxas for classification
     merged_database_host['fasta'] = (database_data['fasta'], host_data['fasta'])  # Fasta file needed for reads simulation
@@ -67,6 +68,7 @@ def preprocess_labels(df, taxa):
     labels = np.unique(y[taxa])
     encoder = LabelEncoder(taxa)
     df = encoder.fit_transform(df)
+    labels = np.arange(len(labels))
     return df, labels
 
 # Function from class models.ray_utils.ModelsUtils
@@ -114,6 +116,9 @@ if opt['data_host']:
     data = merge_database_host(data_db, data_host)
 else:
     data = load_Xy_data(opt['data'])
+
+# Ensure no column is named 'id'
+data['kmers'].remove('id')
 
 X = ray.data.read_parquet(data['profile'])
 cols = data['kmers']
@@ -180,6 +185,7 @@ trainer = SklearnPartialTrainer(
     estimator = clf,
     label_column = opt['taxa'],
     labels_list = labels_list,
+    features_list = cols,
     params = train_params,
     scoring = 'accuracy',
     datasets = datasets,
@@ -187,7 +193,7 @@ trainer = SklearnPartialTrainer(
     set_estimator_cpus = True,
     scaling_config = ScalingConfig(
         trainer_resources = {
-            'CPU' : 5
+            'CPU' : 3
         }
     )
 )

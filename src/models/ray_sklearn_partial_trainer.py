@@ -48,6 +48,7 @@ class SklearnPartialTrainer(SklearnTrainer):
         datasets,
         label_column = None,
         labels_list = None,
+        features_list = None,
         params = None,
         scoring = None,
         cv = None,
@@ -77,6 +78,7 @@ class SklearnPartialTrainer(SklearnTrainer):
         )
         self._batch_size = batch_size
         self._labels = labels_list
+        self._features_list = features_list
 
     def _validate_attributes(self):
         # Run config
@@ -208,16 +210,14 @@ class SklearnPartialTrainer(SklearnTrainer):
                     batch_size = self._batch_size,
                     batch_format = 'numpy'
                 )
-            ):
+            ):  
+                batch_X = pd.DataFrame(batch_X, columns = self._features_list)
+                print("batch_X", batch_X)
                 """
-                batch_X                             __value__
-                (SklearnPartialTrainer pid=5814) 0  [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, ...
-                (SklearnPartialTrainer pid=5814) 1  [16.0, 0.0, 10.0, 10.0, 0.0, 0.0, 0.0, 0.0, 0....
-                (SklearnPartialTrainer pid=5814) 2  [60.0, 68.0, 67.0, 58.0, 46.0, 74.0, 76.0, 64....
-                (SklearnPartialTrainer pid=5814) 3  [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, ...
-                (SklearnPartialTrainer pid=5814) 4  [29.0, 14.0, 14.0, 19.0, 0.0, 0.0, 0.0, 0.0, 1...
+                Ray workers giving ValueError : setting an array element with a sequence.
+                Tests still working...
+                Maybe version of packages?
                 """
-                batch_X = np.reshape(batch_X,(len(batch_X), -1, 1))
                 try:
                     self.estimator.partial_fit(batch_X, np.ravel(batch_y), classes = self._labels, **self.fit_params)
                 except TypeError:
