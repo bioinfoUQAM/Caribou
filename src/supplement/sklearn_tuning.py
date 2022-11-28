@@ -61,7 +61,6 @@ def merge_database_host(database_data, host_data):
 def preprocess(X, y, cols, taxa):
     df = X.repartition(1).add_column([taxa, 'id'], lambda x : y).repartition(os.cpu_count())
     df, labels = preprocess_labels(df, taxa)
-    print(df.to_pandas())
     return df, labels
 
 def preprocess_labels(df, taxa):
@@ -144,7 +143,7 @@ if opt['classifier'] == 'onesvm':
     }
     tune_params = {
         'params' : {
-            'nu' : tune.grid_search(np.logspace(-4,4,10)),
+            'nu' : tune.grid_search(np.linspace(0.1, 1, 10)),
             'learning_rate' : tune.grid_search(['constant','optimal','invscaling','adaptive']),
             'eta0' : tune.grid_search(np.logspace(-4,4,10))
         }

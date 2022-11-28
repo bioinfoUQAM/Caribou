@@ -35,7 +35,11 @@ if TYPE_CHECKING:
     from ray.data.preprocessor import Preprocessor
 
 class SklearnPartialTrainer(SklearnTrainer):
-    """docstring for raySkLearnPartial."""
+    """
+    docstring for SklearnPartialTrainer.
+    
+    Class adapted from Ray's SklearnTrainer class to allow for partial_fit and usage of tensors as inputs.
+    """
 
     def __init__(
         self,
@@ -198,16 +202,25 @@ class SklearnPartialTrainer(SklearnTrainer):
             for batch_X, batch_y in zip(
                 X_train.iter_batches(
                     batch_size = self._batch_size,
-                    batch_format = 'pandas'
+                    batch_format = 'numpy'
                 ),
                 y_train.iter_batches(
                     batch_size = self._batch_size,
-                    batch_format = 'pandas'
+                    batch_format = 'numpy'
                 )
             ):
+                """
+                batch_X                             __value__
+                (SklearnPartialTrainer pid=5814) 0  [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, ...
+                (SklearnPartialTrainer pid=5814) 1  [16.0, 0.0, 10.0, 10.0, 0.0, 0.0, 0.0, 0.0, 0....
+                (SklearnPartialTrainer pid=5814) 2  [60.0, 68.0, 67.0, 58.0, 46.0, 74.0, 76.0, 64....
+                (SklearnPartialTrainer pid=5814) 3  [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, ...
+                (SklearnPartialTrainer pid=5814) 4  [29.0, 14.0, 14.0, 19.0, 0.0, 0.0, 0.0, 0.0, 1...
+                """
+                batch_X = np.reshape(batch_X,(len(batch_X), -1, 1))
                 try:
                     self.estimator.partial_fit(batch_X, np.ravel(batch_y), classes = self._labels, **self.fit_params)
-                except TypeError as e:
+                except TypeError:
                     self.estimator.partial_fit(batch_X, np.ravel(batch_y), **self.fit_params)
             fit_time = time() - start_time
 
