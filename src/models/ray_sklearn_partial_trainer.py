@@ -212,12 +212,6 @@ class SklearnPartialTrainer(SklearnTrainer):
                 )
             ):  
                 batch_X = pd.DataFrame(batch_X, columns = self._features_list)
-                print("batch_X", batch_X)
-                """
-                Ray workers giving ValueError : setting an array element with a sequence.
-                Tests still working...
-                Maybe version of packages?
-                """
                 try:
                     self.estimator.partial_fit(batch_X, np.ravel(batch_y), classes = self._labels, **self.fit_params)
                 except TypeError:
@@ -267,9 +261,16 @@ class SklearnPartialTrainer(SklearnTrainer):
 
         for key, X_y_tuple in datasets.items():
             X_test, y_test = X_y_tuple
+
+            for batch in X_test.iter_batches(
+                batch_size = X_test.count(),
+                batch_format = 'numpy'
+            ):
+                X_test = pd.DataFrame(batch, columns = self._features_list)
+
             start_time = time()
             try:
-                test_scores = _score(estimator, X_test.to_pandas(), y_test.to_pandas(), scorers)
+                test_scores = _score(estimator, X_test, y_test.to_pandas(), scorers)
             except Exception:
                 if isinstance(scorers, dict):
                     test_scores = {k: np.nan for k in scorers}

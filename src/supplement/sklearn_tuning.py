@@ -81,8 +81,8 @@ def sim_4_cv(df, kmers_ds, name, taxa, cols, k):
         cv_sim = readsSimulation(kmers_ds['fasta'], cls, sim_genomes, 'miseq', sim_outdir, name)
         sim_data = cv_sim.simulation(k, cols)
         df = ray.data.read_parquet(sim_data['profile'])
-        labels = pd.DataFrame(sim_data['classes'], index = sim_data['ids'])
-        df = df.add_column(taxa, lambda x : labels)
+        labels = pd.DataFrame(sim_data['classes'])
+        df = df.repartition(1).add_column(taxa, lambda x : labels).repartition(os.cpu_count())
         return df
 
 # CLI argument
@@ -126,6 +126,9 @@ y = pd.DataFrame(
     {opt['taxa']:pd.DataFrame(data['classes'], columns = data['taxas']).loc[:,opt['taxa']].astype('string').str.lower(),
      'id': data['ids']}
 )
+if opt['taxa'] == 'domain':
+    y[y['domain'] == 'archea'] = 'bacteria'
+
 df, labels_list = preprocess(X, y, cols, opt['taxa'])
 
 df_train, df_val = df.train_test_split(0.2, shuffle = True)

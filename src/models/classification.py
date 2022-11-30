@@ -130,6 +130,8 @@ class ClassificationMethods():
                 {taxa: pd.DataFrame(self.database_data['classes'], columns=self.database_data['taxas']).loc[:, taxa].astype('string').str.lower(),
                  'id': self.database_data['ids']}
             )
+            if taxa == 'domain':
+                self.y_train[self.y_train['domain'] != 'bacteria'] = 'bacteria'
         else:
             self._merge_database_host(self.database_data, self.host_data)
             if self.classifier_binary == 'linearSVM':
