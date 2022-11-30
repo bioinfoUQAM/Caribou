@@ -120,8 +120,6 @@ class ModelsUtils(ABC):
 
     def train(self, X, y, kmers_ds, cv = True):
         print('train')
-        # cv = False
-        df = df.window(blocks_per_window=10)
         df = self._training_preprocess(X, y)
         if cv:
             self._cross_validation(df, kmers_ds)
@@ -149,7 +147,7 @@ class ModelsUtils(ABC):
         cv_sim = readsSimulation(kmers_ds['fasta'], cls, sim_genomes, 'miseq', sim_outdir, name)
         sim_data = cv_sim.simulation(self.k, self.kmers)
         df = ray.data.read_parquet(sim_data['profile'])
-        labels = pd.DataFrame(sim_data['classes'], index = kmers_ds['ids'])
+        labels = pd.DataFrame(sim_data['classes'])
         df = df.add_column(self.taxa, lambda x : labels)
         return df.window(blocks_per_window=10)
 

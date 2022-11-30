@@ -119,19 +119,19 @@ class KerasTFModel(ModelsUtils):
     def _training_preprocess(self, X, y):
         print('_training_preprocess')
         df = X.add_column([self.taxa, 'id'], lambda x: y)
-        self._preprocessor = Chain(
-            SimpleImputer(
-                self.kmers,
-                strategy='constant',
-                fill_value=0
-                ),
-            MinMaxScaler(self.kmers),
-            Concatenator(
-                output_column_name='features',
-                include=self.kmers
-            )
-        )
-        self._preprocessor.fit(df)
+        #self._preprocessor = Chain(
+            #SimpleImputer(
+                #self.kmers,
+                #strategy='constant',
+                #fill_value=0
+                #),
+            #MinMaxScaler(self.kmers),
+            #Concatenator(
+                #output_column_name='features',
+                #include=self.kmers
+            #)
+        #)
+        #self._preprocessor.fit(df)
         self._label_encode(df, y)
         return df
 

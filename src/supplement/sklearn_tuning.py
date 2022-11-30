@@ -60,7 +60,12 @@ def merge_database_host(database_data, host_data):
 
 # Function from class function models.ray_sklearn.SklearnModel._training_preprocess
 def preprocess(X, y, cols, taxa):
-    df = X.repartition(1).add_column([taxa, 'id'], lambda x : y).repartition(os.cpu_count())
+    df = X.add_column([taxa, 'id'], lambda x : y).window(blocks_per_window=10)
+    df = df.to_pandas()
+    print(len(df['id']))
+    print(len(np.unique(df['id'])))
+    print(df['id'])
+    sys.exit()
     df, labels = preprocess_labels(df, taxa)
     return df, labels
 
@@ -82,8 +87,8 @@ def sim_4_cv(df, kmers_ds, name, taxa, cols, k):
         sim_data = cv_sim.simulation(k, cols)
         df = ray.data.read_parquet(sim_data['profile'])
         labels = pd.DataFrame(sim_data['classes'])
-        df = df.repartition(1).add_column(taxa, lambda x : labels).repartition(os.cpu_count())
-        return df
+        df = df.add_column(taxa, lambda x : labels)
+        return df.window(blocks_per_window=10)
 
 # CLI argument
 ################################################################################

@@ -103,6 +103,9 @@ class KmersCollection():
         self._lst_arr = []
         # Get labels from seq_data
         if len(seq_data.labels) > 0:
+            print(seq_data.labels)
+            print(seq_data.taxas)
+            print(seq_data.ids)
             self._labels = pd.DataFrame(seq_data.labels, columns = seq_data.taxas, index = seq_data.ids)
         # Get taxas from seq_data if not empty
         if len(seq_data.taxas) > 0:

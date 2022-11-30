@@ -131,7 +131,7 @@ class ClassificationMethods():
                  'id': self.database_data['ids']}
             )
             if taxa == 'domain':
-                self.y_train[self.y_train['domain'] != 'bacteria'] = 'bacteria'
+                self.y_train[self.y_train['domain'] != 'archea'] = 'bacteria'
         else:
             self._merge_database_host(self.database_data, self.host_data)
             if self.classifier_binary == 'linearSVM':

@@ -94,14 +94,14 @@ class SklearnModel(ModelsUtils):
     def _training_preprocess(self, X, y):
         print('_training_preprocess')
         df = X.add_column([self.taxa, 'id'], lambda x: y)
-        self._preprocessor = Chain(
-            SimpleImputer(
-                self.kmers,
-                strategy='constant',
-                fill_value=0),
-            MinMaxScaler(self.kmers)
-        )
-        df = self._preprocessor.fit_transform(df)
+        #self._preprocessor = Chain(
+            #SimpleImputer(
+                #self.kmers,
+                #strategy='constant',
+                #fill_value=0),
+            #MinMaxScaler(self.kmers)
+        #)
+        #df = self._preprocessor.fit_transform(df)
         labels = np.unique(y[self.taxa])
         df = self._label_encode(df, labels)
         return df
