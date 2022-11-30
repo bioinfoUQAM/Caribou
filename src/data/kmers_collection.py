@@ -70,13 +70,6 @@ class KmersCollection():
     kmers_list : list of strings
         List of given K-mers if one was passed in parameters
         List of K-mers extracted if none was passed in parameters
-
-    ----------
-    Methods
-    ----------
-
-    unpack_kmers()
-
     """
     def __init__(
         self,
@@ -103,9 +96,8 @@ class KmersCollection():
         self._lst_arr = []
         # Get labels from seq_data
         if len(seq_data.labels) > 0:
-            print(seq_data.labels)
-            print(seq_data.taxas)
-            print(seq_data.ids)
+            print('seq_data.labels : ', len(seq_data.labels))
+            print('seq_data.ids : ', len(seq_data.ids))
             self._labels = pd.DataFrame(seq_data.labels, columns = seq_data.taxas, index = seq_data.ids)
         # Get taxas from seq_data if not empty
         if len(seq_data.taxas) > 0:

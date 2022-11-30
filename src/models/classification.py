@@ -130,8 +130,8 @@ class ClassificationMethods():
                 {taxa: pd.DataFrame(self.database_data['classes'], columns=self.database_data['taxas']).loc[:, taxa].astype('string').str.lower(),
                  'id': self.database_data['ids']}
             )
-            if taxa == 'domain':
-                self.y_train[self.y_train['domain'] != 'archea'] = 'bacteria'
+            if taxa in ['domain','bacteria','host']:
+                self.y_train[self.y_train[taxa] == 'archea'] = 'bacteria'
         else:
             self._merge_database_host(self.database_data, self.host_data)
             if self.classifier_binary == 'linearSVM':
@@ -143,7 +143,7 @@ class ClassificationMethods():
                     self.batch_size,
                     self.k,
                     taxa,
-                    self.self.merged_database_host['kmers'],
+                    self.merged_database_host['kmers'],
                     self.verbose
                 )
             else:
@@ -156,7 +156,7 @@ class ClassificationMethods():
                     self.training_epochs,
                     self.k,
                     taxa,
-                    self.self.merged_database_host['kmers'],
+                    self.merged_database_host['kmers'],
                     self.verbose
                 )
             self.X_train = ray.data.read_parquet(self.database_data['profile'])

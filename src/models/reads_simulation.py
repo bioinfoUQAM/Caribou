@@ -135,6 +135,6 @@ class readsSimulation():
             self._path,
             None,
             'cv_simulation_{}'.format(self._name),
-            k = k,
-            kmers_list = kmers_list
+            kmers_list = kmers_list,
+            k = k
         )

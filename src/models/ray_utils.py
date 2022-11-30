@@ -140,15 +140,20 @@ class ModelsUtils(ABC):
 
     def _sim_4_cv(self, df, kmers_ds, name):
         sim_genomes = []
+        sim_taxas = []
         for row in df.iter_rows():
             sim_genomes.append(row['id'])
-        cls = pd.DataFrame({'id':sim_genomes,self.taxa:df.to_pandas()[self.taxa]})
+            sim_taxas.append(row[self.taxa])
+        cls = pd.DataFrame({'id':sim_genomes,self.taxa:sim_taxas})
         sim_outdir = os.path.dirname(kmers_ds['profile'])
         cv_sim = readsSimulation(kmers_ds['fasta'], cls, sim_genomes, 'miseq', sim_outdir, name)
         sim_data = cv_sim.simulation(self.k, self.kmers)
         df = ray.data.read_parquet(sim_data['profile'])
         labels = pd.DataFrame(sim_data['classes'])
+        print(labels)
+        print(df.to_pandas())
         df = df.add_column(self.taxa, lambda x : labels)
+        print(df.to_pandas())
         return df.window(blocks_per_window=10)
 
     def _cv_score(self, y_true, y_pred):

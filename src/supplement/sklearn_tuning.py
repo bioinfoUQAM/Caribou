@@ -79,8 +79,10 @@ def preprocess_labels(df, taxa):
 # Function from class models.ray_utils.ModelsUtils
 def sim_4_cv(df, kmers_ds, name, taxa, cols, k):
         sim_genomes = []
+        sim_taxas = []
         for row in df.iter_rows():
             sim_genomes.append(row['id'])
+            sim_taxas.append(row[taxa])
         cls = pd.DataFrame({'id':sim_genomes,taxa:df.to_pandas()[taxa]})
         sim_outdir = os.path.dirname(kmers_ds['profile'])
         cv_sim = readsSimulation(kmers_ds['fasta'], cls, sim_genomes, 'miseq', sim_outdir, name)
