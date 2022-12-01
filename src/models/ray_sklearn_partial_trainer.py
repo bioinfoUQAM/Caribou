@@ -211,7 +211,17 @@ class SklearnPartialTrainer(SklearnTrainer):
                     batch_format = 'numpy'
                 )
             ):  
-                batch_X = pd.DataFrame(batch_X, columns = self._features_list)
+                try:
+                    batch_X = pd.DataFrame(batch_X, columns = self._features_list)
+                except:
+                    # Some array length == len(self._features_list) + 1...
+                    print('batch_X.shape : ', batch_X.shape)
+                    print('batch_size : ', len(batch_X))
+                    for i in range(len(batch_X)):
+                        if len(batch_X[i]) != len(self._features_list):
+                            print('batch_X[i] : ', batch_X[i])
+                    print('reshaped array : ', batch_X.reshape(len(batch_X), len(batch_X[0])))
+                    # batch_X = pd.DataFrame(np.reshape(batch_X, (self._batch_size,len(self._features_list))), columns = self._features_list)
                 try:
                     self.estimator.partial_fit(batch_X, np.ravel(batch_y), classes = self._labels, **self.fit_params)
                 except TypeError:
