@@ -7,6 +7,7 @@ import argparse
 import warnings
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 
 from glob import glob
 from pathlib import Path
@@ -59,13 +60,12 @@ def merge_database_host(database_data, host_data):
     return merged_database_host
 
 # Function from class function models.ray_sklearn.SklearnModel._training_preprocess
-def preprocess(X, y, cols, taxa):
-    df = X.add_column([taxa, 'id'], lambda x : y).window(blocks_per_window=10)
-    df = df.to_pandas()
-    print(len(df['id']))
-    print(len(np.unique(df['id'])))
-    print(df['id'])
-    sys.exit()
+def preprocess(X, y, taxa):
+    y = ray.data.from_arrow(
+            pa.Table.from_pandas(
+                y)).repartition(
+                    X.num_blocks())
+    df = X.repartition(X.num_blocks()).zip(y)
     df, labels = preprocess_labels(df, taxa)
     return df, labels
 
@@ -88,9 +88,9 @@ def sim_4_cv(df, kmers_ds, name, taxa, cols, k):
         cv_sim = readsSimulation(kmers_ds['fasta'], cls, sim_genomes, 'miseq', sim_outdir, name)
         sim_data = cv_sim.simulation(k, cols)
         df = ray.data.read_parquet(sim_data['profile'])
-        labels = pd.DataFrame(sim_data['classes'])
-        df = df.add_column(taxa, lambda x : labels)
-        return df.window(blocks_per_window=10)
+        labels = ray.data.from_arrow(pa.Table.from_pandas(pd.DataFrame(sim_data['classes'], columns = [taxa]))).repartition(df.num_blocks())
+        df = df.repartition(df.num_blocks()).zip(labels)
+        return df
 
 # CLI argument
 ################################################################################
@@ -129,18 +129,17 @@ data['kmers'].remove('id')
 
 X = ray.data.read_parquet(data['profile'])
 cols = data['kmers']
-y = pd.DataFrame(
-    {opt['taxa']:pd.DataFrame(data['classes'], columns = data['taxas']).loc[:,opt['taxa']].astype('string').str.lower(),
-     'id': data['ids']}
-)
-if opt['taxa'] == 'domain':
-    y[y['domain'] == 'archea'] = 'bacteria'
+y = pd.DataFrame({opt['taxa'] : pd.DataFrame(data['classes'], columns = data['taxas']).loc[:,opt['taxa']].astype('string').str.lower()})
 
-df, labels_list = preprocess(X, y, cols, opt['taxa'])
+if opt['taxa'] == 'domain':
+    y[y['domain'] == 'archaea'] = 'bacteria'
+
+df, labels_list = preprocess(X, y, opt['taxa'])
 
 df_train, df_val = df.train_test_split(0.2, shuffle = True)
 df_train = df_train.drop_columns(['id'])
 df_val = sim_4_cv(df_val, data, 'tuning_val', opt['taxa'], cols, opt['kmers_length'])
+df_val = df_val.drop_columns(['id'])
 
 datasets = {'train' : ray.put(df_train), 'validation' : ray.put(df_val)}
 

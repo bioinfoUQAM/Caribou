@@ -25,7 +25,6 @@ logging.set_verbosity(logging.ERROR)
 # Initialisation / validation of parameters from CLI
 ################################################################################
 def kmers_dataset(opt):
-    ray.init()
     kmers_list = None
 
     # Verify there are files to analyse
@@ -66,6 +65,7 @@ def kmers_dataset(opt):
     outdirs["data_dir"] = os.path.join(outdirs["main_outdir"], "data")
     makedirs(outdirs["main_outdir"], mode=0o700, exist_ok=True)
     makedirs(outdirs["data_dir"], mode=0o700, exist_ok=True)
+    ray.init()
 
 # K-mers profile extraction
 ################################################################################

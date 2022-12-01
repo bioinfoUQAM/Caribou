@@ -267,7 +267,6 @@ class SklearnPartialTrainer(SklearnTrainer):
                 batch_format = 'numpy'
             ):
                 X_test = pd.DataFrame(batch, columns = self._features_list)
-
             start_time = time()
             try:
                 test_scores = _score(estimator, X_test, y_test.to_pandas(), scorers)

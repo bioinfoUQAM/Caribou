@@ -24,7 +24,6 @@ logging.set_verbosity(logging.ERROR)
 # Part 0 - Initialisation / extraction of parameters from config file
 ################################################################################
 def caribou(opt):
-    ray.init()
     # Get argument values from config file
     config_file = opt['config']
     config = configparser.ConfigParser(
@@ -158,6 +157,7 @@ def caribou(opt):
     os.makedirs(outdirs['data_dir'], mode=0o700, exist_ok=True)
     os.makedirs(outdirs['models_dir'], mode=0o700, exist_ok=True)
     os.makedirs(outdirs['results_dir'], mode=0o700, exist_ok=True)
+    ray.init()
 
 # Part 1 - K-mers profile extraction
 ################################################################################

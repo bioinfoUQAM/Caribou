@@ -22,7 +22,6 @@ logging.set_verbosity(logging.ERROR)
 # Initialisation / validation of parameters from CLI
 ################################################################################
 def bacteria_classification_train_cv(opt):
-    ray.init()
     # Verify existence of files and load data
     if not os.path.isfile(opt['data_bacteria']):
         raise ValueError("Cannot find file {} ! Exiting".format(opt['data_bacteria']))
@@ -66,10 +65,10 @@ def bacteria_classification_train_cv(opt):
 
     list_taxas = data_bacteria['taxas']
     list_taxas.remove('domain')
+    ray.init()
 
 # Training and cross-validation of models for classification of bacterias
 ################################################################################
-
     ClassificationMethods(
         database_k_mers = data_bacteria,
         k = k_length,

@@ -4,6 +4,7 @@ import warnings
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 import tensorflow as tf
 
 from glob import glob
@@ -235,9 +236,7 @@ class KmersCollection():
     def _batch_read_write_seen(self):
         for file in self._files_list:
             tmp = pd.read_csv(file)
-            print(tmp.loc[0, 'id'])
             self.ids.append(tmp.loc[0,'id'])
-            print(self.ids)
             arr = np.zeros((1, len(self.kmers_list)-1))
             cols = list(tmp.columns)
             cols.remove('id')
@@ -246,8 +245,22 @@ class KmersCollection():
             self._lst_arr.append(ray.put(arr))
             os.remove(file)
         self.df = ray.data.from_numpy_refs(self._lst_arr)
+        self.df = self.df.repartition(
+            self.df.num_blocks()).zip(
+                ray.data.from_arrow(
+                    pa.Table.from_pandas(
+                        pd.DataFrame(
+                            {'id':self.ids}))).repartition(
+                                self.df.num_blocks()))
         self.df.write_parquet(self.Xy_file)
 
     def _batch_read_write_given(self):
         self.df = ray.data.from_numpy_refs(self._lst_arr)
+        self.df = self.df.repartition(
+            self.df.num_blocks()).zip(
+                ray.data.from_arrow(
+                    pa.Table.from_pandas(
+                        pd.DataFrame(
+                            {'id':self.ids}))).repartition(
+                                self.df.num_blocks()))
         self.df.write_parquet(self.Xy_file)
