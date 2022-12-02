@@ -60,37 +60,48 @@ def merge_database_host(database_data, host_data):
     return merged_database_host
 
 # Function from class function models.ray_sklearn.SklearnModel._training_preprocess
-def preprocess(X, y, taxa):
+def preprocess(X, y, taxa, classifier):
+    labels = np.unique(y[taxa])
     y = ray.data.from_arrow(
             pa.Table.from_pandas(
                 y)).repartition(
                     X.num_blocks())
     df = X.repartition(X.num_blocks()).zip(y)
-    df, labels = preprocess_labels(df, taxa)
+    df, labels = preprocess_labels(df, taxa, labels, classifier)
     return df, labels
 
-def preprocess_labels(df, taxa):
-    labels = np.unique(y[taxa])
-    encoder = LabelEncoder(taxa)
-    df = encoder.fit_transform(df)
-    labels = np.arange(len(labels))
+
+def preprocess_labels(df, taxa, labels, classifier):
+    if classifier == 'onesvm':
+        labels = np.array([1,-1], dtype = np.int32)
+        df = df.add_column(taxa, lambda x : 1)
+    else:
+        encoder = LabelEncoder(taxa)
+        df = encoder.fit_transform(df)
+        labels = np.arange(len(labels))
     return df, labels
 
 # Function from class models.ray_utils.ModelsUtils
 def sim_4_cv(df, kmers_ds, name, taxa, cols, k):
-        sim_genomes = []
-        sim_taxas = []
-        for row in df.iter_rows():
-            sim_genomes.append(row['id'])
-            sim_taxas.append(row[taxa])
-        cls = pd.DataFrame({'id':sim_genomes,taxa:df.to_pandas()[taxa]})
-        sim_outdir = os.path.dirname(kmers_ds['profile'])
-        cv_sim = readsSimulation(kmers_ds['fasta'], cls, sim_genomes, 'miseq', sim_outdir, name)
-        sim_data = cv_sim.simulation(k, cols)
-        df = ray.data.read_parquet(sim_data['profile'])
-        labels = ray.data.from_arrow(pa.Table.from_pandas(pd.DataFrame(sim_data['classes'], columns = [taxa]))).repartition(df.num_blocks())
-        df = df.repartition(df.num_blocks()).zip(labels)
-        return df
+    sim_genomes = []
+    sim_taxas = []
+    for row in df.iter_rows():
+        sim_genomes.append(row['id'])
+        sim_taxas.append(row[taxa])
+    cls = pd.DataFrame({'id':sim_genomes,taxa:sim_taxas})
+    sim_outdir = os.path.dirname(kmers_ds['profile'])
+    cv_sim = readsSimulation(kmers_ds['fasta'], cls, sim_genomes, 'miseq', sim_outdir, name)
+    sim_data = cv_sim.simulation(k, cols)
+    df = ray.data.read_parquet(sim_data['profile'])
+    labels = ray.data.from_arrow(
+        pa.Table.from_pandas(
+            pd.DataFrame(
+                sim_data['classes'],
+                columns = [taxa])
+            )).repartition(
+                df.num_blocks())
+    df = df.repartition(df.num_blocks()).zip(labels)
+    return df
 
 # CLI argument
 ################################################################################
@@ -125,7 +136,8 @@ else:
     data = load_Xy_data(opt['data'])
 
 # Ensure no column is named 'id'
-data['kmers'].remove('id')
+if 'id' in data['kmers']:
+    data['kmers'].remove('id')
 
 X = ray.data.read_parquet(data['profile'])
 cols = data['kmers']
@@ -134,11 +146,11 @@ y = pd.DataFrame({opt['taxa'] : pd.DataFrame(data['classes'], columns = data['ta
 if opt['taxa'] == 'domain':
     y[y['domain'] == 'archaea'] = 'bacteria'
 
-df, labels_list = preprocess(X, y, opt['taxa'])
+df, labels_list = preprocess(X, y, opt['taxa'], opt['classifier'])
 
 df_train, df_val = df.train_test_split(0.2, shuffle = True)
-df_train = df_train.drop_columns(['id'])
 df_val = sim_4_cv(df_val, data, 'tuning_val', opt['taxa'], cols, opt['kmers_length'])
+df_train = df_train.drop_columns(['id'])
 df_val = df_val.drop_columns(['id'])
 
 datasets = {'train' : ray.put(df_train), 'validation' : ray.put(df_val)}

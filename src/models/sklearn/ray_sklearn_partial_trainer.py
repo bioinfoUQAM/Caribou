@@ -1,18 +1,14 @@
 import os
 import ray
-import logging
 import warnings
 from time import time
 from traceback import format_exc
 from collections import defaultdict
-from typing import TYPE_CHECKING, Any, Callable, Dict, Iterable, Optional, Union, Tuple
 
 import numpy as np
 import pandas as pd
 from joblib import parallel_backend
 from sklearn.metrics import check_scoring
-from sklearn.base import BaseEstimator, clone
-from sklearn.model_selection import BaseCrossValidator, cross_validate
 
 # we are using a private API here, but it's consistent across versions
 from sklearn.model_selection._validation import _check_multimetric_scoring, _score
@@ -22,22 +18,15 @@ import ray.cloudpickle as cpickle
 from ray.air._internal.checkpointing import (
     save_preprocessor_to_dir,
 )
-from ray.util import PublicAPI
 from ray.util.joblib import register_ray
 from ray.air.config import RunConfig, ScalingConfig
-from ray.train.trainer import BaseTrainer, GenDataset
 from ray.train.constants import MODEL_KEY, TRAIN_DATASET_KEY
-from ray.train.sklearn._sklearn_utils import _has_cpu_params, _set_cpu_params
+from ray.train.sklearn._sklearn_utils import _set_cpu_params
 
 from ray.train.sklearn import SklearnTrainer
 
-if TYPE_CHECKING:
-    from ray.data.preprocessor import Preprocessor
-
 class SklearnPartialTrainer(SklearnTrainer):
     """
-    docstring for SklearnPartialTrainer.
-    
     Class adapted from Ray's SklearnTrainer class to allow for partial_fit and usage of tensors as inputs.
     """
 

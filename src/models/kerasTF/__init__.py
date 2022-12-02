@@ -13,4 +13,4 @@
 
 __author__ = "Nicolas de Montigny"
 
-__all__ = ['classification', 'ray_utils', 'reads_simulation', 'sklearn', 'kerasTF']
+__all__ = ['ray_keras_tf','attentionLayer','build_neural_networks']

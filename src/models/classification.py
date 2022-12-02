@@ -2,11 +2,13 @@ import os
 import ray
 import cloudpickle
 
+import numpy as np
 import pandas as pd
 
 from utils import load_Xy_data
-from models.ray_sklearn import SklearnModel
-from models.ray_keras_tf import KerasTFModel
+from models.sklearn.ray_sklearn import SklearnModel
+from models.kerasTF.ray_keras_tf import KerasTFModel
+
 
 __author__ = 'Nicolas de Montigny'
 
@@ -71,6 +73,11 @@ class ClassificationMethods():
             self.host_data = database_k_mers[1]
         else:
             self.database_data = database_k_mers
+        # Remove 'id' form kmers if present
+        if 'id' in self.database_data['kmers']:
+            self.database_data['kmers'].remove('id')
+        if self.host and 'id' in self.host_data['kmers']:
+            self.host_data['kmers'].remove('id')
         # Automatic executions
         self._verify_assign_taxas(taxa)
         
@@ -126,10 +133,7 @@ class ClassificationMethods():
                 self.verbose
             )
             self.X_train = ray.data.read_parquet(self.database_data['profile'])
-            self.y_train = pd.DataFrame(
-                {taxa: pd.DataFrame(self.database_data['classes'], columns=self.database_data['taxas']).loc[:, taxa].astype('string').str.lower(),
-                 'id': self.database_data['ids']}
-            )
+            self.y_train = pd.DataFrame({taxa: pd.DataFrame(self.database_data['classes'], columns=self.database_data['taxas']).loc[:, taxa].astype('string').str.lower()})
             if taxa in ['domain','bacteria','host']:
                 self.y_train[self.y_train[taxa] == 'archaea'] = 'bacteria'
         else:
@@ -160,10 +164,7 @@ class ClassificationMethods():
                     self.verbose
                 )
             self.X_train = ray.data.read_parquet(self.database_data['profile'])
-            self.y_train = pd.DataFrame(
-                {taxa: pd.DataFrame(self.database_data['classes'], columns=self.database_data['taxas']).loc[:, taxa].astype('string').str.lower(),
-                 'id': self.database_data['ids']}
-            )
+            self.y_train = pd.DataFrame({taxa: pd.DataFrame(self.database_data['classes'], columns=self.database_data['taxas']).loc[:, taxa].astype('string').str.lower()})
         self.models[taxa].train(self.X_train, self.y_train, self.database_data, self.cv)
         self._save_model(self._model_file, taxa)
 
@@ -195,10 +196,7 @@ class ClassificationMethods():
                 self.verbose
             )
         self.X_train = ray.data.read_parquet(self.database_data['profile'])
-        self.y_train = pd.DataFrame(
-            {taxa: pd.DataFrame(self.database_data['classes'], columns=self.database_data['taxas']).loc[:, taxa].astype('string').str.lower(),
-             'id': self.database_data['ids']}
-        )
+        self.y_train = pd.DataFrame({taxa: pd.DataFrame(self.database_data['classes'], columns=self.database_data['taxas']).loc[:, taxa].astype('string').str.lower()})
         self.models[taxa].train(self.X_train, self.y_train, self.database_data, self.cv)
         self._save_model(self._model_file, taxa)
         

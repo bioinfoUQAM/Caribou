@@ -3,16 +3,17 @@ import ray
 import warnings
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 
 from glob import glob
 from shutil import rmtree
 
 # Preprocessing
-from ray.data.preprocessors import MinMaxScaler, LabelEncoder, Chain, SimpleImputer, OneHotEncoder, Concatenator
+from ray.data.preprocessors import Concatenator, LabelEncoder, Chain, OneHotEncoder
 
 # Parent class / models
 from models.ray_utils import ModelsUtils
-from models.build_neural_networks import *
+from models.kerasTF.build_neural_networks import *
 
 # Training
 import tensorflow as tf
@@ -118,20 +119,11 @@ class KerasTFModel(ModelsUtils):
 
     def _training_preprocess(self, X, y):
         print('_training_preprocess')
-        df = X.add_column([self.taxa, 'id'], lambda x: y)
-        #self._preprocessor = Chain(
-            #SimpleImputer(
-                #self.kmers,
-                #strategy='constant',
-                #fill_value=0
-                #),
-            #MinMaxScaler(self.kmers),
-            #Concatenator(
-                #output_column_name='features',
-                #include=self.kmers
-            #)
-        #)
-        #self._preprocessor.fit(df)
+        y = ray.data.from_arrow(
+                pa.Table.from_pandas(
+                    y)).repartition(
+                        X.num_blocks())
+        df = X.repartition(X.num_blocks()).zip(y)
         self._label_encode(df, y)
         return df
 
@@ -175,15 +167,6 @@ class KerasTFModel(ModelsUtils):
         )
         self._encoder.fit(df)
 
-    def _prob_2_cls(self, predict, nb_cls, threshold):
-        print('_prob_2_cls')
-        if nb_cls == 1 and self.classifier != 'lstm':
-            predict = np.round(abs(np.concatenate(predict.to_pandas()['predictions'])))
-        else:
-            predict = predict.map_batches(map_predicted_label, threshold)
-            predict = np.ravel(np.array(predict.to_pandas()))
-        return self._label_decode(predict)
-
     def _label_decode(self, predict):
         print('_label_decode')
         decoded = pd.Series(np.empty(len(predict), dtype=object))
@@ -192,18 +175,33 @@ class KerasTFModel(ModelsUtils):
 
         return decoded
 
+    def train(self, X, y, kmers_ds, cv = True):
+        print('train')
+        df = self._training_preprocess(X, y)
+        if cv:
+            self._cross_validation(df, kmers_ds)
+        else:
+            df_train, df_val = df.train_test_split(0.2, shuffle=True)
+            df_val = self._sim_4_cv(df_val, kmers_ds, 'validation')
+            df_train = df_train.drop_columns(['id'])
+            df_val = df_val.drop_columns(['id'])
+            datasets = {'train': ray.put(df_train), 'validation': ray.put(df_val)}
+            self._fit_model(datasets)
+
     def _cross_validation(self, df, kmers_ds):
         print('_cross_validation')
 
         df_train, df_test = df.train_test_split(0.2, shuffle = True)
         df_train, df_val = df_train.train_test_split(0.1, shuffle = True)
 
-        df_train = df_train.window(blocks_per_window=10)
-
         df_val = self._sim_4_cv(df_val, kmers_ds, '{}_val'.format(self.dataset))
         df_test = self._sim_4_cv(df_test, kmers_ds, '{}_test'.format(self.dataset))
 
-        datasets = {'train' : ray.put(df_train.drop_columns(['id'])), 'validation' : ray.put(df_val)}
+        df_train = df_train.drop_columns(['id'])
+        df_test = df_test.drop_columns(['id'])
+        df_val = df_val.drop_columns(['id'])
+
+        datasets = {'train' : ray.put(df_train), 'validation' : ray.put(df_val)}
         self._fit_model(datasets)
 
         y_true = df_test.to_pandas()[self.taxa]
@@ -258,7 +256,7 @@ class KerasTFModel(ModelsUtils):
 
     def predict(self, df, threshold = 0.8):
         print('predict')
-        df = df.window(blocks_per_window=10)
+        df = df
         df = self._preprocessor.transform(df)
         # Define predictor
         self._predictor = BatchPredictor.from_checkpoint(
@@ -274,7 +272,7 @@ class KerasTFModel(ModelsUtils):
         )
         return self._prob_2_cls(predictions, self._nb_classes, threshold)
 
-# Training function outside of the class as mentioned on the Ray discussion
+# Training/building function outside of the class as mentioned on the Ray discussion
 # https://discuss.ray.io/t/statuscode-resource-exhausted/4379/16
 ################################################################################
 
@@ -350,10 +348,3 @@ def build_model(classifier, nb_cls, nb_kmers):
     elif classifier == 'widecnn':
         clf = build_wideCNN(nb_kmers, nb_cls)
     return clf
-
-
-def map_predicted_label(df, threshold):
-    predict = pd.DataFrame({'best_proba': [df['predictions'][i][np.argmax(df['predictions'][i])] for i in range(len(df))],
-                            'predicted_label': [np.argmax(df['predictions'][i]) for i in range(len(df))]})
-    predict.loc[predict['best_proba'] < threshold, 'predicted_label'] = -1
-    return pd.DataFrame(predict['predicted_label'])

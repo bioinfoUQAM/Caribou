@@ -105,6 +105,6 @@ def build_X_data(seq_data, k, X_file, dataset, kmers_list):
     # Data in a dictionnary
     data['profile'] = collection.Xy_file
     data['ids'] = collection.ids
-    data['kmers'] = collection.kmers
+    data['kmers'] = collection.kmers_list
 
     return data

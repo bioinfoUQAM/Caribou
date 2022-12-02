@@ -1,17 +1,11 @@
 import os
 import ray
 import warnings
-import numpy as np
 import pandas as pd
-
-from glob import glob
-from shutil import rmtree
+import pyarrow as pa
 
 # Class construction
 from abc import ABC, abstractmethod
-
-# Data preprocessing
-from ray.data.preprocessors import MinMaxScaler, Chain, SimpleImputer
 
 # CV metrics
 from sklearn.metrics import precision_recall_fscore_support
@@ -109,24 +103,10 @@ class ModelsUtils(ABC):
         """
         """
 
-    def _predict_preprocess(self, df):
-        print('_predict_preprocess')
-        # for row in df.iter_rows():
-        #     self._predict_ids.append(row['id'])
-        # self._preprocessor = Chain(SimpleImputer(
-        #     self.kmers, strategy='constant', fill_value=0), MinMaxScaler(self.kmers))
-        df = self._preprocessor.transform(df)
-        return df
-
-    def train(self, X, y, kmers_ds, cv = True):
-        print('train')
-        df = self._training_preprocess(X, y)
-        if cv:
-            self._cross_validation(df, kmers_ds)
-        else:
-            df_train, df_val = df.drop_columns(['id']).train_test_split(0.2, shuffle = True)
-            datasets = {'train' : ray.put(df_train), 'validation': ray.put(df_val)}
-            self._fit_model(datasets)
+    @abstractmethod
+    def train(self):
+        """
+        """
 
     @abstractmethod
     def _fit_model(self):
@@ -149,12 +129,15 @@ class ModelsUtils(ABC):
         cv_sim = readsSimulation(kmers_ds['fasta'], cls, sim_genomes, 'miseq', sim_outdir, name)
         sim_data = cv_sim.simulation(self.k, self.kmers)
         df = ray.data.read_parquet(sim_data['profile'])
-        labels = pd.DataFrame(sim_data['classes'])
-        print(labels)
-        print(df.to_pandas())
-        df = df.add_column(self.taxa, lambda x : labels)
-        print(df.to_pandas())
-        return df.window(blocks_per_window=10)
+        labels = ray.data.from_arrow(
+            pa.Table.from_pandas(
+                pd.DataFrame(
+                    sim_data['classes'],
+                    columns = [self.taxa])
+                )).repartition(
+                    df.num_blocks())
+        df = df.repartition(df.num_blocks()).zip(labels)
+        return df
 
     def _cv_score(self, y_true, y_pred):
         print('_cv_score')
@@ -170,6 +153,15 @@ class ModelsUtils(ABC):
         """
         """
 
+    def _prob_2_cls(self, predict, nb_cls, threshold):
+        print('_prob_2_cls')
+        if nb_cls == 1 and self.classifier != 'lstm':
+            predict = np.round(abs(np.concatenate(predict.to_pandas()['predictions'])))
+        else:
+            predict = predict.map_batches(map_predicted_label, threshold)
+            predict = np.ravel(np.array(predict.to_pandas()))
+        return predict
+
     @abstractmethod
     def _label_encode(self):
         """
@@ -179,3 +171,13 @@ class ModelsUtils(ABC):
     def _label_decode(self):
         """
         """
+
+# Mapping function outside of the class as mentioned on the Ray discussion
+# https://discuss.ray.io/t/statuscode-resource-exhausted/4379/16
+################################################################################
+
+def map_predicted_label(df, threshold):
+    predict = pd.DataFrame({'best_proba': [df['predictions'][i][np.argmax(df['predictions'][i])] for i in range(len(df))],
+                            'predicted_label': [np.argmax(df['predictions'][i]) for i in range(len(df))]})
+    predict.loc[predict['best_proba'] < threshold, 'predicted_label'] = -1
+    return pd.DataFrame(predict['predicted_label'])
