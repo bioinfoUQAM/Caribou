@@ -2,6 +2,7 @@
 
 import os
 import ray
+import json
 import logging
 import argparse
 import warnings
@@ -122,7 +123,7 @@ args = parser.parse_args()
 
 opt = vars(args)
 
-ray.init(logging_level=logging.ERROR)
+ray.init(logging_level=logging.ERROR, _system_config={'object_spilling_config': json.dumps({'type': 'filesystem', 'params': {'directory_path': opt['workdir']}})})
 
 # Data
 ################################################################################
@@ -214,7 +215,7 @@ trainer = SklearnPartialTrainer(
     set_estimator_cpus = True,
     scaling_config = ScalingConfig(
         trainer_resources = {
-            'CPU' : 3
+            'CPU' : 5
         }
     )
 )

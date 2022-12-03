@@ -232,6 +232,9 @@ class KmersCollection():
         elif self.method == 'given':
             # Read/concatenate memory tensors -> Ray
             self._batch_read_write_given()
+        # Delete tmp tensors in memory
+        for ref in self._lst_arr:
+            del ref
 
     # Map csv files to numpy array refs then write to parquet file with Ray
     def _batch_read_write_seen(self):
