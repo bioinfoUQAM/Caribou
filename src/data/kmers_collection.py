@@ -213,9 +213,9 @@ class KmersCollection():
         seen_profile = pd.read_table(os.path.join(self._tmp_dir,"{}.txt".format(ind)), sep = '\t', index_col = 0, header = None, names = ['id', str(id)]).T
         # List of seen kmers
         seen_kmers = list(seen_profile.columns)
+        arr = np.zeros((1,len(kmers_list)))
         if len(seen_kmers) > 0:
             id = seen_profile.index[0]
-            arr = np.zeros((1,len(kmers_list)))
             for col in seen_kmers:
                 if col in kmers_list:
                     arr[0, kmers_list.index(col)] = seen_profile.at[id, col]
