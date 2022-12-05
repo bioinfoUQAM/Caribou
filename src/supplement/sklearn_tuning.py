@@ -20,7 +20,7 @@ from models.reads_simulation import readsSimulation
 from models.ray_sklearn_partial_trainer import SklearnPartialTrainer
 
 # Preprocessing
-from ray.data.preprocessors import MinMaxScaler, LabelEncoder, Chain, SimpleImputer, Concatenator
+from ray.data.preprocessors import LabelEncoder
 
 # Training
 from sklearn.naive_bayes import MultinomialNB
@@ -31,6 +31,7 @@ from ray import tune
 from ray.tune import Tuner, TuneConfig
 from ray.tune.schedulers import ASHAScheduler
 from ray.air.config import RunConfig, ScalingConfig
+from ray.tune.search.basic_variant import BasicVariantGenerator
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 warnings.filterwarnings('ignore')
@@ -123,7 +124,7 @@ args = parser.parse_args()
 
 opt = vars(args)
 
-ray.init(logging_level=logging.ERROR, _system_config={'object_spilling_config': json.dumps({'type': 'filesystem', 'params': {'directory_path': opt['workdir']}})})
+ray.init(logging_level=logging.ERROR, _system_config={'object_spilling_config': json.dumps({'type': 'filesystem', 'params': {'directory_path': str(opt['workdir'])}})})
 
 # Data
 ################################################################################
@@ -228,6 +229,9 @@ tuner = Tuner(
     tune_config = TuneConfig(
         metric = 'validation/test_score',
         mode = 'max',
+        search_alg=BasicVariantGenerator(
+            max_concurrent = 3
+        ),
         scheduler = ASHAScheduler()
     ),
     run_config = RunConfig(
