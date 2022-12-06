@@ -17,6 +17,7 @@ from shutil import rmtree
 # Package modules
 from utils import *
 from models.reads_simulation import readsSimulation
+from models.ray_tensor_min_max import TensorMinMaxScaler
 from models.ray_sklearn_partial_trainer import SklearnPartialTrainer
 
 # Preprocessing
@@ -62,15 +63,18 @@ def merge_database_host(database_data, host_data):
     return merged_database_host
 
 # Function from class function models.ray_sklearn.SklearnModel._training_preprocess
-def preprocess(X, y, taxa, classifier):
+def preprocess(X, y, taxa, cols, classifier):
+    num_blocks = X.num_blocks()
+    scaler = TensorMinMaxScaler(cols)
+    X = scaler.fit_transform(X)
     labels = np.unique(y[taxa])
     y = ray.data.from_arrow(
             pa.Table.from_pandas(
                 y)).repartition(
-                    X.num_blocks())
-    df = X.repartition(X.num_blocks()).zip(y)
+                    X.count())
+    df = X.repartition(X.count()).zip(y).repartition(num_blocks)
     df, labels = preprocess_labels(df, taxa, labels, classifier)
-    return df, labels
+    return df, labels, scaler
 
 
 def preprocess_labels(df, taxa, labels, classifier):
@@ -84,7 +88,7 @@ def preprocess_labels(df, taxa, labels, classifier):
     return df, labels
 
 # Function from class models.ray_utils.ModelsUtils
-def sim_4_cv(df, kmers_ds, name, taxa, cols, k):
+def sim_4_cv(df, kmers_ds, name, taxa, cols, k, scaler):
     sim_genomes = []
     sim_taxas = []
     for row in df.iter_rows():
@@ -95,14 +99,16 @@ def sim_4_cv(df, kmers_ds, name, taxa, cols, k):
     cv_sim = readsSimulation(kmers_ds['fasta'], cls, sim_genomes, 'miseq', sim_outdir, name)
     sim_data = cv_sim.simulation(k, cols)
     df = ray.data.read_parquet(sim_data['profile'])
+    df = scaler.transform(df)
+    num_blocks = df.num_blocks()
     labels = ray.data.from_arrow(
         pa.Table.from_pandas(
             pd.DataFrame(
                 sim_data['classes'],
                 columns = [taxa])
             )).repartition(
-                df.num_blocks())
-    df = df.repartition(df.num_blocks()).zip(labels)
+                df.count())
+    df = df.repartition(df.count()).zip(labels).repartition(num_blocks)
     return df
 
 # CLI argument
@@ -148,10 +154,10 @@ y = pd.DataFrame({opt['taxa'] : pd.DataFrame(data['classes'], columns = data['ta
 if opt['taxa'] == 'domain':
     y[y['domain'] == 'archaea'] = 'bacteria'
 
-df, labels_list = preprocess(X, y, opt['taxa'], opt['classifier'])
+df, labels_list, scaler = preprocess(X, y, opt['taxa'], cols, opt['classifier'])
 
 df_train, df_val = df.train_test_split(0.2, shuffle = True)
-df_val = sim_4_cv(df_val, data, 'tuning_val', opt['taxa'], cols, opt['kmers_length'])
+df_val = sim_4_cv(df_val, data, 'tuning_val', opt['taxa'], cols, opt['kmers_length'], scaler)
 df_train = df_train.drop_columns(['id'])
 df_val = df_val.drop_columns(['id'])
 

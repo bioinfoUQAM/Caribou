@@ -24,8 +24,7 @@ class SklearnProbaPredictor(SklearnPredictor):
         estimator: BaseEstimator,
         preprocessor: Optional["Preprocessor"] = None,
     ):
-        self.estimator = estimator
-        super().__init__(preprocessor)
+        super().__init__(estimator, preprocessor)
 
     def _predict_pandas(
         self,

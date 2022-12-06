@@ -167,6 +167,8 @@ class SklearnPartialTrainer(SklearnTrainer):
     def training_loop(self):
         register_ray()
 
+        self.preprocess_datasets()
+
         self.estimator.set_params(**self.params)
 
         datasets = self._get_datasets()

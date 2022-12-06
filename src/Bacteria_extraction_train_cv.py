@@ -83,8 +83,9 @@ def bacteria_extraction_train_cv(opt):
 
 # Training and cross-validation of models for bacteria extraction / host removal
 ################################################################################
-
+    
     if opt['host_name'] is None:
+        print('OneSVM')
         ClassificationMethods(
             database_k_mers = data_bacteria,
             k = k_length,
@@ -99,7 +100,7 @@ def bacteria_extraction_train_cv(opt):
         ).execute_training()
     else:
         ClassificationMethods(
-            database_k_mers=data_bacteria,
+            database_k_mers = (data_bacteria, data_host),
             k = k_length,
             outdirs = outdirs,
             database = opt['database_name'],
@@ -109,7 +110,7 @@ def bacteria_extraction_train_cv(opt):
             training_epochs = opt['training_epochs'],
             verbose = opt['verbose'],
             cv = True
-        )
+        ).execute_training()
 
     print("Caribou finished training and cross-validating the {} model without faults".format(opt['model_type']))
 

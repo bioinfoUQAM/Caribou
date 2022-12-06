@@ -249,22 +249,24 @@ class KmersCollection():
             self._lst_arr.append(ray.put(arr))
             os.remove(file)
         self.df = ray.data.from_numpy_refs(self._lst_arr)
+        num_blocks = self.df.num_blocks()
         self.df = self.df.repartition(
-            self.df.num_blocks()).zip(
+            self.df.count()).zip(
                 ray.data.from_arrow(
                     pa.Table.from_pandas(
                         pd.DataFrame(
                             {'id':self.ids}))).repartition(
-                                self.df.num_blocks()))
+                                self.df.count())).repartition(num_blocks)
         self.df.write_parquet(self.Xy_file)
 
     def _batch_read_write_given(self):
         self.df = ray.data.from_numpy_refs(self._lst_arr)
+        num_blocks = self.df.num_blocks()
         self.df = self.df.repartition(
-            self.df.num_blocks()).zip(
+            self.df.count()).zip(
                 ray.data.from_arrow(
                     pa.Table.from_pandas(
                         pd.DataFrame(
                             {'id':self.ids}))).repartition(
-                                self.df.num_blocks()))
+                                self.df.count())).repartition(num_blocks)
         self.df.write_parquet(self.Xy_file)

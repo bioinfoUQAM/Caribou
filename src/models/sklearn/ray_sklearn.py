@@ -12,8 +12,8 @@ from ray.data.preprocessors import LabelEncoder
 
 # Training
 from sklearn.naive_bayes import MultinomialNB
+from sklearn.calibration import CalibratedClassifierCV
 from sklearn.linear_model import SGDOneClassSVM, SGDClassifier
-
 # Tuning
 from ray import tune
 from ray.tune import Tuner, TuneConfig
@@ -96,11 +96,12 @@ class SklearnModel(ModelsUtils):
     def _training_preprocess(self, X, y):
         print('_training_preprocess')
         labels = np.unique(y[self.taxa])
+        num_blocks = X.num_blocks()
         y = ray.data.from_arrow(
                 pa.Table.from_pandas(
                     y)).repartition(
-                        X.num_blocks())
-        df = X.repartition(X.num_blocks()).zip(y)
+                        X.count())
+        df = X.repartition(X.count()).zip(y).repartition(num_blocks)
         df = self._label_encode(df, labels)
         return df
 
@@ -173,8 +174,8 @@ class SklearnModel(ModelsUtils):
             print('Training bacterial / host classifier with SGD')
             self._clf = SGDClassifier()
             self._train_params = {
-                'alpha' : '0.045',
-                'eta0' : '0.045',
+                'alpha' : 0.045,
+                'eta0' : 0.045,
                 'learning_rate' : 'constant',
                 'loss' : 'hinge',
                 'penalty' : 'elasticnet'
@@ -183,8 +184,8 @@ class SklearnModel(ModelsUtils):
             print('Training multiclass SGD classifier')
             self._clf = SGDClassifier()
             self._train_params = {
-                'alpha' : '0.045',
-                'eta0' : '0.045',
+                'alpha' : 0.045,
+                'eta0' : 0.045,
                 'learning_rate' : 'constant',
                 'loss' : 'epsilon_insensitive',
                 'penalty' : 'elasticnet'
@@ -193,7 +194,7 @@ class SklearnModel(ModelsUtils):
             print('Training multiclass Multinomial Naive Bayes classifier')
             self._clf = MultinomialNB()
             self._train_params = {
-                'alpha' : '1.0'
+                'alpha' : 1.0
             }
 
     def _fit_model(self, datasets):
@@ -221,6 +222,10 @@ class SklearnModel(ModelsUtils):
         # Training execution
         result = self._trainer.fit()
         self._model_ckpt = result.checkpoint
+        if self.classifier == 'linearsvm':
+            print(self._model_ckpt)
+        print(self._model_ckpt.to_dict())
+        sys.exit()
 
     def predict(self, df, threshold = 0.8, cv = False):
         print('predict')

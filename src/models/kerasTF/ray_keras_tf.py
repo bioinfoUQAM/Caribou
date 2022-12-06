@@ -119,11 +119,12 @@ class KerasTFModel(ModelsUtils):
 
     def _training_preprocess(self, X, y):
         print('_training_preprocess')
+        num_blocks = X.num_blocks()
         y = ray.data.from_arrow(
                 pa.Table.from_pandas(
                     y)).repartition(
-                        X.num_blocks())
-        df = X.repartition(X.num_blocks()).zip(y)
+                        X.count())
+        df = X.repartition(X.count()).zip(y).repartition(num_blocks)
         self._label_encode(df, y)
         return df
 

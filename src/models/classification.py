@@ -134,11 +134,10 @@ class ClassificationMethods():
             )
             self.X_train = ray.data.read_parquet(self.database_data['profile'])
             self.y_train = pd.DataFrame({taxa: pd.DataFrame(self.database_data['classes'], columns=self.database_data['taxas']).loc[:, taxa].astype('string').str.lower()})
-            if taxa in ['domain','bacteria','host']:
-                self.y_train[self.y_train[taxa] == 'archaea'] = 'bacteria'
+            self.y_train[self.y_train[taxa] == 'archaea'] = 'bacteria'
         else:
             self._merge_database_host(self.database_data, self.host_data)
-            if self.classifier_binary == 'linearSVM':
+            if self.classifier_binary == 'linearsvm':
                 self.models[taxa] = SklearnModel(
                     self.classifier_binary,
                     self.database,
@@ -163,10 +162,16 @@ class ClassificationMethods():
                     self.merged_database_host['kmers'],
                     self.verbose
                 )
-            self.X_train = ray.data.read_parquet(self.database_data['profile'])
-            self.y_train = pd.DataFrame({taxa: pd.DataFrame(self.database_data['classes'], columns=self.database_data['taxas']).loc[:, taxa].astype('string').str.lower()})
-        self.models[taxa].train(self.X_train, self.y_train, self.database_data, self.cv)
+            self.X_train = ray.data.read_parquet(self.merged_database_host['profile'])
+            self.y_train = pd.DataFrame({taxa: pd.DataFrame(
+                self.merged_database_host['classes'],
+                columns=self.merged_database_host['taxas']).loc[:, taxa].astype('string').str.lower()})
+        if self.merged_database_host is None:
+            self.models[taxa].train(self.X_train, self.y_train, self.database_data, self.cv)
+        else:
+            self.models[taxa].train(self.X_train, self.y_train, self.merged_database_host, self.cv)
         self._save_model(self._model_file, taxa)
+            
 
     def _multiclass_training(self, taxa):
         self._verify_classifier_multiclass()
