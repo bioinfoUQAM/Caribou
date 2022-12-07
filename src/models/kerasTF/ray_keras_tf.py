@@ -120,6 +120,8 @@ class KerasTFModel(ModelsUtils):
     def _training_preprocess(self, X, y):
         print('_training_preprocess')
         num_blocks = X.num_blocks()
+        self._preprocessor = TensorMinMaxScaler(self.kmers)
+        self._preprocessor.fit(X)
         y = ray.data.from_arrow(
                 pa.Table.from_pandas(
                     y)).repartition(
@@ -129,12 +131,8 @@ class KerasTFModel(ModelsUtils):
         return df
 
     def _label_encode(self, df, y):
-        if self.classifier in ['attention', 'lstm', 'deeplstm']:
-            self._nb_classes = 1
-            self._label_encode_binary(df)
-        elif self.classifier in ['lstm_attention', 'cnn', 'widecnn']:
-            self._nb_classes = len(np.unique(y[self.taxa]))
-            self._label_encode_multiclass(df)
+        self._nb_classes = len(np.unique(y.to_pandas()[self.taxa]))
+        self._label_encode_define(df)
 
         encoded = []
         encoded.append(-1)
@@ -145,18 +143,7 @@ class KerasTFModel(ModelsUtils):
 
         self._labels_map = zip(labels, encoded)
 
-    def _label_encode_binary(self, df):
-        print('_label_encode_binary')
-        self._encoder = Chain(
-            LabelEncoder(self.taxa),
-            Concatenator(
-                output_column_name='labels',
-                include=[self.taxa]
-            )
-        )
-        self._encoder.fit(df)
-
-    def _label_encode_multiclass(self, df):
+    def _label_encode_define(self, df):
         print('_label_encode_multiclass')
         self._encoder = Chain(
             LabelEncoder(self.taxa),
@@ -255,7 +242,7 @@ class KerasTFModel(ModelsUtils):
         training_result = self._trainer.fit()
         self._model_ckpt = training_result.best_checkpoints[0][0]
 
-    def predict(self, df, threshold = 0.8):
+    def predict(self, df, threshold = 0.8, cv = False):
         print('predict')
         df = df
         df = self._preprocessor.transform(df)
@@ -268,15 +255,21 @@ class KerasTFModel(ModelsUtils):
         # Make predictions
         predictions = self._predictor.predict(
             df,
-            feature_columns = ['features'],
+            feature_columns = ['__value__'],
             batch_size = self.batch_size
         )
-        return self._prob_2_cls(predictions, self._nb_classes, threshold)
+        predictions = self._prob_2_cls(predictions, threshold)
 
-    def _prob_2_cls(self, predictions, nb_cls, threshold):
+        if cv:
+            return predictions
+        else:
+            return self._label_decode(predictions)
+
+
+    def _prob_2_cls(self, predictions, threshold):
         print('_prob_2_cls')
+        print(predictions.to_pandas())
         def map_predicted_label(df : np.ndarray):
-            print(df)
             predict = pd.DataFrame({
                 'best_proba': [df['predictions'][i][np.argmax(df['predictions'][i])] for i in range(len(df))],
                 'predicted_label': [np.argmax(df['predictions'][i]) for i in range(len(df))]
@@ -284,11 +277,10 @@ class KerasTFModel(ModelsUtils):
             predict.loc[predict['best_proba'] < threshold, 'predicted_label'] = -1
             return pd.DataFrame(predict['predicted_label'])
        
-        if self.classifier != 'lstm':
-            mapper = BatchMapper(map_predicted_label, batch_format = 'pandas')
-            predict = mapper.transform(predict)
-            predict = np.ravel(np.array(predict.to_pandas()))
-        
+        mapper = BatchMapper(map_predicted_label, batch_format = 'pandas')
+        predict = mapper.transform(predictions)
+        predict = np.ravel(np.array(predict.to_pandas()))
+    
         return predict
 
 # Training/building function outside of the class as mentioned on the Ray discussion
@@ -296,7 +288,6 @@ class KerasTFModel(ModelsUtils):
 ################################################################################
 
 def train_func(config):
-    print('train_func')
     batch_size = config.get('batch_size', 128)
     epochs = config.get('epochs', 10)
     size = config.get('size')
@@ -315,7 +306,7 @@ def train_func(config):
             for batch in data.iter_tf_batches(
                 batch_size=batch_size, dtypes=tf.float32,
             ):
-                yield batch['features'], batch['labels']
+                yield batch['__value__'], batch['labels']
 
         output_signature = (
             tf.TensorSpec(shape=(None, size), dtype=tf.float32),
@@ -353,7 +344,6 @@ def train_func(config):
         )
 
 def build_model(classifier, nb_cls, nb_kmers):
-    print('build')
     if classifier == 'attention':
         clf = build_attention(nb_kmers)
     elif classifier == 'lstm':

@@ -12,13 +12,13 @@ from Bio import SeqIO
 from pathlib import Path
 
 def verify_csv(file):
-    path, ext = os.path.splitext(file)
+    ext = os.path.splitext(file)[1]
     if ext != '.csv':
         raise ValueError('Classes file must be in CSV format!')
 
 def verify_extract_ids(file):
     ids = []
-    path, ext = os.path.splitext(file)
+    ext = os.path.splitext(file)[1]
     if ext in ['.fa','.fna','.fasta']:
         with open(file, 'rt') as handle:
             for record in SeqIO.parse(handle, 'fasta'):

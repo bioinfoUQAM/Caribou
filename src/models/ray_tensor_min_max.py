@@ -5,6 +5,7 @@ import numpy as np
 import pandas as pd
 
 from ray.data.preprocessor import Preprocessor
+from ray.data.extensions.tensor_extension import TensorArray
 
 class TensorMinMaxScaler(Preprocessor):
     """
@@ -41,13 +42,12 @@ class TensorMinMaxScaler(Preprocessor):
         """
         Transform the given dataset to pandas dataframe.
         """
-                
-        df = pd.DataFrame(np.array(batch['__value__']), columns = self._features_list)
+        df = pd.DataFrame(np.vstack(batch['__value__']), columns = self._features_list)
 
         for i, col in enumerate(self._features_list):
             df[col] = df[col].apply(value_transform, args=(self._min[i], self._max[i]))
 
-        batch['__value__'] = df
+        batch['__value__'] = TensorArray(np.array(df))
 
         return batch
 

@@ -4,13 +4,28 @@ import ray
 import argparse
 
 import numpy as np
+import pandas as pd
+import pyarrow as pa
 
-from glob import glob
 from pathlib import Path
 from shutil import rmtree
 
 from utils import load_Xy_data, save_Xy_data
 from joblib import Parallel, delayed, parallel_backend
+
+def subset_expand_tensors(subset, lst_kmers):
+    ray.data.set_progress_bars(False)
+    lst_rows = []
+    sub_cols = subset['kmers']
+    sub_df = ray.data.read_parquet(subset['profile']) # distributed in parallel?
+    for row in sub_df.iter_rows():
+        row_full = np.zeros((1, len(lst_kmers)))
+        row = row['__value__']
+        for col in sub_cols:
+            row_full[0, lst_kmers.index(col)] = row[sub_cols.index(col)]
+        lst_rows.append(ray.put(row_full))
+    ray.data.set_progress_bars(True)
+    return lst_rows
 
 # CLI
 ################################################################################
@@ -80,8 +95,7 @@ cls = None
 ################################################################################
 # Load data from each files
 with parallel_backend('threading'):
-    subsets = Parallel(n_jobs=-1, verbose=1)(delayed(load_Xy_data)(file)
-                                             for file in files_lst)
+    subsets = Parallel(n_jobs=-1, verbose=1)(delayed(load_Xy_data)(file) for file in files_lst)
 
 # Extract data per file in lists
 for subset in subsets:
@@ -96,21 +110,25 @@ lst_kmers = list(np.unique(np.concatenate(lst_kmers)))
 lst_taxas = list(np.unique(np.concatenate(lst_taxas)))
 
 # Merge profiles
-for subset in subsets:
-    row_full = np.zeros((1, len(lst_kmers)))
-    sub_cols = subset['kmers']
-    sub_df = ray.data.read_parquet(subset['profile'])
-    for row in sub_df.iter_rows():
-        row = row['__value__']
-        for col in sub_cols:
-            row_full[0, lst_kmers.index(col)] = row[sub_cols.index(col)]
-        rows_full.append(ray.put(row_full))
+# for subset in subsets:
+#     rows_full.extend(subset_expand_tensors(subset, lst_kmers))
+with parallel_backend('threading'):
+    rows_full = Parallel(n_jobs=-1, verbose=1)(delayed(subset_expand_tensors)(subset, lst_kmers) for subset in subsets)
 
 # Build merged profile dataframe
-merged_profile_df = ray.data.from_numpy_refs(rows_full)
+merged_profile_df = ray.data.from_numpy_refs(list(np.concatenate(rows_full)))
 # Add ID column
-merged_profile_df = merged_profile_df.add_column(
-    'id', lambda ds: pd.DataFrame(lst_ids))
+num_blocks = merged_profile_df.num_blocks()
+merged_profile_df = merged_profile_df.repartition(
+    merged_profile_df.count()).zip(
+        ray.data.from_arrow(
+            pa.Table.from_pandas(
+                pd.DataFrame({
+                    'id': lst_ids,
+                })
+            )
+        ).repartition(merged_profile_df.count())
+    ).repartition(num_blocks)
 # Write new profile to file
 merged_profile_df.write_parquet(merged_profile_file)
 
@@ -132,10 +150,10 @@ save_Xy_data(data, opt['out'])
 
 # Delete subset files
 ################################################################################
-for file in subsets:
-    os.remove(file)
-
-rmtree(tmp_dir)
+# for file in files_lst:
+#     os.remove(file)
+# for subset in subsets:
+#     rmtree(subset['profile'])
 
 # Recreate k-mers list file
 ################################################################################

@@ -13,7 +13,6 @@ from ray.data.preprocessors import BatchMapper, LabelEncoder
 
 # Training
 from sklearn.naive_bayes import MultinomialNB
-from sklearn.calibration import CalibratedClassifierCV
 from sklearn.linear_model import SGDOneClassSVM, SGDClassifier
 # Tuning
 from ray import tune
@@ -98,6 +97,8 @@ class SklearnModel(ModelsUtils):
         print('_training_preprocess')
         labels = np.unique(y[self.taxa])
         num_blocks = X.num_blocks()
+        self._preprocessor = TensorMinMaxScaler(self.kmers)
+        X = self._preprocessor.fit(X)
         y = ray.data.from_arrow(
                 pa.Table.from_pandas(
                     y)).repartition(
@@ -114,7 +115,7 @@ class SklearnModel(ModelsUtils):
             df = df.add_column(self.taxa, lambda x : 1)
         else:
             self._encoder = LabelEncoder(self.taxa)
-            df = self._encoder.fit_transform(df)
+            df = self._encoder.fit(df)
             self._encoded = np.arange(len(labels))
             encoded = np.append(self._encoded, -1)
             labels = np.append(labels, 'unknown')
@@ -200,6 +201,12 @@ class SklearnModel(ModelsUtils):
 
     def _fit_model(self, datasets):
         print('_fit_model')
+        for name, ds in datasets.items():
+            ds = ray.get(ds)
+            ds = self._preprocessor.transform(ds)
+            ds = self._encoder.transform(ds)
+            datasets[name] = ray.put(ds)
+            
         # Define trainer
         self._trainer = SklearnPartialTrainer(
             estimator = self._clf,

@@ -97,8 +97,6 @@ class KmersCollection():
         self._lst_arr = []
         # Get labels from seq_data
         if len(seq_data.labels) > 0:
-            print('seq_data.labels : ', len(seq_data.labels))
-            print('seq_data.ids : ', len(seq_data.ids))
             self._labels = pd.DataFrame(seq_data.labels, columns = seq_data.taxas, index = seq_data.ids)
         # Get taxas from seq_data if not empty
         if len(seq_data.taxas) > 0:
@@ -245,7 +243,7 @@ class KmersCollection():
             cols = list(tmp.columns)
             cols.remove('id')
             for col in cols:
-                    arr[0, self.kmers_list.index(col)] = tmp.at[0, col]            
+                arr[0, self.kmers_list.index(col)] = tmp.at[0, col]            
             self._lst_arr.append(ray.put(arr))
             os.remove(file)
         self.df = ray.data.from_numpy_refs(self._lst_arr)
