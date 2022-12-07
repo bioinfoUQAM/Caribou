@@ -10,10 +10,12 @@ from shutil import rmtree
 # Preprocessing
 from models.ray_tensor_min_max import TensorMinMaxScaler
 from ray.data.preprocessors import BatchMapper, LabelEncoder
+from models.sklearn.ray_sklearn_onesvm_encoder import OneClassSVMLabelEncoder
 
 # Training
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.linear_model import SGDOneClassSVM, SGDClassifier
+
 # Tuning
 from ray import tune
 from ray.tune import Tuner, TuneConfig
@@ -98,7 +100,7 @@ class SklearnModel(ModelsUtils):
         labels = np.unique(y[self.taxa])
         num_blocks = X.num_blocks()
         self._preprocessor = TensorMinMaxScaler(self.kmers)
-        X = self._preprocessor.fit(X)
+        self._preprocessor.fit(X)
         y = ray.data.from_arrow(
                 pa.Table.from_pandas(
                     y)).repartition(
@@ -110,12 +112,14 @@ class SklearnModel(ModelsUtils):
     def _label_encode(self, df, labels):
         print('_label_encode')
         if self.classifier == 'onesvm':
+            self._encoder = OneClassSVMLabelEncoder(self.taxa)
+            self._encoder.fit(df)
             encoded = np.array([1,-1], dtype = np.int32)
             labels = np.array(['bacteria', 'unknown'], dtype = object)
             df = df.add_column(self.taxa, lambda x : 1)
         else:
             self._encoder = LabelEncoder(self.taxa)
-            df = self._encoder.fit(df)
+            self._encoder.fit(df)
             self._encoded = np.arange(len(labels))
             encoded = np.append(self._encoded, -1)
             labels = np.append(labels, 'unknown')
@@ -152,6 +156,7 @@ class SklearnModel(ModelsUtils):
         datasets = {'train' : ray.put(df_train)}
         self._fit_model(datasets)
 
+        df_test = self._encoder.transform(df_test)
         y_true = df_test.to_pandas()[self.taxa]
         y_pred = self.predict(df_test.drop_columns([self.taxa]), cv = True)
 
@@ -206,7 +211,7 @@ class SklearnModel(ModelsUtils):
             ds = self._preprocessor.transform(ds)
             ds = self._encoder.transform(ds)
             datasets[name] = ray.put(ds)
-            
+
         # Define trainer
         self._trainer = SklearnPartialTrainer(
             estimator = self._clf,
@@ -233,6 +238,7 @@ class SklearnModel(ModelsUtils):
 
     def predict(self, df, threshold = 0.8, cv = False):
         print('predict')
+        df = self._preprocessor.transform(df)
         if self.classifier == 'onesvm':
             self._predictor = BatchPredictor.from_checkpoint(self._model_ckpt, SklearnPredictor)
             predictions = self._predictor.predict(df, batch_size = self.batch_size)
@@ -241,7 +247,6 @@ class SklearnModel(ModelsUtils):
             self._predictor = BatchPredictor.from_checkpoint(self._model_ckpt, SklearnProbaPredictor)
             predictions = self._predictor.predict(df, batch_size = self.batch_size)
             predictions = self._prob_2_cls(predictions, len(self._encoded), threshold)
-            predictions = predictions.reshape(-1)
         
         if cv:
             return predictions

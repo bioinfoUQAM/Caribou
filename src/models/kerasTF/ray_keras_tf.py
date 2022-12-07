@@ -192,10 +192,11 @@ class KerasTFModel(ModelsUtils):
         datasets = {'train' : ray.put(df_train), 'validation' : ray.put(df_val)}
         self._fit_model(datasets)
 
+        df_test = self._encoder.preprocessors[0].transform(df_test)
         y_true = df_test.to_pandas()[self.taxa]
         y_pred = self.predict(df_test.drop_columns([self.taxa]), cv = True)
 
-        for file in glob(os.path.join( os.path.dirname(kmers_ds['profile']), '*sim*')):
+        for file in glob(os.path.join(os.path.dirname(kmers_ds['profile']), '*sim*')):
             if os.path.isdir(file):
                 rmtree(file)
             else:
@@ -244,7 +245,6 @@ class KerasTFModel(ModelsUtils):
 
     def predict(self, df, threshold = 0.8, cv = False):
         print('predict')
-        df = df
         df = self._preprocessor.transform(df)
         # Define predictor
         self._predictor = BatchPredictor.from_checkpoint(
@@ -265,11 +265,20 @@ class KerasTFModel(ModelsUtils):
         else:
             return self._label_decode(predictions)
 
-
     def _prob_2_cls(self, predictions, threshold):
         print('_prob_2_cls')
-        print(predictions.to_pandas())
-        def map_predicted_label(df : np.ndarray):
+        def map_predicted_label_binary(df):
+            lower_threshold = 0.5 - (threshold * 0.5)
+            upper_threshold = 0.5 + (threshold * 0.5)
+            predict = pd.DataFrame({
+                'proba': df['predictions'],
+                'predicted_label': np.full(len(df), -1)
+            })
+            predict.loc[predict['proba'] >= upper_threshold, 'predicted_label'] = 1
+            predict.loc[predict['proba'] <= lower_threshold, 'predicted_label'] = 0
+            return pd.DataFrame(predict['predicted_label'])
+
+        def map_predicted_label_multiclass(df):
             predict = pd.DataFrame({
                 'best_proba': [df['predictions'][i][np.argmax(df['predictions'][i])] for i in range(len(df))],
                 'predicted_label': [np.argmax(df['predictions'][i]) for i in range(len(df))]
@@ -277,7 +286,10 @@ class KerasTFModel(ModelsUtils):
             predict.loc[predict['best_proba'] < threshold, 'predicted_label'] = -1
             return pd.DataFrame(predict['predicted_label'])
        
-        mapper = BatchMapper(map_predicted_label, batch_format = 'pandas')
+        if self._nb_classes == 2:
+            mapper = BatchMapper(map_predicted_label_binary, batch_format = 'pandas')
+        else:
+            mapper = BatchMapper(map_predicted_label_multiclass, batch_format = 'pandas')
         predict = mapper.transform(predictions)
         predict = np.ravel(np.array(predict.to_pandas()))
     
