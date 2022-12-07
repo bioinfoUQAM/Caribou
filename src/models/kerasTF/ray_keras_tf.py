@@ -9,7 +9,8 @@ from glob import glob
 from shutil import rmtree
 
 # Preprocessing
-from ray.data.preprocessors import Concatenator, LabelEncoder, Chain, OneHotEncoder
+from models.ray_tensor_min_max import TensorMinMaxScaler
+from ray.data.preprocessors import BatchMapper, Concatenator, LabelEncoder, Chain, OneHotEncoder
 
 # Parent class / models
 from models.ray_utils import ModelsUtils
@@ -21,7 +22,6 @@ from ray.air import session, Checkpoint
 from ray.air.callbacks.keras import Callback
 from ray.air.config import ScalingConfig, CheckpointConfig
 from ray.train.tensorflow import TensorflowTrainer, TensorflowCheckpoint, prepare_dataset_shard
-
 
 # Tuning
 from ray.air.config import RunConfig
@@ -272,6 +272,24 @@ class KerasTFModel(ModelsUtils):
             batch_size = self.batch_size
         )
         return self._prob_2_cls(predictions, self._nb_classes, threshold)
+
+    def _prob_2_cls(self, predictions, nb_cls, threshold):
+        print('_prob_2_cls')
+        def map_predicted_label(df : np.ndarray):
+            print(df)
+            predict = pd.DataFrame({
+                'best_proba': [df['predictions'][i][np.argmax(df['predictions'][i])] for i in range(len(df))],
+                'predicted_label': [np.argmax(df['predictions'][i]) for i in range(len(df))]
+            })
+            predict.loc[predict['best_proba'] < threshold, 'predicted_label'] = -1
+            return pd.DataFrame(predict['predicted_label'])
+       
+        if self.classifier != 'lstm':
+            mapper = BatchMapper(map_predicted_label, batch_format = 'pandas')
+            predict = mapper.transform(predict)
+            predict = np.ravel(np.array(predict.to_pandas()))
+        
+        return predict
 
 # Training/building function outside of the class as mentioned on the Ray discussion
 # https://discuss.ray.io/t/statuscode-resource-exhausted/4379/16

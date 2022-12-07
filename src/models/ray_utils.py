@@ -153,14 +153,10 @@ class ModelsUtils(ABC):
         """
         """
 
-    def _prob_2_cls(self, predict, nb_cls, threshold):
-        print('_prob_2_cls')
-        if nb_cls == 1 and self.classifier != 'lstm':
-            predict = np.round(abs(np.concatenate(predict.to_pandas()['predictions'])))
-        else:
-            predict = predict.map_batches(map_predicted_label, threshold)
-            predict = np.ravel(np.array(predict.to_pandas()))
-        return predict
+    @abstractmethod
+    def _prob_2_cls(self):
+        """
+        """
 
     @abstractmethod
     def _label_encode(self):
@@ -171,13 +167,3 @@ class ModelsUtils(ABC):
     def _label_decode(self):
         """
         """
-
-# Mapping function outside of the class as mentioned on the Ray discussion
-# https://discuss.ray.io/t/statuscode-resource-exhausted/4379/16
-################################################################################
-
-def map_predicted_label(df, threshold):
-    predict = pd.DataFrame({'best_proba': [df['predictions'][i][np.argmax(df['predictions'][i])] for i in range(len(df))],
-                            'predicted_label': [np.argmax(df['predictions'][i]) for i in range(len(df))]})
-    predict.loc[predict['best_proba'] < threshold, 'predicted_label'] = -1
-    return pd.DataFrame(predict['predicted_label'])

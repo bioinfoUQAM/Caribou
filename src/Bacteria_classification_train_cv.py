@@ -64,7 +64,6 @@ def bacteria_classification_train_cv(opt):
     os.makedirs(outdirs["results_dir"], mode=0o700, exist_ok=True)
 
     list_taxas = data_bacteria['taxas']
-    list_taxas.remove('domain')
     ray.init()
 
 # Training and cross-validation of models for classification of bacterias
@@ -74,6 +73,7 @@ def bacteria_classification_train_cv(opt):
         k = k_length,
         outdirs = outdirs,
         database = opt['database_name'],
+        classifier_binary = 'onesvm',
         classifier_multiclass = opt['model_type'],
         taxa = list_taxas,
         batch_size = opt['batch_size'],

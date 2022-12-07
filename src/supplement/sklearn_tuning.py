@@ -47,9 +47,21 @@ def merge_database_host(database_data, host_data):
     merged_database_host['profile'] = "{}_host_merged".format(os.path.splitext(database_data["profile"])[0]) # Kmers profile
 
     df_classes = pd.DataFrame(database_data["classes"], columns=database_data["taxas"])
+    df_cls_host = pd.DataFrame(host_data["classes"], columns=host_data["taxas"])
+
     if len(np.unique(df_classes['domain'])) != 1:
         df_classes[df_classes['domain'] != 'bacteria'] = 'bacteria'
-    df_classes = df_classes.append(pd.DataFrame(host_data["classes"], columns=host_data["taxas"]), ignore_index=True)
+    
+    if len(df_cls_host) > len(host_data["ids"]):
+        to_remove = np.arange(len(df_cls_host) - len(host_data["ids"]))
+        df_cls_host.drop(to_remove, axis = 0, inplace = True)
+    elif len(df_cls_host) < len(host_data["ids"]):
+        diff = len(host_data["ids"]) - len(df_cls_host)
+        row = df_cls_host.iloc[0]
+        for i in range(diff):
+            df_cls_host = pd.concat([df_cls_host, row.to_frame().T], ignore_index=True)
+
+    df_classes = pd.concat([df_classes, df_cls_host], ignore_index=True)
     merged_database_host['classes'] = np.array(df_classes)  # Class labels
     merged_database_host['ids'] = np.concatenate((database_data['ids'], host_data['ids'])) # IDs
     merged_database_host['kmers'] = database_data["kmers"]  # Features
@@ -75,7 +87,6 @@ def preprocess(X, y, taxa, cols, classifier):
     df = X.repartition(X.count()).zip(y).repartition(num_blocks)
     df, labels = preprocess_labels(df, taxa, labels, classifier)
     return df, labels, scaler
-
 
 def preprocess_labels(df, taxa, labels, classifier):
     if classifier == 'onesvm':
@@ -189,7 +200,7 @@ elif opt['classifier'] == 'linearsvm' or opt['classifier'] == 'sgd':
     }
     tune_params = {
         'params' : {
-            'loss' : tune.grid_search(['hinge', 'log_loss', 'modified_huber', 'squared_hinge', 'perceptron', 'squared_error', 'huber', 'epsilon_insensitive', 'squared_epsilon_insensitive']),
+            'loss' : tune.grid_search(['log_loss', 'modified_huber']),
             'penalty' : tune.grid_search(['l2', 'l1', 'elasticnet']),
             'alpha' : tune.grid_search(np.logspace(-4,4,10)),
             'learning_rate' : tune.grid_search(['constant','optimal','invscaling','adaptive']),

@@ -8,7 +8,8 @@ import pyarrow as pa
 from glob import glob
 from shutil import rmtree
 # Preprocessing
-from ray.data.preprocessors import LabelEncoder
+from models.ray_tensor_min_max import TensorMinMaxScaler
+from ray.data.preprocessors import BatchMapper, LabelEncoder
 
 # Training
 from sklearn.naive_bayes import MultinomialNB
@@ -177,7 +178,7 @@ class SklearnModel(ModelsUtils):
                 'alpha' : 0.045,
                 'eta0' : 0.045,
                 'learning_rate' : 'constant',
-                'loss' : 'hinge',
+                'loss' : 'log_loss',
                 'penalty' : 'elasticnet'
             }
         elif self.classifier == 'sgd':
@@ -187,7 +188,7 @@ class SklearnModel(ModelsUtils):
                 'alpha' : 0.045,
                 'eta0' : 0.045,
                 'learning_rate' : 'constant',
-                'loss' : 'epsilon_insensitive',
+                'loss': 'modified_huber',
                 'penalty' : 'elasticnet'
             }
         elif self.classifier == 'mnb':
@@ -222,10 +223,6 @@ class SklearnModel(ModelsUtils):
         # Training execution
         result = self._trainer.fit()
         self._model_ckpt = result.checkpoint
-        if self.classifier == 'linearsvm':
-            print(self._model_ckpt)
-        print(self._model_ckpt.to_dict())
-        sys.exit()
 
     def predict(self, df, threshold = 0.8, cv = False):
         print('predict')
@@ -244,3 +241,22 @@ class SklearnModel(ModelsUtils):
         else:
             return self._label_decode(predictions)    
             
+    def _prob_2_cls(self, predict, nb_cls, threshold):
+        print('_prob_2_cls')
+        def map_predicted_label(df : pd.DataFrame):
+            predict = pd.DataFrame({
+                'best_proba': [max(df.iloc[i].values) for i in range(len(df))],
+                'predicted_label': [np.argmax(df.iloc[i].values) for i in range(len(df))]
+            })
+            predict.loc[predict['best_proba'] < threshold, 'predicted_label'] = 0
+            return pd.DataFrame(predict['predicted_label'])
+
+        if nb_cls == 1:
+            predict = np.round(abs(np.concatenate(predict.to_pandas()['predictions'])))
+        else:
+            mapper = BatchMapper(map_predicted_label, batch_format = 'pandas')
+            predict = mapper.transform(predict)
+            predict = np.ravel(np.array(predict.to_pandas()))
+        
+        return predict
+        

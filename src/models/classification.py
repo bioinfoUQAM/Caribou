@@ -54,7 +54,7 @@ class ClassificationMethods():
         self.batch_size = batch_size
         self.training_epochs = training_epochs
         # Initialize with values
-        self.classified_data = {'order': []}
+        self.classified_data = {'sequence': []}
         # Empty initializations
         self.taxas = []
         self.models = {}
@@ -163,9 +163,12 @@ class ClassificationMethods():
                     self.verbose
                 )
             self.X_train = ray.data.read_parquet(self.merged_database_host['profile'])
-            self.y_train = pd.DataFrame({taxa: pd.DataFrame(
-                self.merged_database_host['classes'],
-                columns=self.merged_database_host['taxas']).loc[:, taxa].astype('string').str.lower()})
+            self.y_train = pd.DataFrame({
+                taxa: pd.DataFrame(
+                    self.merged_database_host['classes'],
+                    columns=self.merged_database_host['taxas']
+                ).loc[:, taxa].astype('string').str.lower()
+            })
         if self.merged_database_host is None:
             self.models[taxa].train(self.X_train, self.y_train, self.database_data, self.cv)
         else:
@@ -184,7 +187,7 @@ class ClassificationMethods():
                 self.batch_size,
                 self.k,
                 taxa,
-                self.database_k_mers['kmers'],
+                self.database_data['kmers'],
                 self.verbose
             )
         else:
@@ -197,11 +200,16 @@ class ClassificationMethods():
                 self.training_epochs,
                 self.k,
                 taxa,
-                self.database_k_mers['kmers'],
+                self.database_data['kmers'],
                 self.verbose
             )
         self.X_train = ray.data.read_parquet(self.database_data['profile'])
-        self.y_train = pd.DataFrame({taxa: pd.DataFrame(self.database_data['classes'], columns=self.database_data['taxas']).loc[:, taxa].astype('string').str.lower()})
+        self.y_train = pd.DataFrame({
+            taxa: pd.DataFrame(
+                self.database_data['classes'],
+                columns=self.database_data['taxas']
+            ).loc[:, taxa].astype('string').str.lower()
+        })
         self.models[taxa].train(self.X_train, self.y_train, self.database_data, self.cv)
         self._save_model(self._model_file, taxa)
         
@@ -210,7 +218,7 @@ class ClassificationMethods():
         df_file = data2classify['profile']
         df = ray.data.read_parquet(df_file)
         ids = data2classify['ids']
-        for i, taxa in enumerate(self.classified_data['order']):
+        for i, taxa in enumerate(self.classified_data['sequence']):
             if i == 0:
                 df = self._classify_first(df, taxa, ids, df_file)
             else:
@@ -250,8 +258,8 @@ class ClassificationMethods():
         predictions = self.models[taxa].predict(df, self.threshold)
         pred_df = pd.DataFrame({'id': ids, taxa: predictions.values})
 
-        taxa_pos = self.classified_data['order'].index(taxa)
-        lst_taxa = self.classified_data['order'][taxa_pos:]
+        taxa_pos = self.classified_data['sequence'].index(taxa)
+        lst_taxa = self.classified_data['sequence'][taxa_pos:]
         db_df = pd.DataFrame(
             self.database_data['classes'],
             columns=self.database_data['taxas']
@@ -322,7 +330,7 @@ class ClassificationMethods():
         
     # Load extracted data if already exists
     def _verify_files(self, file, taxa):
-        self.classified_data['order'].append(taxa)
+        self.classified_data['sequence'].append(taxa)
         if os.path.isfile(file):
             self.classified_data[taxa] = load_Xy_data(file)
         else:
