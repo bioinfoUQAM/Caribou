@@ -261,25 +261,31 @@ class SklearnPartialTrainer(SklearnTrainer):
         for key, X_y_tuple in datasets.items():
             X_test, y_test = X_y_tuple
 
-            for batch in X_test.iter_batches(
-                batch_size = X_test.count(),
-                batch_format = 'numpy'
-            ):
-                X_test = pd.DataFrame(batch, columns = self._features_list)
+            test_scores = {'score':[]}
+
             start_time = time()
-            try:
-                test_scores = _score(estimator, X_test, y_test.to_pandas(), scorers)
-            except Exception:
-                if isinstance(scorers, dict):
-                    test_scores = {k: np.nan for k in scorers}
-                else:
-                    test_scores = np.nan
-                warnings.warn(
-                    f"Scoring on validation set {key} failed. The score(s) for "
-                    f"this set will be set to nan. Details: \n"
-                    f"{format_exc()}",
-                    UserWarning,
+            for batch, labels in zip(X_test.iter_batches(
+                    batch_size = self._batch_size,
+                    batch_format = 'numpy'
+                ), y_test.iter_batches(
+                    batch_size = self._batch_size,
+                    batch_format = 'pandas'
                 )
+            ):
+                batch = pd.DataFrame(batch, columns = self._features_list)
+                try:
+                    test_scores['score'].extend(_score(estimator, batch, labels, scorers))
+                except Exception:
+                    if isinstance(scorers, dict):
+                        test_scores = {k: np.nan for k in scorers}
+                    else:
+                        test_scores = np.nan
+                    warnings.warn(
+                        f"Scoring on validation set {key} failed. The score(s) for "
+                        f"this set will be set to nan. Details: \n"
+                        f"{format_exc()}",
+                        UserWarning,
+                    )
             score_time = time() - start_time
             results[key]["score_time"] = score_time
             if not isinstance(test_scores, dict):
