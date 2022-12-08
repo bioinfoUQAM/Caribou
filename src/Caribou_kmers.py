@@ -1,15 +1,13 @@
 #!/usr/bin python3
 
-from data.build_data import build_load_save_data
-
-from tensorflow.compat.v1 import logging
-
 import ray
+import pathlib
+import logging
 import os.path
 import argparse
-import pathlib
 
-from os import makedirs
+from utils import *
+from data.build_data import build_load_save_data
 
 __author__ = "Nicolas de Montigny"
 
@@ -28,43 +26,19 @@ def kmers_dataset(opt):
     kmers_list = None
 
     # Verify there are files to analyse
-    if opt['seq_file'] is None and opt['seq_file_host'] is None:
-        raise ValueError("No file to extract K-mers from ! Exiting")
+    verify_seqfiles(opt['seq_file'], opt['seq_file_host'])
 
     # Verification of existence of files
     for file in [opt['seq_file'],opt['cls_file'],opt['seq_file_host'],opt['cls_file_host'],opt['kmers_list']]:
-        if file is not None and not os.path.isfile(file):
-            raise ValueError("Cannot find file {} ! Exiting".format(file))
+        verify_file(file)
 
     # Verification of k length
-    if opt['kmers_list'] is not None:
-        # Read kmers file to put in list
-        kmers_list = []
-        with open(opt['kmers_list'], 'r') as handle:
-            kmers_list = [kmer.rstrip() for kmer in handle.readlines()]
-        if opt['k_length'] != len(kmers_list[0]):
-            print("K-mers length is different than length in the K-mers list file given ! Setting K-mers length to correspond to previously extracted length !")
-            opt['k_length'] = len(kmers_list[0])
-        elif opt['k_length'] <= 0:
-            print("Invalid K-mers length but K-mers list file was found ! Setting K-mers length to correspond to previously extracted length !")
-            opt['k_length'] = len(kmers_list[0])
-    elif opt['k_length'] <= 0 and kmers_list is None:
-        raise ValueError("Invalid K-mers length ! Exiting")
+    opt['k_length'], kmers_list = verify_kmers_list_length(opt['k_length'], opt['kmers_list'])
 
     # Verify path for saving
-    outdir_path, outdir_folder = os.path.split(opt['outdir'])
-    if not os.path.isdir(outdir_folder) and os.path.exists(outdir_path):
-        print("Created output folder")
-        os.makedirs(outdir_folder)
-    elif not os.path.exists(outdir_path):
-        raise ValueError("Cannot find where to create output folder ! Exiting")
-
-    # Folders creation for output
-    outdirs = {}
-    outdirs["main_outdir"] = opt['outdir']
-    outdirs["data_dir"] = os.path.join(outdirs["main_outdir"], "data")
-    makedirs(outdirs["main_outdir"], mode=0o700, exist_ok=True)
-    makedirs(outdirs["data_dir"], mode=0o700, exist_ok=True)
+    outdirs = define_create_outdir(opt['outdir'])
+    
+    # Initialize cluster
     ray.init()
 
 # K-mers profile extraction

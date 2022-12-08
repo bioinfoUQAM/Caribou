@@ -1,15 +1,12 @@
 #!/usr/bin python3
 
-from models.classification import ClassificationMethods
-
-from tensorflow.compat.v1 import logging
-
-import os
 import ray
+import logging
 import argparse
 
+from utils import *
 from pathlib import Path
-from utils import load_Xy_data
+from models.classification import ClassificationMethods
 
 __author__ = "Nicolas de Montigny"
 
@@ -23,47 +20,23 @@ logging.set_verbosity(logging.ERROR)
 ################################################################################
 def bacteria_classification_train_cv(opt):
     # Verify existence of files and load data
-    if not os.path.isfile(opt['data_bacteria']):
-        raise ValueError("Cannot find file {} ! Exiting".format(opt['data_bacteria']))
-    else:
-        data_bacteria = load_Xy_data(opt['data_bacteria'])
-        # Infer k-mers length from the extracted bacteria profile
-        k_length = len(data_bacteria['kmers'][0])
-        # Verify that kmers profile file exists
-        if not os.path.isdir(data_bacteria['profile']):
-            raise ValueError("Cannot find data folder {} ! Exiting".format(data_bacteria['profile']))
+    data_bacteria = verify_load_data(opt['data_bacteria'])
+    k_length = len(data_bacteria['kmers'][0])
 
     # Verify that model type is valid / choose default depending on host presence
     if opt['model_type'] is None:
-        opt['model_type'] = 'attention'
+        opt['model_type'] = 'cnn'
 
-    # Validate batch size
-    if opt['batch_size'] <= 0:
-        raise ValueError("Invalid batch size ! Exiting")
+    # Validate training parameters
+    verify_positive_int(opt['batch_size'], 'batch_size')
+    verify_positive_int(opt['training_epochs'], 'number of iterations in neural networks training')
+    
+    outdirs = define_create_outdirs(opt['outdir'])
+    
+    lst_taxas = data_bacteria['taxas']
+    lst_taxas.remove('domain')
 
-    # Validate number of epochs
-    if opt['training_epochs'] <= 0:
-        raise ValueError("Invalid number of training iterations for neural networks")
-
-    # Validate path for saving
-    outdir_path, outdir_folder = os.path.split(opt['outdir'])
-    if not os.path.isdir(opt['outdir']) and os.path.exists(outdir_path):
-        print("Created output folder")
-        os.makedirs(opt['outdir'])
-    elif not os.path.exists(outdir_path):
-        raise ValueError("Cannot find where to create output folder ! Exiting")
-
-    # Folders creation for output
-    outdirs = {}
-    outdirs["main_outdir"] = opt['outdir']
-    outdirs["data_dir"] = os.path.join(outdirs["main_outdir"], "data/")
-    outdirs["models_dir"] = os.path.join(outdirs["main_outdir"], "models/")
-    outdirs["results_dir"] = os.path.join(outdirs["main_outdir"], "results/")
-    os.makedirs(outdirs["main_outdir"], mode=0o700, exist_ok=True)
-    os.makedirs(outdirs["models_dir"], mode=0o700, exist_ok=True)
-    os.makedirs(outdirs["results_dir"], mode=0o700, exist_ok=True)
-
-    list_taxas = data_bacteria['taxas']
+    # Initialize cluster
     ray.init()
 
 # Training and cross-validation of models for classification of bacterias
@@ -73,16 +46,16 @@ def bacteria_classification_train_cv(opt):
         k = k_length,
         outdirs = outdirs,
         database = opt['database_name'],
-        classifier_binary = 'onesvm',
+        classifier_binary = None,
         classifier_multiclass = opt['model_type'],
-        taxa = list_taxas,
+        taxa = lst_taxas,
         batch_size = opt['batch_size'],
         training_epochs = opt['training_epochs'],
         verbose = opt['verbose'],
         cv = True
     ).execute_training()
 
-    print("Caribou finished training and cross-validating the {} model without faults".format(opt['model_type']))
+    print("Caribou finished training and cross-validating the {} model".format(opt['model_type']))
 
 # Argument parsing from CLI
 ################################################################################

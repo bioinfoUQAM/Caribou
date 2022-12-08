@@ -1,17 +1,15 @@
 #!/usr/bin python3
-import os
+
 import ray
+import logging
 import argparse
 import configparser
 
+from utils import *
 from pathlib import Path
-
+from outputs.out import Outputs
 from data.build_data import build_load_save_data
 from models.classification import ClassificationMethods
-from outputs.out import Outputs
-
-from tensorflow.compat.v1 import logging
-
 
 __author__ = 'Nicolas de Montigny'
 
@@ -67,96 +65,40 @@ def caribou(opt):
 
     # io
     for file in [database_seq_file, database_cls_file, metagenome_seq_file]:
-        if not os.path.isfile(file):
-            raise ValueError('Cannot find file {} ! Exiting\n'.format(file))
+        verify_file(file)
 
-    if host not in ['none', 'None', None]:
+    host = verify_host(host)
+    if host is not None:
         for file in [host_seq_file, host_cls_file]:
-            if not os.path.isfile(file):
-                raise ValueError('Cannot find file {} ! Exiting\n'.format(file))
-
-    # Verify path for saving
-    outdir_path, outdir_folder = os.path.split(outdir)
-    if not os.path.isdir(outdir_folder) and os.path.exists(outdir_path):
-        print("Created output folder")
-        os.makedirs(outdir)
-    elif not os.path.exists(outdir_path):
-        raise ValueError("Cannot find where to create output folder ! Exiting")
-
-    # settings
-    if type(k_length) != int or k_length <= 0:
-        raise ValueError(
-            'Invalid kmers length ! Please enter a positive integer ! Exiting\n' +
-            'Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
-    if binary_classifier not in ['onesvm','linearsvm','attention','lstm','deeplstm']:
-        raise ValueError(
-            'Invalid host extraction classifier ! Exiting\n' +
-            'Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
-    if multi_classifier not in ['ridge','svm','mlr','mnb','lstm_attention','cnn','widecnn']:
-        raise ValueError(
-            'Invalid multiclass bacterial classifier ! Exiting\n' +
-            'Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
-    if cv not in [True, False, None]:
-        raise ValueError(
-            'Invalid value for cross_validation ! Please use boolean values ! Exiting\n' +
-            'Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
-    if type(n_cvJobs) != int or n_cvJobs <= 0:
-        raise ValueError(
-            'Invalid number of cross validation jobs ! Please enter a positive integer ! Exiting\n' +
-            'Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
-    if verbose not in [True, False, None]:
-        raise ValueError(
-            'Invalid value for verbose parameter ! Please use boolean values ! Exiting\n' +
-            'Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
-    if type(training_batch_size) != int or training_batch_size <= 0:
-        raise ValueError(
-            'Invalid number of training batch size ! Please enter a positive integer ! Exiting\n' +
-            'Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
-    if training_epochs <= 0:
-        raise ValueError(
-            'Invalid number of iterations for training neural networks ! Please enter a value bigger than 0 ! Exiting\n' +
-            'Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
-    if not 0 < classif_threshold <= 1 or type(classif_threshold) != float:
-        raise ValueError(
-            'Invalid confidence threshold for classifying bacterial sequences ! Please enter a value between 0 and 1 ! Exiting\n' +
-            'Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
-
-    # outputs
-    if abundance_stats not in [True, False, None]:
-        raise ValueError(
-            'Invalid value for output in abundance table form ! Please use boolean values ! Exiting\n' + 
-            'Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
-    if kronagram not in [True, False, None]:
-        raise ValueError(
-            'Invalid value for output in Kronagram form ! Please use boolean values ! Exiting\n' +
-            'Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
-    if full_report not in [True, False, None]:
-        raise ValueError(
-            'Invalid value for output in full report form ! Please use boolean values ! Exiting\n' +
-            'Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
-    if extract_fasta not in [True, False, None]:
-        raise ValueError(
-            'Invalid value for output in fasta extraction form ! Please use boolean values ! Exiting\n' +
-            'Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
-
-    # Adjust classifier based on host presence or not
-    if host in ['none', 'None', None]:
+            file_exist(file)
+    else:
+        # Adjust classifier based on host presence or not
         binary_classifier = 'onesvm'
 
+    # settings
+    verify_positive_int(k_length, 'kmers length')
+    verify_binary_classifier(binary_classifier)
+    verify_multiclass_classifier(multi_classifier)
+    verify_boolean(cv, 'cross validation')
+    verify_boolean(verbose, 'verbose parameter')
+    verify_positive_int(training_batch_size, 'training batch size')
+    verify_positive_int(training_epochs, 'number of iterations in neural networks training')
+    verify_0_1(classif_threshold, 'classification threshold')
+
+    # outputs
+    verify_boolean(abundance_stats, 'output in abundance table form')
+    verify_boolean(kronagram, 'output in Kronagram form')
+    verify_boolean(full_report, 'output in full report form')
+    verify_boolean(extract_fasta, 'output in fasta extraction form')
+    
     # Check batch_size
     if multi_classifier in ['cnn','widecnn'] and training_batch_size < 20:
         training_batch_size = 20
 
     # Folders creation for output
-    outdirs = {}
-    outdirs['main_outdir'] = outdir
-    outdirs['data_dir'] = os.path.join(outdirs['main_outdir'], 'data/')
-    outdirs['models_dir'] = os.path.join(outdirs['main_outdir'], 'models/')
-    outdirs['results_dir'] = os.path.join(outdirs['main_outdir'], 'results/')
-    os.makedirs(outdirs['main_outdir'], mode=0o700, exist_ok=True)
-    os.makedirs(outdirs['data_dir'], mode=0o700, exist_ok=True)
-    os.makedirs(outdirs['models_dir'], mode=0o700, exist_ok=True)
-    os.makedirs(outdirs['results_dir'], mode=0o700, exist_ok=True)
+    outdirs = define_create_outdirs(outdir)
+    
+    # Initialize cluster
     ray.init()
 
 # Part 1 - K-mers profile extraction

@@ -1,7 +1,7 @@
 import os
 import ray
-import warnings
 from time import time
+from warnings import warn
 from traceback import format_exc
 from collections import defaultdict
 
@@ -207,7 +207,7 @@ class SklearnPartialTrainer(SklearnTrainer):
                 except:
                     for i in range(len(batch_X)):
                         if len(batch_X[i]) != len(self._features_list):
-                            warnings.warn("The features list length for some reads are not the same as for other reads.\
+                            warn("The features list length for some reads are not the same as for other reads.\
                                 Removing the last {} additionnal values, this may influence training.\
                                     If error persists over multiple samples, please rerun the K-mers extraction".format(len(batch_X[i]) - len(self._features_list)))
                             batch_X[i] = batch_X[i][:len(self._features_list)]

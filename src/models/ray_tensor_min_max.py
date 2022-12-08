@@ -9,7 +9,7 @@ from ray.data.extensions.tensor_extension import TensorArray
 
 class TensorMinMaxScaler(Preprocessor):
     """
-    Custom implementation of Ray's MinMax Scaler for using with tensors
+    Custom implementation of Ray's MinMax Scaler for usage with Numpy tensors column in ray.data.dataset.Dataset.
     """
     
     def __init__(self, features_list):

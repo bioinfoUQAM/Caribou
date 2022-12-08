@@ -292,7 +292,7 @@ class KerasTFModel(ModelsUtils):
             mapper = BatchMapper(map_predicted_label_multiclass, batch_format = 'pandas')
         predict = mapper.transform(predictions)
         predict = np.ravel(np.array(predict.to_pandas()))
-    
+        
         return predict
 
 # Training/building function outside of the class as mentioned on the Ray discussion

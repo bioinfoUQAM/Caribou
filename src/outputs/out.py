@@ -1,13 +1,10 @@
-import numpy as np
-import pandas as pd
-
-from Bio import SeqIO
-from copy import copy
-
 import os
-import ray
 import gzip
 
+import numpy as np
+import pandas as pd
+from copy import copy
+from Bio import SeqIO
 from subprocess import run
 
 __author__ = 'Nicolas de Montigny'
@@ -56,7 +53,15 @@ class Outputs():
         No parameters required
 
     """
-    def __init__(database_kmers, results_dir, k, classifier, dataset, host, classified_data):
+    def __init__(
+        database_kmers,
+        results_dir,
+        k,
+        classifier,
+        dataset,
+        host,
+        classified_data
+    ):
         # Third-party path
         self._krona_path = os.path.join(os.path.dirname(os.path.realpath(__file__)),'KronaTools','scripts','ImportText.pl')
         self._perl_loc = run('which perl', shell = True, capture_output = True, text = True).stdout.strip('\n')
@@ -65,7 +70,7 @@ class Outputs():
         self.dataset = dataset
         self.classified_data = classified_data
         self.taxas = database_kmers['taxas']
-        self.order = classified_data['order']
+        self.order = classified_data['sequence']
         self.data_labels = database_kmers['classes']
         # File names
         self._abund_file = '{}abundance_K{}_{}_{}.csv'.format(results_dir, k, classifier, dataset)
@@ -83,60 +88,50 @@ class Outputs():
 
     def _get_abundances(self):
         for taxa in self.order:
-            df = pd.read_parquet(self.classified_data[taxa]['profile'])
-            if taxa in ['bacteria','host','unclassified']:
-                self._abundances[taxa] = len(df)
-            else:
-                self._abundances[taxa] = {}
-                for cls in np.unique(df['classes']):
-                    if cls in self._abundances[taxa]:
-                        self._abundances[taxa][cls] += 1
-                    else:
-                        self._abundances[taxa][cls] = 1
+            df = self.classified_data[taxa]['classification'] # Should already be pd.DataFrame
+            self._abundances[taxa] = df.value_counts(subset = [taxa])
 
     def abundances(self):
         self._abundance_table()
         print('Abundance table saved to {}'.format(self._abund_file))
-        self._summary['initial'] = len(self.data_labels)
         self._summary_table()
         print('Summary table saved to {}'.format(self._summary_file))
 
+    # Bacteria abundance tables / relative abundance vs total bacteria
     def _abundance_table(self):
-        # Abundance tables / relative abundance
-        self._summary['total'] = 0
-        cols = ['Taxonomic classification','Number of reads','Relative Abundance (%)']
-        nrows = 0
-        for taxa in self._abundances:
-            if taxa not in ['bacteria','host','unclassified']:
-                nrows += 1
+        lst_taxa = list(self._abundances.keys())
+        lst_nb_reads = np.zeros(len(lst_taxa), dtype = object)
+        lst_rel_abund = np.zeros(len(lst_taxa), dtype = object)
+        
+        if 'domain' in lst_taxa:
+            lst_taxa.remove('domain')
+        if 'host' in self._abundances:
+            lst_taxa.remove('host')
+        
+        nb_total_bacteria = len(self.classified_data['bacteria'])
+        for taxa in lst_taxa:
+            lst_taxa[taxa] = [taxa]
+            lst_taxa[taxa].extend(list(self._abundances[taxa].index))
+            lst_nb_reads[lst_taxa.index(taxa)] = [self._abundances[taxa].sum()]
+            lst_nb_reads[lst_taxa.index(taxa)].extend(list(self._abundances[taxa].values))
+            
+        lst_taxa = np.ravel(lst_taxa)
+        lst_nb_reads = np.ravel(lst_nb_reads)
+        lst_rel_abund = (lst_nb_reads / nb_total_bacteria) * 100
 
-        df = pd.DataFrame(np.zeros((nrows,len(cols)), dtype = int), index = np.arange(nrows), columns = cols)
+        df = pd.DataFrame({
+            'Taxonomic classification': lst_taxa,
+            'Number of reads': lst_nb_reads,
+            'Relative Abundance (%)': lst_rel_abund
+        })
 
-        index = 0
-        total_abund = 0
-
-        for taxa in self.order:
-            if taxa in ['bacteria','host','unclassified']:
-                self._summary[taxa] = self._abundances[taxa]
-            else:
-                df.loc[index, 'Taxonomic classification'] = taxa
-                taxa_ind = copy(index)
-                taxa_abund = 0
-                index += 1
-                for k, v in self._abundances[taxa].items():
-                    df.loc[index, 'Taxonomic classification'] = k
-                    df.loc[index, 'Number of reads'] = v
-                    taxa_abund += v
-                    total_abund += v
-                    index += 1
-                df.loc[taxa_ind, 'Number of reads'] = taxa_abund
-                self._summary[taxa] = taxa_abund
-        df['Relative Abundance (%)'] = (df['Number of reads']/total_abund)*100
-        self._summary['total'] = total_abund
         df.to_csv(self._abund_file, na_rep = '', header = True, index = False)
 
+# TODO: CONTINUE HERE
+
+    # Summary file of operations / counts & proportions of reads at each steps
     def _summary_table(self):
-        # Summary file of operations / counts & proportions of reads at each steps
+        self._summary['initial'] = len(self.data_labels)
         cols = ['Value']
         rows = ['Abundance','','Number of reads before classification', 'Number of reads classified','Number of unclassified reads','Number of reads identified as bacteria']
         values = np.array([np.NaN, np.NaN, self._summary['initial'], self._summary['total'], self._summary['unclassified'], self._summary['bacteria']])
@@ -144,7 +139,7 @@ class Outputs():
             rows.append('Number of reads identified as {}'.format(self.host))
             values = np.append(values, self._summary['host'])
         for taxa in self.order:
-            if taxa not in ['bacteria','host','unclassified']:
+            if taxa not in ['domain','host']:
                 rows.append('Number of reads classified at {} level'.format(taxa))
                 values = np.append(values, self._summary[taxa])
         rows.extend(['','Relative abundances','','Percentage of reads classified', 'Percentage of reads unclassified','Percentage of reads identified as bacteria'])
@@ -153,14 +148,14 @@ class Outputs():
             rows.append('Percentage of reads identified as {}'.format(self.host))
             values = np.append(values, self._summary['host']/self._summary['initial']*100)
         for taxa in self.order:
-            if taxa not in ['bacteria','host','unclassified']:
+            if taxa not in ['domain','host']:
                 rows.append('Percentage of reads classified at {} level'.format(taxa))
                 values = np.append(values, self._summary[taxa]/self._summary['initial']*100)
         df = pd.DataFrame(values, index = rows, columns = cols)
         df.to_csv(self._summary_file, na_rep = '', header = False, index = True)
 
+    # Kronagram / interactive tree
     def kronagram(self):
-        # Kronagram / interactive tree
         self._create_krona_file()
         cmd = '{} {} {} -o {} -n {}'.format(self._perl_loc, self._krona_path, self._krona_file, self._krona_out, self.dataset)
         run(cmd, shell = True)
@@ -170,7 +165,7 @@ class Outputs():
         [cols.append(self.taxas[i]) for i in range(len(self.taxas)-1, -1, -1)]
         nrows = 0
         for taxa in self._abundances:
-            if taxa not in ['bacteria','host','unclassified']:
+            if taxa not in ['domain','host']:
                 nrows += len(self._abundances[taxa])
 
         df = pd.DataFrame(np.zeros((nrows,len(cols)), dtype = int), index = np.arange(nrows), columns = cols)
@@ -179,7 +174,7 @@ class Outputs():
 
         index = 0
         for taxa in self.order:
-            if taxa not in ['bacteria','host','unclassified']:
+            if taxa not in ['domain','host']:
                 col_taxa = df.columns.get_loc(taxa)
                 for k, v in abundances[taxa].items():
                     if k in df[taxa]:
@@ -205,7 +200,7 @@ class Outputs():
         [cols.append(self.taxas[i]) for i in range(len(self.taxas)-1, -1, -1)]
         nrows = 0
         for taxa in self.order:
-            if taxa not in ['bacteria','host','unclassified']:
+            if taxa not in ['domain','host']:
                 nrows += len(self.classified_data[taxa]['ids'])
 
         df = pd.DataFrame(np.zeros((nrows,len(cols)), dtype = int), index = np.arange(nrows), columns = cols)
@@ -214,7 +209,7 @@ class Outputs():
 
         index = 0
         for taxa in self.order:
-            if taxa not in ['bacteria','host','unclassified']:
+            if taxa not in ['domain','host']:
                 col_taxa = df.columns.get_loc(taxa)
                 for id, classification in zip(self.classified_data[taxa]['ids'], self.classified_data[taxa]['classification']):
                     df.loc[index, 'Sequence ID'] = id
@@ -238,7 +233,7 @@ class Outputs():
                 records = SeqIO.index(handle, 'fasta')
 
         list_taxa = [order[i] for i in range(len(order)-1, -1, -1)]
-        list_taxa.remove('unclassified')
+        list_taxa.remove('unknown')
         for taxa in list_taxa:
             taxa_dir = os.path.join(self._fasta_outdir,taxa)
             df = pd.read_parquet(self.classified_data[taxa]['profile'])

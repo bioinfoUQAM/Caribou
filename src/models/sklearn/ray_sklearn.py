@@ -40,7 +40,6 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 warnings.filterwarnings('ignore')
 
 class SklearnModel(ModelsUtils):
-    # https://docs.ray.io/en/master/ray-air/examples/sklearn_example.html
     """
     Class used to build, train and predict models using Ray with Scikit-learn backend
 

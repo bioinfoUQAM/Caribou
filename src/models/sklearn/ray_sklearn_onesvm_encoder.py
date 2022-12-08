@@ -7,7 +7,7 @@ from ray.data.preprocessors.encoder import _validate_df
 
 class OneClassSVMLabelEncoder(Preprocessor):
     """
-    Encode labels as integer targets for Scikit-Learn SGDOneClassSVM model.
+    Class adapted from Ray's LabelEncoder class to encode labels as integer targets for Scikit-Learn SGDOneClassSVM model.
 
     """
 
