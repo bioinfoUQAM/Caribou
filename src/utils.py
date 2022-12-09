@@ -17,7 +17,7 @@ __all__ = [
     'verify_positive_int',
     'verify_0_1',
     'verify_binary_classifier',
-    'verify_multi_classifier',
+    'verify_multiclass_classifier',
     'define_create_outdirs',
     'verify_seqfiles',
     'verify_kmers_list_length',

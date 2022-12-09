@@ -44,19 +44,19 @@ warnings.filterwarnings('ignore')
 def merge_database_host(database_data, host_data):
     merged_database_host = {}
 
-    merged_database_host['profile'] = "{}_host_merged".format(os.path.splitext(database_data["profile"])[0]) # Kmers profile
+    merged_database_host['profile'] = '{}_host_merged'.format(os.path.splitext(database_data['profile'])[0]) # Kmers profile
 
-    df_classes = pd.DataFrame(database_data["classes"], columns=database_data["taxas"])
-    df_cls_host = pd.DataFrame(host_data["classes"], columns=host_data["taxas"])
+    df_classes = pd.DataFrame(database_data['classes'], columns=database_data['taxas'])
+    df_cls_host = pd.DataFrame(host_data['classes'], columns=host_data['taxas'])
 
     if len(np.unique(df_classes['domain'])) != 1:
         df_classes[df_classes['domain'] != 'bacteria'] = 'bacteria'
     
-    if len(df_cls_host) > len(host_data["ids"]):
-        to_remove = np.arange(len(df_cls_host) - len(host_data["ids"]))
+    if len(df_cls_host) > len(host_data['ids']):
+        to_remove = np.arange(len(df_cls_host) - len(host_data['ids']))
         df_cls_host.drop(to_remove, axis = 0, inplace = True)
-    elif len(df_cls_host) < len(host_data["ids"]):
-        diff = len(host_data["ids"]) - len(df_cls_host)
+    elif len(df_cls_host) < len(host_data['ids']):
+        diff = len(host_data['ids']) - len(df_cls_host)
         row = df_cls_host.iloc[0]
         for i in range(diff):
             df_cls_host = pd.concat([df_cls_host, row.to_frame().T], ignore_index=True)
@@ -64,12 +64,12 @@ def merge_database_host(database_data, host_data):
     df_classes = pd.concat([df_classes, df_cls_host], ignore_index=True)
     merged_database_host['classes'] = np.array(df_classes)  # Class labels
     merged_database_host['ids'] = np.concatenate((database_data['ids'], host_data['ids'])) # IDs
-    merged_database_host['kmers'] = database_data["kmers"]  # Features
-    merged_database_host['taxas'] = database_data["taxas"]  # Known taxas for classification
+    merged_database_host['kmers'] = database_data['kmers']  # Features
+    merged_database_host['taxas'] = database_data['taxas']  # Known taxas for classification
     merged_database_host['fasta'] = (database_data['fasta'], host_data['fasta'])  # Fasta file needed for reads simulation
 
-    df_db = ray.data.read_parquet(database_data["profile"])
-    df_host = ray.data.read_parquet(host_data["profile"])
+    df_db = ray.data.read_parquet(database_data['profile'])
+    df_host = ray.data.read_parquet(host_data['profile'])
     df_merged = df_db.union(df_host)
     df_merged.write_parquet(merged_database_host['profile'])
     return merged_database_host
@@ -134,7 +134,7 @@ parser.add_argument('-c','--classifier', required=True, choices=['onesvm','linea
 parser.add_argument('-bs','--batch_size', required=True, help='Size of the batches to pass while training')
 parser.add_argument('-t','--taxa', required=True, help='The taxa for which the tuning should be done')
 parser.add_argument('-k','--kmers_length', required=True, help='Length of k-mers')
-parser.add_argument('-o','--outfile', required=True, type=Path, help='Path to outfile')
+parser.add_argument('-o','--outdir', required=True, type=Path, help='Path to folder for outputing tuning results')
 parser.add_argument('-wd','--workdir', default='~/ray_results', type=Path, help='Optional. Path to a working directory where Ray Tune will output and spill tuning data')
 
 args = parser.parse_args()
@@ -261,9 +261,10 @@ tuning_results = tuner.fit()
 # Tuning results
 ################################################################################
 
+outfile = os.path.join(opt['outdir'], '{}_{}_tuning.csv'.format(opt['classifier'],opt['taxa']))
 tuning_df = tuning_results.get_dataframe(filter_metric = 'validation/test_score', filter_mode = 'max')
 tuning_df.index = [opt['taxa']] * len(tuning_df)
-tuning_df.to_csv(opt['outfile'])
+tuning_df.to_csv(outfile)
 
 # delete sim files
 for file in glob(os.path.join(os.path.dirname(data['profile']),'*sim*')):
