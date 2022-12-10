@@ -14,16 +14,7 @@ The Caribou analysis pipeline is packed with executables for all dependencies th
 - [KMC](https://github.com/refresh-bio/KMC)
 - [KronaTools](https://github.com/marbl/Krona/tree/master/KronaTools)
 
-### [Optional] GPU acceleration
-It is recommended to run on a GPU-enabled machine to accelerate training of models but it is not necessary.
-If using a container, these dependencies are already installed. Otherwise they should be installed prior to analysis accelerated by GPU.
-
-To install GPU dependencies on your machine if wanted, refer to following tutorials for installation :
-- [CUDA](https://developer.nvidia.com/cuda-downloads)
-- [cudnn](https://docs.nvidia.com/deeplearning/cudnn/install-guide/index.html)
-- [GPU for tensorflow](https://www.tensorflow.org/install/gpu)
-
-### [Optional] Containers
+### [Recommanded] Containers
 Containers with the Caribou package and all dependencies already installed can be found in the folder `Caribou/containers`.
 It is recommended to execute the Caribou pipeline inside a container to ease usage and reproductibility.
 
@@ -60,17 +51,26 @@ It is often already installed on HPC clusters, but should the user need to insta
 
 The Singularity / apptainer container is a [Tensorflow container optimised for HPC by NVIDIA](https://catalog.ngc.nvidia.com/orgs/nvidia/containers/tensorflow) with dependencies and Caribou installed in a python virtual environment.
 
-
 As with docker, the environment can be used in two ways :
 - Shell : Use the environment in a shell interface and run commands as described later in this document.
+
 ```
 singularity shell --nv -B a/folder/containing/data/to/bind/in/the/environment path/to/Caribou/containers/Caribou_singularity.sif
 ```
 - Process : Execute instructions scripts when using the container for production on a compute cluster managed by schedulers (ex: Slurm, Torque, PBS, etc.). Instructions for usage of the exec command are provided in the [documentation.](https://apptainer.org/docs/user/main/cli/apptainer_exec.html) and applied example on Compute Canada clusters using Slurm Workload Manager can be found on their [wiki.](https://docs.computecanada.ca/wiki/Singularity#Running_a_single_command). Usage may differ slightly depending on the HPC clusters and Workload Managers used.
 
+### [Optional] GPU acceleration
+Usage of machine learning models can be accelerated by using a GPU but it is not necessary.
+If using a container, these dependencies are already installed. Otherwise they should be installed prior to analysis accelerated by GPU.
+
+To install GPU dependencies on your machine, refer to following tutorials for installation :
+- [CUDA](https://developer.nvidia.com/cuda-downloads)
+- [cudnn](https://docs.nvidia.com/deeplearning/cudnn/install-guide/index.html)
+- [GPU for tensorflow](https://www.tensorflow.org/install/gpu)
+
 ### [Optional] Python virtual environment
 If not using a container, it is recommended to use the analysis pipeline in a virtual environment to be sure that no other installed package can interfere. \
-Here is an example of Linux command shell to install Caribou in a new virtual environment by modifying the paths:
+Here is an example of Unix-like command shell to install Caribou in a new virtual environment by modifying the paths:
 
 ```
 python3 -m venv /path/to/your/environment/folder
@@ -103,12 +103,12 @@ The modified template can be submitted to an HPC cluster managed by Slurm (ex: C
 sbatch Caribou/data/build_data_scripts/template_slurm_datagen.sh
 ```
 
-The modified template can also be ran in a Linux command shell by running the following command :
+The modified template can also be ran in a Unix-like command shell by running the following command :
 ```
 sh Caribou/data/build_data_scripts/template_slurm_datagen.sh
 ```
 
-Finally each script used by the template can be used alone in Linux command shell by running the following commands :
+Finally each script used by the template can be used alone in Unix-like command shell by running the following commands :
 ```
 # Generate a list of all fastas to be merged
 sh Caribou/data/build_data_scripts/generateFastaList.sh -d [directory] -o [outputFile]
@@ -144,25 +144,25 @@ There are also partial steps scripts that can be used should the user want to.
 > Usage : Caribou_pipeline.py [-c CONFIG_FILE]
 
 * Caribou_kmers.py
-> This script extracts K-mers of the given dataset using the available ressources on the computer before saving it to drive.
+> This script extracts K-mers of the given dataset using the available ressources on the computer before saving it to drive. \
 > usage: Caribou_kmers.py [-h] [-s SEQ_FILE] [-c CLS_FILE] [-dt DATASET_NAME] [-sh SEQ_FILE_HOST] [-ch CLS_FILE_HOST] [-dh HOST_NAME] -k K_LENGTH [-l KMERS_LIST] -o OUTDIR
 
 * Caribou_extraction.py
-> This script trains a model and extracts bacteria / host sequences.
+> This script trains a model and extracts bacteria / host sequences. \
 > usage: Caribou_extraction.py [-h] -db DATA_BACTERIA [-dh DATA_HOST] -mg DATA_METAGENOME -dt DATABASE_NAME [-ds HOST_NAME] -mn METAGENOME_NAME [-model {None,onesvm,linearsvm,attention,lstm,deeplstm}] [-bs BATCH_SIZE] [-e TRAINING_EPOCHS] [-v] -o OUTDIR [-wd WORKDIR]
 
 * Caribou_classification.py
-> This script trains a model and classifies bacteria sequences iteratively over known taxonomic levels
+> This script trains a model and classifies bacteria sequences iteratively over known taxonomic levels. \
 > usage: Caribou_classification.py [-h] -db DATA_BACTERIA -mg DATA_METAGENOME -dt DATABASE_NAME -mn METAGENOME_NAME [-model {sgd,mnb,lstm_attention,cnn,widecnn}] [-t TAXA] [-bs BATCH_SIZE] [-e TRAINING_EPOCHS] [-v] -o OUTDIR [-wd WORKDIR]
 
 * Caribou_outputs.py
-> This script produces outputs from the results of classified data by Caribou.
+> This script produces outputs from the results of classified data by Caribou. \
 > usage: Caribou_outputs.py [-h] -db DATA_BACTERIA -clf CLASSIFIED_DATA -model {sgd,mnb,lstm_attention,cnn,widecnn} -dt DATASET_NAME [-ds HOST_NAME] [-a] [-k] [-r] [-f]
 
 * Caribou_extraction_train_cv.py
-> This script trains and cross-validates a model for the bacteria extraction / host removal step.
+> This script trains and cross-validates a model for the bacteria extraction / host removal step. \
 > usage: Caribou_extraction_train_cv.py [-h] -db DATA_BACTERIA [-dh DATA_HOST] -dt DATABASE_NAME [-ds HOST_NAME] [-model {None,onesvm,linearsvm,attention,lstm,deeplstm}] [-bs BATCH_SIZE] [-e TRAINING_EPOCHS] [-v] -o OUTDIR [-wd WORKDIR]
 
 * Caribou_classification_train_cv.py
-> This script trains and cross-validates a model for the bacteria classification step.
+> This script trains and cross-validates a model for the bacteria classification step. \
 > usage: Caribou_classification_train_cv.py [-h] -db DATA_BACTERIA -dt DATABASE_NAME [-model {sgd,mnb,lstm_attention,cnn,widecnn}] [-bs BATCH_SIZE] [-e TRAINING_EPOCHS] [-v] -o OUTDIR [-wd WORKDIR]
