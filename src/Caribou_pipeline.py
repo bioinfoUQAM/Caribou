@@ -1,7 +1,6 @@
 #!/usr/bin python3
 
 import ray
-import logging
 import argparse
 import configparser
 
@@ -14,10 +13,6 @@ from models.classification import ClassificationMethods
 __author__ = 'Nicolas de Montigny'
 
 __all__ = ['caribou']
-
-# Suppress Tensorflow warnings
-################################################################################
-logging.set_verbosity(logging.ERROR)
 
 # Part 0 - Initialisation / extraction of parameters from config file
 ################################################################################

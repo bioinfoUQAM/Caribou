@@ -237,21 +237,24 @@ class SklearnModel(ModelsUtils):
 
     def predict(self, df, threshold = 0.8, cv = False):
         print('predict')
-        df = self._preprocessor.transform(df)
-        if self.classifier == 'onesvm':
-            self._predictor = BatchPredictor.from_checkpoint(self._model_ckpt, SklearnPredictor)
-            predictions = self._predictor.predict(df, batch_size = self.batch_size)
-            predictions = np.array(predictions.to_pandas()).reshape(-1)
-        else:
-            self._predictor = BatchPredictor.from_checkpoint(self._model_ckpt, SklearnProbaPredictor)
-            predictions = self._predictor.predict(df, batch_size = self.batch_size)
-            predictions = self._prob_2_cls(predictions, len(self._encoded), threshold)
-        
-        if cv:
-            return predictions
-        else:
-            return self._label_decode(predictions)    
+        if df.count() > 0:
+            df = self._preprocessor.transform(df)
+            if self.classifier == 'onesvm':
+                self._predictor = BatchPredictor.from_checkpoint(self._model_ckpt, SklearnPredictor)
+                predictions = self._predictor.predict(df, batch_size = self.batch_size)
+                predictions = np.array(predictions.to_pandas()).reshape(-1)
+            else:
+                self._predictor = BatchPredictor.from_checkpoint(self._model_ckpt, SklearnProbaPredictor)
+                predictions = self._predictor.predict(df, batch_size = self.batch_size)
+                predictions = self._prob_2_cls(predictions, len(self._encoded), threshold)
             
+            if cv:
+                return predictions
+            else:
+                return self._label_decode(predictions)    
+        else:
+            raise ValueError('No data to predict')
+
     def _prob_2_cls(self, predict, nb_cls, threshold):
         print('_prob_2_cls')
         def map_predicted_label(df : pd.DataFrame):

@@ -5,7 +5,6 @@ import ray
 import json
 import logging
 import argparse
-import warnings
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -33,9 +32,6 @@ from ray.tune import Tuner, TuneConfig
 from ray.tune.schedulers import ASHAScheduler
 from ray.air.config import RunConfig, ScalingConfig
 from ray.tune.search.basic_variant import BasicVariantGenerator
-
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-warnings.filterwarnings('ignore')
 
 # Functions
 ################################################################################
@@ -135,7 +131,7 @@ parser.add_argument('-bs','--batch_size', required=True, help='Size of the batch
 parser.add_argument('-t','--taxa', required=True, help='The taxa for which the tuning should be done')
 parser.add_argument('-k','--kmers_length', required=True, help='Length of k-mers')
 parser.add_argument('-o','--outdir', required=True, type=Path, help='Path to folder for outputing tuning results')
-parser.add_argument('-wd','--workdir', default='~/ray_results', type=Path, help='Optional. Path to a working directory where Ray Tune will output and spill tuning data')
+parser.add_argument('-wd','--workdir', default=None, type=Path, help='Optional. Path to a working directory where Ray Tune will output and spill tuning data')
 
 args = parser.parse_args()
 
@@ -233,7 +229,7 @@ trainer = SklearnPartialTrainer(
     set_estimator_cpus = True,
     scaling_config = ScalingConfig(
         trainer_resources = {
-            'CPU' : 5
+            'CPU' : 4
         }
     )
 )
@@ -247,7 +243,7 @@ tuner = Tuner(
         metric = 'validation/test_score',
         mode = 'max',
         search_alg=BasicVariantGenerator(
-            max_concurrent = 3
+            max_concurrent = int(os.cpu_count()/4)
         ),
         scheduler = ASHAScheduler()
     ),

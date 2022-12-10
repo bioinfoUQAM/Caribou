@@ -134,6 +134,7 @@ def verify_kmers_list_length(klen: int, kmers_file: list):
         return klen, kmers_list
     else:
         verify_positive_int(klen, 'K-mers length')
+        return klen, None
 
 def verify_load_data(data_file: str):
     verify_file(data_file)

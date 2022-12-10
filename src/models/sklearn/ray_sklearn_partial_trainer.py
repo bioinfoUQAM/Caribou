@@ -204,7 +204,7 @@ class SklearnPartialTrainer(SklearnTrainer):
             ):  
                 try:
                     batch_X = pd.DataFrame(batch_X, columns = self._features_list)
-                except:
+                except ValueError:
                     for i in range(len(batch_X)):
                         if len(batch_X[i]) != len(self._features_list):
                             warn("The features list length for some reads are not the same as for other reads.\

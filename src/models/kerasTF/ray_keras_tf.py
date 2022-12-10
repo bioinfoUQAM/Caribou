@@ -245,25 +245,28 @@ class KerasTFModel(ModelsUtils):
 
     def predict(self, df, threshold = 0.8, cv = False):
         print('predict')
-        df = self._preprocessor.transform(df)
-        # Define predictor
-        self._predictor = BatchPredictor.from_checkpoint(
-            self._model_ckpt,
-            TensorflowPredictor,
-            model_definition = lambda : build_model(self.classifier, self._nb_classes, len(self.kmers))
-        )
-        # Make predictions
-        predictions = self._predictor.predict(
-            df,
-            feature_columns = ['__value__'],
-            batch_size = self.batch_size
-        )
-        predictions = self._prob_2_cls(predictions, threshold)
+        if df.count() > 0:
+            df = self._preprocessor.transform(df)
+            # Define predictor
+            self._predictor = BatchPredictor.from_checkpoint(
+                self._model_ckpt,
+                TensorflowPredictor,
+                model_definition = lambda : build_model(self.classifier, self._nb_classes, len(self.kmers))
+            )
+            # Make predictions
+            predictions = self._predictor.predict(
+                df,
+                feature_columns = ['__value__'],
+                batch_size = self.batch_size
+            )
+            predictions = self._prob_2_cls(predictions, threshold)
 
-        if cv:
-            return predictions
+            if cv:
+                return predictions
+            else:
+                return self._label_decode(predictions)
         else:
-            return self._label_decode(predictions)
+            raise ValueError('No data to predict')
 
     def _prob_2_cls(self, predictions, threshold):
         print('_prob_2_cls')

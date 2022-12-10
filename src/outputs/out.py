@@ -81,7 +81,6 @@ class Outputs():
         self._fasta_outdir = '{}fasta_by_taxa_k{}_{}_{}'.format(results_dir, k, classifier, dataset)
         # Initialize empty
         self._abundances = {}
-        self._summary = {}
         # Get abundances used for other outputs
         self._get_abundances()
 
@@ -89,7 +88,10 @@ class Outputs():
     def _get_abundances(self):
         for taxa in self.order:
             df = self.classified_data[taxa]['classification'] # Should already be pd.DataFrame
-            self._abundances[taxa] = df.value_counts(subset = [taxa])
+            self._abundances[taxa] = {
+                'abundance': df.value_counts(subset = [taxa]),
+                'total': df.value_counts(subset = [taxa]).sum()
+            }
 
     def abundances(self):
         self._abundance_table()
@@ -108,12 +110,12 @@ class Outputs():
         if 'host' in self._abundances:
             lst_taxa.remove('host')
         
-        nb_total_bacteria = len(self.classified_data['bacteria'])
+        nb_total_bacteria = len(self.classified_data['domain']['classified_ids'])
         for taxa in lst_taxa:
             lst_taxa[taxa] = [taxa]
-            lst_taxa[taxa].extend(list(self._abundances[taxa].index))
-            lst_nb_reads[lst_taxa.index(taxa)] = [self._abundances[taxa].sum()]
-            lst_nb_reads[lst_taxa.index(taxa)].extend(list(self._abundances[taxa].values))
+            lst_taxa[taxa].extend(list(self._abundances[taxa]['abundance'].index))
+            lst_nb_reads[lst_taxa.index(taxa)] = [self._abundances[taxa]['total']]
+            lst_nb_reads[lst_taxa.index(taxa)].extend(list(self._abundances[taxa]['abundance'].values))
             
         lst_taxa = np.ravel(lst_taxa)
         lst_nb_reads = np.ravel(lst_nb_reads)
@@ -127,32 +129,56 @@ class Outputs():
 
         df.to_csv(self._abund_file, na_rep = '', header = True, index = False)
 
-# TODO: CONTINUE HERE
-
     # Summary file of operations / counts & proportions of reads at each steps
     def _summary_table(self):
-        self._summary['initial'] = len(self.data_labels)
-        cols = ['Value']
-        rows = ['Abundance','','Number of reads before classification', 'Number of reads classified','Number of unclassified reads','Number of reads identified as bacteria']
-        values = np.array([np.NaN, np.NaN, self._summary['initial'], self._summary['total'], self._summary['unclassified'], self._summary['bacteria']])
+        # Raw abundances
+        reads_total = (len(self.classified_data['domain']['classified_ids']) + len(self.classified_data['domain']['unknown_ids']))
+        reads_bacteria = len(self.classified_data['domain']['classified_ids'])
         if self.host is not None:
-            rows.append('Number of reads identified as {}'.format(self.host))
-            values = np.append(values, self._summary['host'])
+            reads_host = len(self.classified_data['domain']['host_ids'])
+            reads_classified = (reads_bacteria + reads_host)
+        else:
+            reads_classified = reads_bacteria
+        reads_unknown = len(self.classified_data['domain']['unknown_ids'])
+        rows = [
+            'Total number of reads',
+            'Total number of classified reads',
+            'Total Number of unknown reads'
+        ]
+        values_raw = [
+            reads_total,
+            reads_classified,
+            reads_unknown
+        ]
+        # Relative abundances
+        values_rel = [
+            np.NaN,
+            ((reads_classified/reads_total)*100),
+            ((reads_unknown/reads_total)*100)
+        ]
         for taxa in self.order:
-            if taxa not in ['domain','host']:
-                rows.append('Number of reads classified at {} level'.format(taxa))
-                values = np.append(values, self._summary[taxa])
-        rows.extend(['','Relative abundances','','Percentage of reads classified', 'Percentage of reads unclassified','Percentage of reads identified as bacteria'])
-        values = np.append(values, [np.NaN,np.NaN,np.NaN,(self._summary['total']/self._summary['initial']*100),(self._summary['unclassified']/self._summary['initial']*100),(self._summary['bacteria']/self._summary['initial']*100)])
-        if self.host is not None:
-            rows.append('Percentage of reads identified as {}'.format(self.host))
-            values = np.append(values, self._summary['host']/self._summary['initial']*100)
-        for taxa in self.order:
-            if taxa not in ['domain','host']:
-                rows.append('Percentage of reads classified at {} level'.format(taxa))
-                values = np.append(values, self._summary[taxa]/self._summary['initial']*100)
-        df = pd.DataFrame(values, index = rows, columns = cols)
-        df.to_csv(self._summary_file, na_rep = '', header = False, index = True)
+            if taxa == 'domain':
+                rows.append('bacteria')
+                values_raw.append(reads_bacteria)
+                values_rel.append((reads_bacteria/reads_total)*100)
+                if self.host is not None:
+                    rows.append(self.host)
+                    values_raw.append(reads_host)
+                    values_rel.append((reads_host/reads_total)*100)
+            else:
+                rows.append(taxa)
+                values_raw.append(self._abundances[taxa]['total'])
+                values_rel.append((self._abundances[taxa]['total']/reads_total)*100)
+
+        df = pd.DataFrame({
+            'Taxa' : rows,
+            'Abundance': values_raw,
+            'Relative abundance (%)': values_rel
+        })
+
+        df.to_csv(self._summary_file, na_rep = '', header = True)
+
+# TODO :FInish outputs but need to visualise results from classif before continuing
 
     # Kronagram / interactive tree
     def kronagram(self):
@@ -192,6 +218,17 @@ class Outputs():
                                 df.iloc[index,col] = np.flip(unique_rows[np.where(unique_rows == k)[0]])[0][col-1]
                         index += 1
         df = df.fillna(0)
+
+        dct_df = {'Abundance': []}
+        taxas = self.order.copy()
+        if 'domain' in taxas:
+            dct_df['domain'] = []
+            taxas.remove('domain')
+        for taxa in taxas:
+            
+
+
+        df = pd.DataFrame(dct_df)
         df.to_csv(self._krona_file, na_rep = '', header = False, index = False)
 
     def report(self):

@@ -4,12 +4,10 @@ import numpy as np
 import pandas as pd
 
 import os
-import sys
 import gzip
-import tarfile
-import argparse
 
 from Bio import SeqIO
+from warnings import warn
 from data.build_data import build_load_save_data
 
 __author__ = "Nicolas de Montigny"
@@ -48,6 +46,7 @@ class readsSimulation():
     Methods
     ----------
         simulation : initiate simulation and k-mers extraction for the simulated reads
+            Optional parameters, they must be specified together or not at all
             k : integer
                 Length of the k-mers to extract, must be concordant with the database used for classification
             kmers_list : list of strings
@@ -55,7 +54,15 @@ class readsSimulation():
 
     """
 
-    def __init__(self, fasta, cls, genomes, sequencing, outdir, name):
+    def __init__(
+        self,
+        fasta,
+        cls,
+        genomes,
+        sequencing,
+        outdir,
+        name
+    ):
         # Parameters
         if isinstance(fasta, tuple):
             self._fasta_in = fasta[0]
@@ -79,16 +86,17 @@ class readsSimulation():
         # Dataset variables
         self.kmers_data = {}
 
-    def simulation(self, k, kmers_list):
+    def simulation(self, k = None, kmers_list = None):
+        k, kmers_list = self._verify_sim_arguments(k, kmers_list)
         self._make_tmp_fasta()
         cmd = "iss generate -g {} -n {} --abundance halfnormal --model {} --output {} --compress --cpus {}".format(self._fasta_tmp,self._nb_reads,self._sequencing,self._prefix,os.cpu_count())
         os.system(cmd)
         self._fastq2fasta()
         self._write_cls_file()
-        self._kmers_dataset(k, kmers_list)
-        return self.kmers_data
-
-
+        if k is not None and kmers_list is not None:
+            self._kmers_dataset(k, kmers_list)
+            return self.kmers_data
+            
     def _make_tmp_fasta(self):
         for file in [self._fasta_in, self._fasta_host]:
             if file is not None:
@@ -134,7 +142,16 @@ class readsSimulation():
             (self._fasta_out,self._cls_out),
             self._path,
             None,
-            'cv_simulation_{}'.format(self._name),
+            'simulation_{}'.format(self._name),
             kmers_list = kmers_list,
             k = k
         )
+
+    def _verify_sim_arguments(self, k, kmers_list):
+        if k is None and kmers_list is not None:
+            warn("K-mers list provided but k is None, k will be set to length of k-mers in the list")
+            k = len(kmers_list[0])
+        elif k is not None and kmers_list is None:
+            warn("K is provided but k-mers list is None, k-mers list will be generated")
+            raise ValueError("k value was provided but not k-mers list, please provide a k-mers list or no k value")
+        return k, kmers_list

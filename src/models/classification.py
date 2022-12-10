@@ -5,6 +5,8 @@ import cloudpickle
 import numpy as np
 import pandas as pd
 
+from glob import glob
+from shutil import rmtree
 from utils import load_Xy_data
 from models.sklearn.ray_sklearn import SklearnModel
 from models.kerasTF.ray_keras_tf import KerasTFModel
@@ -98,6 +100,7 @@ class ClassificationMethods():
 
     # Execute training of model(s)
     def execute_training(self):
+        print('execute_training')
         for taxa in self._taxas:
             if taxa in ['domain','bacteria','host']:
                 clf = self._classifier_binary
@@ -125,12 +128,20 @@ class ClassificationMethods():
 
     # Train model according to passed taxa
     def _train_model(self, taxa):
+        print('_train_model')
         if taxa in ['domain','bacteria','host']:
             self._binary_training(taxa)
         else:
             self._multiclass_training(taxa)
+        if isinstance(self.models[taxa], KerasTFModel):
+            for file in glob(os.path.join(self._outdirs['data_dir'], '*sim*')):
+                if os.path.isdir(file):
+                    rmtree(file)
+                else:
+                    os.remove(file)
 
     def _binary_training(self, taxa):
+        print('_binary_training')
         self._verify_classifier_binary()
         if self._classifier_binary == 'onesvm':
             self.models[taxa] = SklearnModel(
@@ -186,9 +197,11 @@ class ClassificationMethods():
         else:
             self.models[taxa].train(self.X_train, self._y_train, self._merged_database_host, self._cv)
         self._save_model(self._model_file, taxa)
+        
             
 
     def _multiclass_training(self, taxa):
+        print('_multiclass_training')
         self._verify_classifier_multiclass()
         if self._classifier_multiclass in ['sgd','mnb']:
             self.models[taxa] = SklearnModel(
@@ -227,86 +240,106 @@ class ClassificationMethods():
         
     # Execute classification using trained model(s)
     def execute_classification(self, data2classify):
+        print('execute_classification')
         df_file = data2classify['profile']
         df = ray.data.read_parquet(df_file)
         ids = data2classify['ids']
         for i, taxa in enumerate(self.classified_data['sequence']):
-            if i == 0:
-                df = self._classify_first(df, taxa, ids, df_file)
-            else:
-                df = self._classify_subsequent(df, taxa, ids, df_file)
+            try:
+                if i == 0:
+                    df = self._classify_first(df, taxa, ids, df_file)
+                else:
+                    df = self._classify_subsequent(df, taxa, ids, df_file)
+            except ValueError:
+                print('Stopping classification prematurelly because there are no more sequences to classify')
+                return taxa
+        return None
+                
 
     # Classify sequences for first iteration
     def _classify_first(self, df, taxa, ids, df_file):
-        pred_df = self._predict_sequences(df, taxa, ids)
-        
-        self._classified_ids = list(pred_df['id'].values)
-        self._not_classified_ids = list(np.setdiff1d(ids, self._classified_ids, assume_unique=True))
-
-        if taxa == 'domain':
-            if self._host == True:
-                pred_df = pred_df[pred_df['domain'] == 'host']
-                pred_df_host = pred_df[pred_df['domain'] != 'host']
-                self.classified_data['host']['classification'] = pred_df_host
+        print('_classify_first')
+        try:
+            pred_df = self._predict_sequences(df, taxa, ids)
             
-            classified, classified_file = self._extract_subset(df, df_file, self._classified_ids, taxa, 'bacteria')
-            self.classified_data[taxa]['bacteria'] = classified_file
-            self.classified_data[taxa]['bacteria_ids'] = self._classified_ids.copy()
-            not_classified, not_classified_file = self._extract_subset(df, df_file, self._not_classified_ids, taxa, 'unknown')
-            self.classified_data[taxa]['unknown'] = not_classified_file
-            self.classified_data[taxa]['unknown_ids'] = self._not_classified_ids.copy()
-            return classified
-        else:
+            self._classified_ids = list(pred_df['id'].values)
+            self._not_classified_ids = list(np.setdiff1d(ids, self._classified_ids, assume_unique=True))
+
+            if taxa == 'domain':
+                if self._host == True:
+                    pred_df = pred_df[pred_df['domain'] == 'host']
+                    pred_df_host = pred_df[pred_df['domain'] != 'host']
+                    self.classified_data['host'] = {
+                        'classification' : pred_df_host,
+                        'classified_ids': list(pred_df_host['id'].values)
+                    }
+                
+                classified, classified_file = self._extract_subset(df, df_file, self._classified_ids, taxa, 'bacteria')
+                self.classified_data[taxa]['bacteria'] = classified_file
+                self.classified_data[taxa]['bacteria_ids'] = self._classified_ids.copy()
+                not_classified, not_classified_file = self._extract_subset(df, df_file, self._not_classified_ids, taxa, 'unknown')
+                self.classified_data[taxa]['unknown'] = not_classified_file
+                self.classified_data[taxa]['unknown_ids'] = self._not_classified_ids.copy()
+                return classified
+            else:
+                self.classified_data[taxa]['classification'] = pred_df
+                self.classified_data[taxa]['classified_ids'] = list(pred_df['id'].values)
+                not_classified, not_classified_file = self._extract_subset(df, df_file, self._not_classified_ids, taxa, 'unknown')
+                self.classified_data[taxa]['unknown'] = not_classified_file
+                self.classified_data[taxa]['unknown_ids'] = self._not_classified_ids.copy()
+                return not_classified
+        except:
+            raise ValueError('No sequences to classify for {}.'.format(taxa))
+
+    # Classify sequences according to passed taxa and model
+    def _classify_subsequent(self, df, taxa, ids, df_file):
+        print('_classify_subsequent')
+        try:
+            pred_df = self._predict_sequences(df, taxa, ids)
+
+            self._classified_ids = self._classified_ids.extend(list(pred_df['id'].values))
+            self._not_classified_ids = [id for id in ids if id not in self._classified_ids]
+
             self.classified_data[taxa]['classification'] = pred_df
             self.classified_data[taxa]['classified_ids'] = list(pred_df['id'].values)
             not_classified, not_classified_file = self._extract_subset(df, df_file, self._not_classified_ids, taxa, 'unknown')
             self.classified_data[taxa]['unknown'] = not_classified_file
             self.classified_data[taxa]['unknown_ids'] = self._not_classified_ids.copy()
+
             return not_classified
-
-
-
-    # Classify sequences according to passed taxa and model
-    def _classify_subsequent(self, df, taxa, ids, df_file):
-        pred_df = self._predict_sequences(df, taxa, ids)
-
-        self._classified_ids = self._classified_ids.extend(list(pred_df['id'].values))
-        self._not_classified_ids = [id for id in ids if id not in self._classified_ids]
-
-        self.classified_data[taxa]['classification'] = pred_df
-        self.classified_data[taxa]['classified_ids'] = list(pred_df['id'].values)
-        not_classified, not_classified_file = self._extract_subset(df, df_file, self._not_classified_ids, taxa, 'unknown')
-        self.classified_data[taxa]['unknown'] = not_classified_file
-        self.classified_data[taxa]['unknown_ids'] = self._not_classified_ids.copy()
-
-        return not_classified
+        except:
+            raise ValueError('No sequences to classify for {}.'.format(taxa))
 
     # Make predictions
     def _predict_sequences(self, df, taxa, ids):
-        predictions = self.models[taxa].predict(df, self._threshold)
-        pred_df = pd.DataFrame({'id': ids, taxa: predictions.values})
+        print('_predict_sequences')
+        try:
+            predictions = self.models[taxa].predict(df, self._threshold)
+            pred_df = pd.DataFrame({'id': ids, taxa: predictions.values})
 
-        taxa_pos = self.classified_data['sequence'].index(taxa)
-        lst_taxa = self.classified_data['sequence'][taxa_pos:]
-        db_df = pd.DataFrame(
-            self._database_data['classes'],
-            columns=self._database_data['taxas']
-        )[[lst_taxa]]
-        pred_df = pred_df.merge(db_df, on=taxa, how='left')
-        
-        return pred_df
+            taxa_pos = self.classified_data['sequence'].index(taxa)
+            lst_taxa = self.classified_data['sequence'][taxa_pos:]
+            db_df = pd.DataFrame(
+                self._database_data['classes'],
+                columns=self._database_data['taxas']
+            )[lst_taxa]
+            pred_df = pred_df.merge(db_df, on=taxa, how='left')
+            
+            return pred_df
+        except ValueError:
+            raise ValueError('No sequences to classify for {}.'.format(taxa))
 
     # Extract subset of classified or not classified sequences
     def _extract_subset(self, df, df_file, ids, taxa, status):
+        print('_extract_subset')
         clf_file = df_file + '_{}_{}'.format(taxa, status)
         rows_clf = []
-        df = ray.data.read_parquet(df)
         for row in df.iter_rows():
             if row['id'] in ids:
                 rows_clf.append(row)
-
         df_clf = ray.data.from_items(rows_clf)
-        df_clf.write_parquet(clf_file)
+        if df_clf.count() > 0:
+            df_clf.write_parquet(clf_file)
         return df_clf, clf_file
 
     # Utils functions
@@ -314,6 +347,7 @@ class ClassificationMethods():
     
      # Merge database and host reference data for bacteria extraction training
     def _merge_database_host(self, database_data, host_data):
+        print('_merge_database_host')
         self._merged_database_host = {}
 
         self._merged_database_host['profile'] = "{}_host_merged".format(os.path.splitext(database_data["profile"])[0]) # Kmers profile
@@ -335,6 +369,7 @@ class ClassificationMethods():
 
     # Verify taxas and assign to class variable
     def _verify_assign_taxas(self, taxa):
+        print('_verify_assign_taxas')
         if taxa is None:
             self._taxas = self._database_data['taxas'].copy()
         elif isinstance(taxa, list):
@@ -347,17 +382,20 @@ class ClassificationMethods():
 
     # Verify if selected taxas are in database
     def _verify_taxas(self):
+        print('_verify_taxas')
         for taxa in self._taxas:
             if taxa not in self._database_data['taxas']:
                 raise ValueError("Taxa {} not found in database".format(taxa))
 
     # Caller function for verifying if the data and model already exist
     def _verify_load_data_model(self, data_file, model_file, taxa):
+        print('_verify_load_data_model')
         self._verify_files(data_file, taxa)
         return self._verify_load_model(model_file, taxa)
         
     # Load extracted data if already exists
     def _verify_files(self, file, taxa):
+        print('_verify_files')
         self.classified_data['sequence'].append(taxa)
         if os.path.isfile(file):
             self.classified_data[taxa] = load_Xy_data(file)
@@ -366,6 +404,7 @@ class ClassificationMethods():
 
     # Load model if already exists
     def _verify_load_model(self, model_file, taxa):
+        print('_verify_load_model')
         if os.path.exists(model_file):
             with open(model_file, 'rb') as f:
                 self.models[taxa] = cloudpickle.load(f)
@@ -374,10 +413,12 @@ class ClassificationMethods():
             return True
 
     def _save_model(self, model_file, taxa):
+        print('_save_model')
         with open(model_file, 'wb') as f:
             cloudpickle.dump(self.models[taxa], f)
 
     def _verify_classifier_binary(self):
+        print('_verify_classifier_binary')
         if self._classifier_binary == 'onesvm' and self._host == True:
             raise ValueError('Classifier One-Class SVM cannot be used with host data!\nEither remove host data from config file or choose another bacteria extraction method')
         elif self._classifier_binary == 'onesvm' and self._host == False:
@@ -390,6 +431,7 @@ class ClassificationMethods():
             raise ValueError('Invalid classifier option for bacteria extraction!\n\tModels implemented at this moment are :\n\tBacteria isolator :  One Class SVM (onesvm)\n\tClassic algorithm : Linear SVM (linearsvm)\n\tNeural networks : Attention (attention), Shallow LSTM (lstm) and Deep LSTM (deeplstm)')
 
     def _verify_classifier_multiclass(self):
+        print('_verify_classifier_multiclass')
         if self._classifier_multiclass in ['sgd','mnb','lstm_attention','cnn','widecnn']:
             pass
         else:

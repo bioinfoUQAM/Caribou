@@ -1,7 +1,5 @@
 #!/usr/bin python3
 
-import ray
-import logging
 import argparse
 
 from utils import *
@@ -12,10 +10,6 @@ from os.path import dirname
 __author__ = 'Nicolas de Montigny'
 
 __all__ = ['caribou']
-
-# Suppress Tensorflow warnings
-################################################################################
-logging.set_verbosity(logging.ERROR)
 
 # Initialisation / validation of parameters from CLI
 ################################################################################
@@ -62,7 +56,8 @@ if __name__ == "__main__":
     parser.add_argument('-r','--report', action='store_true', help='Should the full report be generated?')
     parser.add_argument('-f', '--fasta', action='store_true', help='Should the fasta file per classified taxa be generated?')
     # parser.add_argument('-b', '--biom', action='store_true', help='Should the biom file be generated?')
+    args = parser.parse_args()
 
     opt = vars(args)
 
-    out_to_user(opt)
+    out_2_user(opt)

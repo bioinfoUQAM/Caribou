@@ -1,7 +1,7 @@
 #!/usr/bin python3
 
 import ray
-import logging
+import os.path
 import argparse
 
 from utils import *
@@ -11,10 +11,6 @@ from models.classification import ClassificationMethods
 __author__ = "Nicolas de Montigny"
 
 __all__ = ['bacteria_extraction_train_cv']
-
-# Suppress Tensorflow warnings
-################################################################################
-logging.set_verbosity(logging.ERROR)
 
 # Initialisation / validation of parameters from CLI
 ################################################################################
@@ -75,27 +71,32 @@ def bacteria_extraction(opt):
 
 # Execution of bacteria extraction / host removal on metagenome + save results
 ################################################################################
-    clf.execute_classification(data_metagenome)
-    
-    clf_data['profile'] = clf.classified_data['domain']['bacteria']
-    clf_data['kmers'] = data_metagenome['kmers']
-    clf_data['ids'] = clf.classified_data['domain']['bacteria_ids']
-    clf_data['classification'] = clf.classified_data['classification']
-    clf_data['classified_ids'] = clf.classified_data['classified_ids']
-    clf_data['unknown_profile'] = clf.classified_data['unknown']
-    clf_data['unknown_ids'] = clf.classified_data['unknown_ids']
-    
-
-    clf_file = clf_data['profile'] + '.npz'
-
-    save_Xy_data(clf_data, clf_file)
-
-    print("Caribou finished training the {} model and extracting bacteria with it".format(opt['model_type']))
+    def populate_save_data(clf):
+        clf_data = {
+            'sequence': clf.classified_data['sequence'].copy(),
+            'profile' : clf.classified_data['domain']['bacteria'],
+            'kmers' : data_metagenome['kmers'],
+            'ids' : clf.classified_data['domain']['bacteria_ids'],
+            'unknown_profile' : clf.classified_data['domain']['unknown'],
+            'unknown_ids' : clf.classified_data['domain']['unknown_ids'],
+        }
+        if 'host' in clf.classified_data.keys():
+            clf_data['host_profile'] = clf.classified_data['host']['classification']
+            clf_data['host_ids'] = clf.classified_data['host']['classified_ids']
+        clf_file = os.path.join(outdirs['results_dir'], opt['metagenome_name'] + '_extracted.npz')
+        save_Xy_data(clf_data, clf_file)
+        
+    end_taxa = clf.execute_classification(data_metagenome)
+    if end_taxa is None:
+        populate_save_data(clf)
+        print("Caribou finished training the {} model and extracting bacteria with it".format(opt['model_type']))
+    else:
+        print("Caribou finished training the {} model but there was no data to classify".format(opt['model_type']))
 
 # Argument parsing from CLI
 ################################################################################
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='This script trains and cross-validates a model for the bacteria extraction / host removal step.')
+    parser = argparse.ArgumentParser(description='This script trains a model and extracts bacteria / host sequences.')
     parser.add_argument('-db','--data_bacteria', required=True, type=Path, help='PATH to a npz file containing the data corresponding to the k-mers profile for the bacteria database')
     parser.add_argument('-dh','--data_host', default=None, type=Path, help='PATH to a npz file containing the data corresponding to the k-mers profile for the host')
     parser.add_argument('-mg','--data_metagenome', required=True, type=Path, help='PATH to a npz file containing the data corresponding to the k-mers profile for the metagenome to classify')
@@ -107,7 +108,7 @@ if __name__ == "__main__":
     parser.add_argument('-e','--training_epochs', default=100, type=int, help='The number of training iterations for the neural networks models if one ise chosen, defaults to 100')
     parser.add_argument('-v','--verbose', action='store_true', help='Should the program be verbose')
     parser.add_argument('-o','--outdir', required=True, type=Path, help='PATH to a directory on file where outputs will be saved')
-    parser.add_argument('-wd','--workdir', default='~/ray_results', type=Path, help='Optional. Path to a working directory where Ray Tune will output and spill tuning data')
+    parser.add_argument('-wd','--workdir', default=None, type=Path, help='Optional. Path to a working directory where Ray Tune will output and spill tuning data')
     args = parser.parse_args()
 
     opt = vars(args)

@@ -2,7 +2,6 @@
 
 import ray
 import pathlib
-import logging
 import os.path
 import argparse
 
@@ -16,9 +15,6 @@ __all__ = ['kmers_dataset']
 """
 This script extracts K-mers of the given dataset using the available ressources on the computer before saving it to drive.
 """
-# Suppress Tensorflow warnings
-################################################################################
-logging.set_verbosity(logging.ERROR)
 
 # Initialisation / validation of parameters from CLI
 ################################################################################
@@ -36,7 +32,7 @@ def kmers_dataset(opt):
     opt['k_length'], kmers_list = verify_kmers_list_length(opt['k_length'], opt['kmers_list'])
 
     # Verify path for saving
-    outdirs = define_create_outdir(opt['outdir'])
+    outdirs = define_create_outdirs(opt['outdir'])
     
     # Initialize cluster
     ray.init()
