@@ -54,6 +54,7 @@ class Outputs():
 
     """
     def __init__(
+        self,
         database_kmers,
         results_dir,
         k,
@@ -89,7 +90,7 @@ class Outputs():
         for taxa in self.order:
             df = self.classified_data[taxa]['classification'] # Should already be pd.DataFrame
             self._abundances[taxa] = {
-                'abundance': df.value_counts(subset = [taxa]),
+                'counts': df.value_counts(subset = [taxa]),
                 'total': df.value_counts(subset = [taxa]).sum()
             }
 
@@ -113,9 +114,9 @@ class Outputs():
         nb_total_bacteria = len(self.classified_data['domain']['classified_ids'])
         for taxa in lst_taxa:
             lst_taxa[taxa] = [taxa]
-            lst_taxa[taxa].extend(list(self._abundances[taxa]['abundance'].index))
+            lst_taxa[taxa].extend(list(self._abundances[taxa]['counts'].index))
             lst_nb_reads[lst_taxa.index(taxa)] = [self._abundances[taxa]['total']]
-            lst_nb_reads[lst_taxa.index(taxa)].extend(list(self._abundances[taxa]['abundance'].values))
+            lst_nb_reads[lst_taxa.index(taxa)].extend(list(self._abundances[taxa]['counts'].values))
             
         lst_taxa = np.ravel(lst_taxa)
         lst_nb_reads = np.ravel(lst_nb_reads)
@@ -178,8 +179,6 @@ class Outputs():
 
         df.to_csv(self._summary_file, na_rep = '', header = True)
 
-# TODO :FInish outputs but need to visualise results from classif before continuing
-
     # Kronagram / interactive tree
     def kronagram(self):
         self._create_krona_file()
@@ -187,76 +186,40 @@ class Outputs():
         run(cmd, shell = True)
 
     def _create_krona_file(self):
-        cols = ['Abundance']
-        [cols.append(self.taxas[i]) for i in range(len(self.taxas)-1, -1, -1)]
-        nrows = 0
-        for taxa in self._abundances:
-            if taxa not in ['domain','host']:
-                nrows += len(self._abundances[taxa])
-
-        df = pd.DataFrame(np.zeros((nrows,len(cols)), dtype = int), index = np.arange(nrows), columns = cols)
-
-        unique_rows = np.vstack(list({tuple(row) for row in self.data_labels}))
-
-        index = 0
-        for taxa in self.order:
-            if taxa not in ['domain','host']:
-                col_taxa = df.columns.get_loc(taxa)
-                for k, v in abundances[taxa].items():
-                    if k in df[taxa]:
-                        ind = df[df[taxa] == k].index.values
-                        df.loc[ind, taxa] = k
-                        df.loc[ind, 'Abundance'] += v
-                        if col_taxa != 1:
-                            for col in range(1, col_taxa+1):
-                                df.iloc[ind,col] = np.flip(unique_rows[np.where(unique_rows == k)[0]])[0][col-1]
-                    else:
-                        df.loc[index, taxa] = k
-                        df.loc[index, 'Abundance'] += v
-                        if col_taxa != 1:
-                            for col in range(1, col_taxa+1):
-                                df.iloc[index,col] = np.flip(unique_rows[np.where(unique_rows == k)[0]])[0][col-1]
-                        index += 1
-        df = df.fillna(0)
-
-        dct_df = {'Abundance': []}
+        db_labs = pd.DataFrame(self.data_labels, columns = self.taxas)
+        db_labs = db_labs[db_labs.columns[::-1]] # Reverse order of columns
         taxas = self.order.copy()
         if 'domain' in taxas:
-            dct_df['domain'] = []
             taxas.remove('domain')
+            taxas.append('domain')
+        
+        df = pd.DataFrame(columns=[taxa for taxa in reversed(taxas)])
+        
         for taxa in taxas:
-            
+            abund_per_tax = pd.DataFrame(self._abundances[taxa]['counts'])
+            abund_per_tax.reset_index(level = 0, inplace = True)
+            abund_per_tax.columns = [taxa, 'abundance']
+            abund_per_tax = abund_per_tax.join(db_labs, how = 'left', on = taxa)
+            abund_per_tax.index = abund_per_tax['abundance'] # Index is abundance
+            df = pd.concat([df, abund_per_tax], axis = 0, ignore_index = False) # Keep abundance on index when concatenating
+        
+        #taxas.insert(0, 'abundance')
+        #df.reset_index(level = 0, inplace = True)
+        df.to_csv(self._krona_file, na_rep = '', header = False, index = True)
 
-
-        df = pd.DataFrame(dct_df)
-        df.to_csv(self._krona_file, na_rep = '', header = False, index = False)
-
+    # Report file of classification of each id
     def report(self):
-        # Report file of classification of each id
-        cols = ['Sequence ID']
-        [cols.append(self.taxas[i]) for i in range(len(self.taxas)-1, -1, -1)]
-        nrows = 0
-        for taxa in self.order:
-            if taxa not in ['domain','host']:
-                nrows += len(self.classified_data[taxa]['ids'])
+        taxas = self.order.copy()
+        if 'domain' in taxas:
+            taxas.remove('domain')
+            taxas.append('domain')
+        taxas.append('id')
 
-        df = pd.DataFrame(np.zeros((nrows,len(cols)), dtype = int), index = np.arange(nrows), columns = cols)
+        taxas = [taxa for taxa in reversed(taxas)]
+        df = pd.DataFrame(columns = taxas)
+        for taxa in taxas:
+            df = pd.concat([df, self.classified_data[taxa]['classification']], axis = 0, ignore_index = True)
 
-        unique_rows = np.vstack(list({tuple(row) for row in self.data_labels}))
-
-        index = 0
-        for taxa in self.order:
-            if taxa not in ['domain','host']:
-                col_taxa = df.columns.get_loc(taxa)
-                for id, classification in zip(self.classified_data[taxa]['ids'], self.classified_data[taxa]['classification']):
-                    df.loc[index, 'Sequence ID'] = id
-                    df.loc[index, taxa] = classification
-                    if col_taxa != 1:
-                        for col in range(1, col_taxa+1):
-                            df.iloc[index,col] = np.flip(unique_rows[np.where(unique_rows == classification)[0]])[0][col-1]
-                    index += 1
-
-        df = df.fillna(0)
         df.to_csv(self._report_file, na_rep = '', header = True, index = False)
 
     def fasta(self):
