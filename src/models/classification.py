@@ -261,14 +261,19 @@ class ClassificationMethods():
         print('_classify_first')
         try:
             pred_df = self._predict_sequences(df, taxa, ids)
-            
+            not_pred_df = pred_df[pred_df[taxa] == 'unknown']
+            pred_df = pred_df[pred_df[taxa] != 'unknown']
+
+            print(pred_df)
+            print(not_pred_df)
+
             self._classified_ids = list(pred_df['id'].values)
-            self._not_classified_ids = list(np.setdiff1d(ids, self._classified_ids, assume_unique=True))
+            self._not_classified_ids = list(not_pred_df['id'].values)
 
             if taxa == 'domain':
                 if self._host == True:
-                    pred_df = pred_df[pred_df['domain'] == 'host']
-                    pred_df_host = pred_df[pred_df['domain'] != 'host']
+                    pred_df_host = pred_df[pred_df['domain'] == 'host']
+                    pred_df = pred_df[pred_df['domain'] != 'host']
                     self.classified_data['host'] = {
                         'classification' : pred_df_host,
                         'classified_ids': list(pred_df_host['id'].values)
@@ -296,9 +301,11 @@ class ClassificationMethods():
         print('_classify_subsequent')
         try:
             pred_df = self._predict_sequences(df, taxa, ids)
+            not_pred_df = pred_df[pred_df[taxa] == 'unknown']
+            pred_df = pred_df[pred_df[taxa] != 'unknown']
 
             self._classified_ids = self._classified_ids.extend(list(pred_df['id'].values))
-            self._not_classified_ids = [id for id in ids if id not in self._classified_ids]
+            self._not_classified_ids = list(not_pred_df['id'].values)
 
             self.classified_data[taxa]['classification'] = pred_df
             self.classified_data[taxa]['classified_ids'] = list(pred_df['id'].values)

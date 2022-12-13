@@ -1,5 +1,6 @@
 import os
 import numpy as np
+import pandas as pd
 
 from pathlib import Path
 from warnings import warn
@@ -23,7 +24,8 @@ __all__ = [
     'verify_kmers_list_length',
     'verify_load_data',
     'verify_concordance_klength',
-    'verify_taxas'
+    'verify_taxas',
+    'verify_load_classified'
 ]
 
 # Data handling
@@ -41,7 +43,7 @@ def save_Xy_data(df, Xy_file):
 # User arguments verification
 #########################################################################################################
 
-def verify_file(file : str):
+def verify_file(file : Path):
     if file is not None and not os.path.exists(file):
         raise ValueError('Cannot find file {} !'.format(file))
 
@@ -94,7 +96,7 @@ def verify_multiclass_classifier(clf : str):
             'Invalid multiclass bacterial classifier !\n' +
             'Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
 
-def verify_seqfiles(seqfile, seqfile_host):
+def verify_seqfiles(seqfile : Path, seqfile_host : Path):
     if seqfile is None and seqfile_host is None:
         raise ValueError("No file to extract K-mers from !")
 
@@ -119,7 +121,7 @@ def define_create_outdirs(dir : Path):
     os.makedirs(outdirs['results_dir'], mode=0o700, exist_ok=True)
     return outdirs
 
-def verify_kmers_list_length(klen: int, kmers_file: list):
+def verify_kmers_list_length(klen: int, kmers_file: Path):
     if kmers_file is not None:
         # Read kmers file to put in list
         kmers_list = []
@@ -136,7 +138,7 @@ def verify_kmers_list_length(klen: int, kmers_file: list):
         verify_positive_int(klen, 'K-mers length')
         return klen, None
 
-def verify_load_data(data_file: str):
+def verify_load_data(data_file: Path):
     verify_file(data_file)
     data = load_Xy_data(data_file)
     verify_data_path(data['profile'])
@@ -146,7 +148,29 @@ def verify_load_data(data_file: str):
         raise ValueError("Invalid data file !")
     return data
 
-def verify_taxas(taxas, db_taxas):
+def verify_load_classified(classified_data: Path):
+    verify_file(classified_data)
+    data = load_Xy_data(classified_data)
+    if len(data['sequence']) == 0:
+        raise ValueError("No classified taxa present in data file !")
+    elif len(data['sequence']) != len(data.keys())-1:
+        raise ValueError("Inconsistent number of classified data vs metadata in data file !")
+    else:
+        for taxa in data['sequence']:
+            verify_data_path(data[taxa]['profile'])
+        if not isinstance(data[taxa]['ids'], list):
+            raise ValueError("Invalid classified data file !")
+        elif not isinstance(data[taxa]['kmers'], list):
+            raise ValueError("Invalid classified data file !")
+        elif not isinstance(data[taxa]['classification'], pd.DataFrame):
+            raise ValueError("Invalid classified data file !")
+        elif not isinstance(data[taxa]['classified_ids'], list):
+            raise ValueError("Invalid classified data file !")
+            
+    return data
+
+
+def verify_taxas(taxas : str, db_taxas : list):
     taxas = str.split(taxas, ',')
     for taxa in taxas:
         if taxa not in db_taxas:

@@ -3,7 +3,6 @@ import gzip
 
 import numpy as np
 import pandas as pd
-from copy import copy
 from Bio import SeqIO
 from subprocess import run
 
@@ -111,10 +110,19 @@ class Outputs():
         if 'host' in self._abundances:
             lst_taxa.remove('host')
         
-        nb_total_bacteria = len(self.classified_data['domain']['classified_ids'])
+        if 'domain' in self.classified_data.keys():
+            nb_total_bacteria = len(self.classified_data['domain']['classified_ids'])
+        else:
+            nb_total_bacteria = 0
+            for taxa in lst_taxa:
+                nb_total_bacteria += self._abundances[taxa]['total']
+
+        print(lst_taxa)
         for taxa in lst_taxa:
-            lst_taxa[taxa] = [taxa]
-            lst_taxa[taxa].extend(list(self._abundances[taxa]['counts'].index))
+            print(taxa)
+            lst_taxa[lst_taxa.index(taxa)] = []
+            lst_taxa[lst_taxa.index(taxa)].append(taxa)
+            lst_taxa[lst_taxa.index(taxa)].extend(list(self._abundances[taxa]['counts'].index))
             lst_nb_reads[lst_taxa.index(taxa)] = [self._abundances[taxa]['total']]
             lst_nb_reads[lst_taxa.index(taxa)].extend(list(self._abundances[taxa]['counts'].values))
             
