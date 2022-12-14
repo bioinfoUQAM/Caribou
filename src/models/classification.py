@@ -155,9 +155,7 @@ class ClassificationMethods():
                 self._database_data['kmers'],
                 self._verbose
             )
-            self.X_train = ray.data.read_parquet(self._database_data['profile'])
-            self._y_train = pd.DataFrame({taxa: pd.DataFrame(self._database_data['classes'], columns=self._database_data['taxas']).loc[:, taxa].astype('string').str.lower()})
-            self._y_train[self._y_train[taxa] == 'archaea'] = 'bacteria'
+            self._load_training_data(taxa)
         else:
             self._merge_database_host(self._database_data, self._host_data)
             if self._classifier_binary == 'linearsvm':
@@ -185,20 +183,12 @@ class ClassificationMethods():
                     self._merged_database_host['kmers'],
                     self._verbose
                 )
-            self.X_train = ray.data.read_parquet(self._merged_database_host['profile'])
-            self._y_train = pd.DataFrame({
-                taxa: pd.DataFrame(
-                    self._merged_database_host['classes'],
-                    columns=self._merged_database_host['taxas']
-                ).loc[:, taxa].astype('string').str.lower()
-            })
+            self._load_training_data(taxa, merged = True)
         if self._merged_database_host is None:
             self.models[taxa].train(self.X_train, self._y_train, self._database_data, self._cv)
         else:
             self.models[taxa].train(self.X_train, self._y_train, self._merged_database_host, self._cv)
-        self._save_model(self._model_file, taxa)
-        
-            
+        self._save_model(self._model_file, taxa)            
 
     def _multiclass_training(self, taxa):
         print('_multiclass_training')
@@ -228,13 +218,7 @@ class ClassificationMethods():
                 self._database_data['kmers'],
                 self._verbose
             )
-        self.X_train = ray.data.read_parquet(self._database_data['profile'])
-        self._y_train = pd.DataFrame({
-            taxa: pd.DataFrame(
-                self._database_data['classes'],
-                columns=self._database_data['taxas']
-            ).loc[:, taxa].astype('string').str.lower()
-        })
+        self._load_training_data(taxa)
         self.models[taxa].train(self.X_train, self._y_train, self._database_data, self._cv)
         self._save_model(self._model_file, taxa)
         
@@ -360,9 +344,21 @@ class ClassificationMethods():
         self._merged_database_host['profile'] = "{}_host_merged".format(os.path.splitext(database_data["profile"])[0]) # Kmers profile
 
         df_classes = pd.DataFrame(database_data["classes"], columns=database_data["taxas"])
+        df_cls_host = pd.DataFrame(host_data["classes"], columns=host_data["taxas"])
+
         if len(np.unique(df_classes['domain'])) != 1:
             df_classes[df_classes['domain'] != 'bacteria'] = 'bacteria'
-        df_classes = df_classes.append(pd.DataFrame(host_data["classes"], columns=host_data["taxas"]), ignore_index=True)
+
+        if len(df_cls_host) > len(host_data['ids']):
+            to_remove = np.arange(len(df_cls_host) - len(host_data['ids']))
+            df_cls_host.drop(to_remove, axis=0, inplace=True)
+        elif len(df_cls_host) < len(host_data['ids']):
+            diff = len(host_data['ids']) - len(df_cls_host)
+            row = df_cls_host.iloc[0]
+            for i in range(diff):
+                df_cls_host = pd.concat([df_cls_host, row.to_frame().T], ignore_index=True)
+
+        df_classes = pd.concat([df_classes, df_cls_host], ignore_index=True)
         self._merged_database_host['classes'] = np.array(df_classes)  # Class labels
         self._merged_database_host['ids'] = np.concatenate((database_data["ids"], host_data["ids"]))  # IDs
         self._merged_database_host['kmers'] = database_data["kmers"]  # Features
@@ -443,3 +439,26 @@ class ClassificationMethods():
             pass
         else:
             raise ValueError('Invalid classifier option for bacteria classification!\n\tModels implemented at this moment are :\n\tClassic algorithm : Stochastic Gradient Descent (sgd) and Multinomial Naïve Bayes (mnb)\n\tNeural networks : Deep hybrid between LSTM and Attention (lstm_attention), CNN (cnn) and Wide CNN (widecnn)')
+
+    def _load_training_data(self, taxa, merged = False):
+        if merged:
+            # Binary merged
+            self.X_train = ray.data.read_parquet(self._merged_database_host['profile'])
+            self._y_train = pd.DataFrame({
+                taxa: pd.DataFrame(
+                    self._merged_database_host['classes'],
+                    columns=self._merged_database_host['taxas']
+                ).loc[:, taxa].astype('string').str.lower()
+            })
+        else:
+        # Binary not merged or multiclass
+            self.X_train = ray.data.read_parquet(self._database_data['profile'])
+            self._y_train = pd.DataFrame({
+                taxa: pd.DataFrame(
+                    self._database_data['classes'],
+                    columns=self._database_data['taxas']
+                ).loc[:, taxa].astype('string').str.lower()
+            })
+            if taxa == 'domain':
+                self._y_train[self._y_train[taxa] == 'archaea'] = 'bacteria'
+
