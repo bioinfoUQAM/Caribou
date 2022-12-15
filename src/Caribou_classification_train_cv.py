@@ -69,23 +69,3 @@ if __name__ == "__main__":
     opt = vars(args)
 
     bacteria_classification_train_cv(opt)
-    """
-    Traceback (most recent call last):
-    File "/usr/local/bin/Caribou_classification_train_cv.py", line 71, in <module>
-        bacteria_classification_train_cv(opt)
-    File "/usr/local/bin/Caribou_classification_train_cv.py", line 39, in bacteria_classification_train_cv
-        ClassificationMethods(
-    File "/usr/local/lib/python3.8/dist-packages/models/classification.py", line 127, in execute_training
-        self._train_model(taxa)
-    File "/usr/local/lib/python3.8/dist-packages/models/classification.py", line 135, in _train_model
-        self._multiclass_training(taxa)
-    File "/usr/local/lib/python3.8/dist-packages/models/classification.py", line 233, in _multiclass_training
-        taxa: pd.DataFrame(
-    File "/usr/local/lib/python3.8/dist-packages/pandas/core/frame.py", line 672, in __init__
-        mgr = ndarray_to_mgr(
-    File "/usr/local/lib/python3.8/dist-packages/pandas/core/internals/construction.py", line 324, in ndarray_to_mgr
-        _check_values_indices_shape_match(values, index, columns)
-    File "/usr/local/lib/python3.8/dist-packages/pandas/core/internals/construction.py", line 393, in _check_values_indices_shape_match
-        raise ValueError(f"Shape of passed values is {passed}, indices imply {implied}")
-    ValueError: Shape of passed values is (7441, 7), indices imply (7441, 6)
-    """

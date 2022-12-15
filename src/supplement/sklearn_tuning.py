@@ -17,7 +17,7 @@ from shutil import rmtree
 from utils import *
 from models.reads_simulation import readsSimulation
 from models.ray_tensor_min_max import TensorMinMaxScaler
-from models.ray_sklearn_partial_trainer import SklearnPartialTrainer
+from models.sklearn.ray_sklearn_partial_trainer import SklearnPartialTrainer
 
 # Preprocessing
 from ray.data.preprocessors import LabelEncoder
