@@ -261,26 +261,26 @@ class SklearnPartialTrainer(SklearnTrainer):
         for key, X_y_tuple in datasets.items():
             X_test, y_test = X_y_tuple
 
-            test_scores = {'score':[]}
+            test_scores = []
 
             start_time = time()
             for batch, labels in zip(X_test.iter_batches(
                     batch_size = self._batch_size,
                     batch_format = 'numpy'
                 ), y_test.iter_batches(
-                    batch_size = self._batch_size,
+                    batch_size=self._batch_size,
                     batch_format = 'pandas'
                 )
             ):
                 batch = pd.DataFrame(batch, columns = self._features_list)
                 try:
-                    test_scores['score'].extend(_score(estimator, batch, labels, scorers))
+                    test_scores.append(_score(estimator, batch, labels, scorers))
                 except Exception:
                     if isinstance(scorers, dict):
                         test_scores = {k: np.nan for k in scorers}
                     else:
                         test_scores = np.nan
-                    warnings.warn(
+                    warn(
                         f"Scoring on validation set {key} failed. The score(s) for "
                         f"this set will be set to nan. Details: \n"
                         f"{format_exc()}",
@@ -288,9 +288,5 @@ class SklearnPartialTrainer(SklearnTrainer):
                     )
             score_time = time() - start_time
             results[key]["score_time"] = score_time
-            if not isinstance(test_scores, dict):
-                test_scores = {"score": test_scores}
-
-            for name in test_scores:
-                results[key][f"test_{name}"] = test_scores[name]
+            results[key][f"test_score"] = np.mean(test_scores)
         return results

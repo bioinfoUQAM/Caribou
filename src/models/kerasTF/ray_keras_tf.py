@@ -2,8 +2,7 @@ import os
 import ray
 import warnings
 import numpy as np
-import pandas as pd
-import pyarrow as pa
+import modin.pandas as pd
 
 from glob import glob
 from shutil import rmtree
@@ -119,19 +118,16 @@ class KerasTFModel(ModelsUtils):
 
     def _training_preprocess(self, X, y):
         print('_training_preprocess')
-        num_blocks = X.num_blocks()
         self._preprocessor = TensorMinMaxScaler(self.kmers)
         self._preprocessor.fit(X)
-        y = ray.data.from_arrow(
-                pa.Table.from_pandas(
-                    y)).repartition(
-                        X.count())
-        df = X.repartition(X.count()).zip(y).repartition(num_blocks)
+        df = X.to_modin()
+        df[taxa] = y[taxa]
+        df = ray.data.from_modin(df)
         self._label_encode(df, y)
         return df
 
     def _label_encode(self, df, y):
-        self._nb_classes = len(np.unique(y.to_pandas()[self.taxa]))
+        self._nb_classes = len(np.unique(y.to_modin()[self.taxa]))
         self._label_encode_define(df)
 
         encoded = []
@@ -193,7 +189,7 @@ class KerasTFModel(ModelsUtils):
         self._fit_model(datasets)
 
         df_test = self._encoder.preprocessors[0].transform(df_test)
-        y_true = df_test.to_pandas()[self.taxa]
+        y_true = df_test.to_modin()[self.taxa]
         y_pred = self.predict(df_test.drop_columns([self.taxa]), cv = True)
 
         for file in glob(os.path.join(os.path.dirname(kmers_ds['profile']), '*sim*')):
@@ -294,7 +290,7 @@ class KerasTFModel(ModelsUtils):
         else:
             mapper = BatchMapper(map_predicted_label_multiclass, batch_format = 'pandas')
         predict = mapper.transform(predictions)
-        predict = np.ravel(np.array(predict.to_pandas()))
+        predict = np.ravel(np.array(predict.to_modin()))
         
         return predict
 

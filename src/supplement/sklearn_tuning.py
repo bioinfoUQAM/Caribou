@@ -6,8 +6,7 @@ import json
 import logging
 import argparse
 import numpy as np
-import pandas as pd
-import pyarrow as pa
+import modin.pandas as pd
 
 from glob import glob
 from pathlib import Path
@@ -72,15 +71,12 @@ def merge_database_host(database_data, host_data):
 
 # Function from class function models.ray_sklearn.SklearnModel._training_preprocess
 def preprocess(X, y, taxa, cols, classifier):
-    num_blocks = X.num_blocks()
     scaler = TensorMinMaxScaler(cols)
     X = scaler.fit_transform(X)
     labels = np.unique(y[taxa])
-    y = ray.data.from_arrow(
-            pa.Table.from_pandas(
-                y)).repartition(
-                    X.count())
-    df = X.repartition(X.count()).zip(y).repartition(num_blocks)
+    df = X.to_modin()
+    df[taxa] = y[taxa]
+    df = ray.data.from_modin(df)
     df, labels = preprocess_labels(df, taxa, labels, classifier)
     return df, labels, scaler
 
@@ -107,15 +103,12 @@ def sim_4_cv(df, kmers_ds, name, taxa, cols, k, scaler):
     sim_data = cv_sim.simulation(k, cols)
     df = ray.data.read_parquet(sim_data['profile'])
     df = scaler.transform(df)
-    num_blocks = df.num_blocks()
-    labels = ray.data.from_arrow(
-        pa.Table.from_pandas(
-            pd.DataFrame(
-                sim_data['classes'],
-                columns = [taxa])
-            )).repartition(
-                df.count())
-    df = df.repartition(df.count()).zip(labels).repartition(num_blocks)
+    df = df.to_modin()
+    df[taxa] = pd.DataFrame(
+        sim_data['classes'],
+        columns = [taxa]
+    )
+    df = ray.data.from_modin(df)
     return df
 
 # CLI argument

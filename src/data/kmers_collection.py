@@ -4,8 +4,7 @@ import warnings
 
 import numpy as np
 import pandas as pd
-import pyarrow as pa
-import tensorflow as tf
+import modin.pandas as mpd
 
 from glob import glob
 from copy import copy
@@ -248,23 +247,15 @@ class KmersCollection():
             os.remove(file)
         self.df = ray.data.from_numpy_refs(self._lst_arr)
         num_blocks = self.df.num_blocks()
-        self.df = self.df.repartition(
-            self.df.count()).zip(
-                ray.data.from_arrow(
-                    pa.Table.from_pandas(
-                        pd.DataFrame(
-                            {'id':self.ids}))).repartition(
-                                self.df.count())).repartition(num_blocks)
+        self.df = self.df.to_modin()
+        self.df['id'] = self.ids
+        self.df = ray.data.from_modin(self.df)
         self.df.write_parquet(self.Xy_file)
 
     def _batch_read_write_given(self):
         self.df = ray.data.from_numpy_refs(self._lst_arr)
         num_blocks = self.df.num_blocks()
-        self.df = self.df.repartition(
-            self.df.count()).zip(
-                ray.data.from_arrow(
-                    pa.Table.from_pandas(
-                        pd.DataFrame(
-                            {'id':self.ids}))).repartition(
-                                self.df.count())).repartition(num_blocks)
+        self.df = self.df.to_modin()
+        self.df['id'] = self.ids
+        self.df = ray.data.from_modin(self.df)
         self.df.write_parquet(self.Xy_file)

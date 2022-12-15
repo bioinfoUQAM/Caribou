@@ -2,8 +2,7 @@ import os
 import ray
 import warnings
 import numpy as np
-import pandas as pd
-import pyarrow as pa
+import modin.pandas as pd
 
 from glob import glob
 from shutil import rmtree
@@ -97,14 +96,11 @@ class SklearnModel(ModelsUtils):
     def _training_preprocess(self, X, y):
         print('_training_preprocess')
         labels = np.unique(y[self.taxa])
-        num_blocks = X.num_blocks()
         self._preprocessor = TensorMinMaxScaler(self.kmers)
         self._preprocessor.fit(X)
-        y = ray.data.from_arrow(
-                pa.Table.from_pandas(
-                    y)).repartition(
-                        X.count())
-        df = X.repartition(X.count()).zip(y).repartition(num_blocks)
+        df = X.to_modin()
+        df[taxa] = y[taxa]
+        df = ray.data.from_modin(df)
         df = self._label_encode(df, labels)
         return df
 
@@ -156,7 +152,7 @@ class SklearnModel(ModelsUtils):
         self._fit_model(datasets)
 
         df_test = self._encoder.transform(df_test)
-        y_true = df_test.to_pandas()[self.taxa]
+        y_true = df_test.to_modin()[self.taxa]
         y_pred = self.predict(df_test.drop_columns([self.taxa]), cv = True)
 
         for file in glob(os.path.join( os.path.dirname(kmers_ds['profile']), '*sim*')):
@@ -242,7 +238,7 @@ class SklearnModel(ModelsUtils):
             if self.classifier == 'onesvm':
                 self._predictor = BatchPredictor.from_checkpoint(self._model_ckpt, SklearnPredictor)
                 predictions = self._predictor.predict(df, batch_size = self.batch_size)
-                predictions = np.array(predictions.to_pandas()).reshape(-1)
+                predictions = np.array(predictions.to_modin()).reshape(-1)
             else:
                 self._predictor = BatchPredictor.from_checkpoint(self._model_ckpt, SklearnProbaPredictor)
                 predictions = self._predictor.predict(df, batch_size = self.batch_size)
@@ -266,11 +262,11 @@ class SklearnModel(ModelsUtils):
             return pd.DataFrame(predict['predicted_label'])
 
         if nb_cls == 1:
-            predict = np.round(abs(np.concatenate(predict.to_pandas()['predictions'])))
+            predict = np.round(abs(np.concatenate(predict.to_modin()['predictions'])))
         else:
             mapper = BatchMapper(map_predicted_label, batch_format = 'pandas')
             predict = mapper.transform(predict)
-            predict = np.ravel(np.array(predict.to_pandas()))
+            predict = np.ravel(np.array(predict.to_modin()))
         
         return predict
         

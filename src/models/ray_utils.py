@@ -1,8 +1,8 @@
 import os
 import ray
 import warnings
-import pandas as pd
 import pyarrow as pa
+import modin.pandas as pd
 
 # Class construction
 from abc import ABC, abstractmethod
@@ -129,14 +129,12 @@ class ModelsUtils(ABC):
         cv_sim = readsSimulation(kmers_ds['fasta'], cls, sim_genomes, 'miseq', sim_outdir, name)
         sim_data = cv_sim.simulation(self.k, self.kmers)
         df = ray.data.read_parquet(sim_data['profile'])
-        labels = ray.data.from_arrow(
-            pa.Table.from_pandas(
-                pd.DataFrame(
-                    sim_data['classes'],
-                    columns = [self.taxa])
-                )).repartition(
-                    df.num_blocks())
-        df = df.repartition(df.num_blocks()).zip(labels)
+        df = df.to_modin()
+        df[self.taxa] = pd.DataFrame(
+            sim_data['classes'],
+            columns=[self.taxa]
+        )
+        df = ray.data.from_modin(df)
         return df
 
     def _cv_score(self, y_true, y_pred):

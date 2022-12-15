@@ -3,7 +3,7 @@ import ray
 import cloudpickle
 
 import numpy as np
-import pandas as pd
+import modin.pandas as pd
 
 from glob import glob
 from shutil import rmtree
