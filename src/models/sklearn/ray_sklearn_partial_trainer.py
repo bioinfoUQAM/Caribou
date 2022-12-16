@@ -279,7 +279,7 @@ class SklearnPartialTrainer(SklearnTrainer):
                     if isinstance(scorers, dict):
                         test_scores = {k: np.nan for k in scorers}
                     else:
-                        test_scores = np.nan
+                        test_scores.append(np.nan)
                     warn(
                         f"Scoring on validation set {key} failed. The score(s) for "
                         f"this set will be set to nan. Details: \n"

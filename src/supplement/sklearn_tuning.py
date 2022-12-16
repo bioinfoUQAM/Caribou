@@ -1,9 +1,9 @@
 #!/usr/bin python3
-
 import os
 import ray
 import json
 import logging
+import warnings
 import argparse
 import numpy as np
 import modin.pandas as pd
@@ -17,6 +17,7 @@ from utils import *
 from models.reads_simulation import readsSimulation
 from models.ray_tensor_min_max import TensorMinMaxScaler
 from models.sklearn.ray_sklearn_partial_trainer import SklearnPartialTrainer
+from models.sklearn.ray_sklearn_onesvm_encoder import OneClassSVMLabelEncoder
 
 # Preprocessing
 from ray.data.preprocessors import LabelEncoder
@@ -32,6 +33,7 @@ from ray.tune.schedulers import ASHAScheduler
 from ray.air.config import RunConfig, ScalingConfig
 from ray.tune.search.basic_variant import BasicVariantGenerator
 
+warnings.simplefilter(action='ignore')
 # Functions
 ################################################################################
 
@@ -45,7 +47,7 @@ def merge_database_host(database_data, host_data):
     df_cls_host = pd.DataFrame(host_data['classes'], columns=host_data['taxas'])
 
     if len(np.unique(df_classes['domain'])) != 1:
-        df_classes[df_classes['domain'] != 'bacteria'] = 'bacteria'
+        df_classes[df_classes != 'bacteria'] = 'bacteria'
     
     if len(df_cls_host) > len(host_data['ids']):
         to_remove = np.arange(len(df_cls_host) - len(host_data['ids']))
@@ -82,8 +84,9 @@ def preprocess(X, y, taxa, cols, classifier):
 
 def preprocess_labels(df, taxa, labels, classifier):
     if classifier == 'onesvm':
-        labels = np.array([1,-1], dtype = np.int32)
-        df = df.add_column(taxa, lambda x : 1)
+        encoder = OneClassSVMLabelEncoder(taxa)
+        df = encoder.fit_transform(df)
+        labels = np.array([-1, 1], dtype=np.int32)
     else:
         encoder = LabelEncoder(taxa)
         df = encoder.fit_transform(df)
@@ -109,6 +112,7 @@ def sim_4_cv(df, kmers_ds, name, taxa, cols, k, scaler):
         columns = [taxa]
     )
     df = ray.data.from_modin(df)
+    df = df.drop_columns(['__index_level_0__'])
     return df
 
 # CLI argument
@@ -152,7 +156,7 @@ cols = data['kmers']
 y = pd.DataFrame({opt['taxa'] : pd.DataFrame(data['classes'], columns = data['taxas']).loc[:,opt['taxa']].astype('string').str.lower()})
 
 if opt['taxa'] == 'domain':
-    y[y['domain'] == 'archaea'] = 'bacteria'
+    y[y == 'archaea'] = 'bacteria'
 
 df, labels_list, scaler = preprocess(X, y, opt['taxa'], cols, opt['classifier'])
 

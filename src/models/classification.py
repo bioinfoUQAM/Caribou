@@ -347,7 +347,7 @@ class ClassificationMethods():
         df_cls_host = pd.DataFrame(host_data["classes"], columns=host_data["taxas"])
 
         if len(np.unique(df_classes['domain'])) != 1:
-            df_classes[df_classes['domain'] != 'bacteria'] = 'bacteria'
+            df_classes[df_classes != 'bacteria'] = 'bacteria'
 
         if len(df_cls_host) > len(host_data['ids']):
             to_remove = np.arange(len(df_cls_host) - len(host_data['ids']))
@@ -460,5 +460,5 @@ class ClassificationMethods():
                 ).loc[:, taxa].astype('string').str.lower()
             })
             if taxa == 'domain':
-                self._y_train[self._y_train[taxa] == 'archaea'] = 'bacteria'
+                self._y_train[self._y_train == 'archaea'] = 'bacteria'
 
