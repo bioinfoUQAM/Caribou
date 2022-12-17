@@ -121,15 +121,20 @@ class KerasTFModel(ModelsUtils):
         self._preprocessor = TensorMinMaxScaler(self.kmers)
         self._preprocessor.fit(X)
         df = X.to_modin()
-        df[taxa] = y[taxa]
+        df.index = np.arange(len(df))
+        df[self.taxa] = y[self.taxa]
         df = ray.data.from_modin(df)
+        print(df.to_modin())
+        sys.exit()
         self._label_encode(df, y)
+        print(df.to_modin())
         return df
 
     def _label_encode(self, df, y):
-        self._nb_classes = len(np.unique(y.to_modin()[self.taxa]))
+        print(df.to_modin())
+        self._nb_classes = len(np.unique(y[self.taxa]))
         self._label_encode_define(df)
-
+        print(df.to_modin())
         encoded = []
         encoded.append(-1)
         labels = ['unknown']
@@ -162,6 +167,8 @@ class KerasTFModel(ModelsUtils):
     def train(self, X, y, kmers_ds, cv = True):
         print('train')
         df = self._training_preprocess(X, y)
+        print(df.to_modin())
+        sys.exit()
         if cv:
             self._cross_validation(df, kmers_ds)
         else:

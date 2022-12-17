@@ -99,7 +99,8 @@ class SklearnModel(ModelsUtils):
         self._preprocessor = TensorMinMaxScaler(self.kmers)
         self._preprocessor.fit(X)
         df = X.to_modin()
-        df[taxa] = y[taxa]
+        df.index = np.arange(len(df))
+        df[self.taxa] = y[self.taxa]
         df = ray.data.from_modin(df)
         df = self._label_encode(df, labels)
         return df

@@ -77,6 +77,7 @@ def preprocess(X, y, taxa, cols, classifier):
     X = scaler.fit_transform(X)
     labels = np.unique(y[taxa])
     df = X.to_modin()
+    df.index = np.arange(len(df))
     df[taxa] = y[taxa]
     df = ray.data.from_modin(df)
     df, labels = preprocess_labels(df, taxa, labels, classifier)
@@ -107,6 +108,7 @@ def sim_4_cv(df, kmers_ds, name, taxa, cols, k, scaler):
     df = ray.data.read_parquet(sim_data['profile'])
     df = scaler.transform(df)
     df = df.to_modin()
+    df.index = np.arange(len(df))
     df[taxa] = pd.DataFrame(
         sim_data['classes'],
         columns = [taxa]
