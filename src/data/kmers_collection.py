@@ -4,7 +4,7 @@ import warnings
 
 import numpy as np
 import pandas as pd
-import modin.pandas as mpd
+import pyarrow as pa
 
 from glob import glob
 from copy import copy
@@ -246,16 +246,35 @@ class KmersCollection():
             self._lst_arr.append(ray.put(arr))
             os.remove(file)
         self.df = ray.data.from_numpy_refs(self._lst_arr)
-        num_blocks = self.df.num_blocks()
-        self.df = self.df.to_modin()
-        self.df['id'] = self.ids
-        self.df = ray.data.from_modin(self.df)
+        self._zip_id_col()
         self.df.write_parquet(self.Xy_file)
 
     def _batch_read_write_given(self):
         self.df = ray.data.from_numpy_refs(self._lst_arr)
-        num_blocks = self.df.num_blocks()
-        self.df = self.df.to_modin()
-        self.df['id'] = self.ids
-        self.df = ray.data.from_modin(self.df)
+        self._zip_id_col()
         self.df.write_parquet(self.Xy_file)
+    
+    def _zip_id_col(self):
+        num_blocks = self.df.num_blocks()
+        len_df = self.df.count()
+        ids = pd.DataFrame({
+            'id': self.ids
+        })
+        self._ensure_length_ds(len_df, len(ids))
+        # Convert ids -> ray.data.Dataset with arrow schema
+        ids = ray.data.from_arrow(pa.Table.from_pandas(ids))
+        # Repartition to 1 row/partition
+        self.df = self.df.repartition(len_df)
+        ids = ids.repartition(len_df)
+        # Ensure both ds fully executed
+        for ds in [self.df, ids]:
+            if not ds.is_fully_executed():
+                ds.fully_executed()
+        # Zip X and y
+        self.df = self.df.zip(ids).repartition(num_blocks)
+# TODO: If still no work : write/read on disk + clear memory
+
+    def _ensure_length_ds(self, len_df, len_ids):
+        if len_df != len_ids:
+            raise ValueError(
+                'K-mers profile and ids list have different lengths: {} and {}'.format(len_df, len_ids))

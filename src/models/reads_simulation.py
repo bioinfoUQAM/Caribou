@@ -1,7 +1,7 @@
 #!/usr/bin python3
 
 import numpy as np
-import modin.pandas as pd
+import pandas as pd
 
 import os
 import gzip
@@ -28,7 +28,7 @@ class readsSimulation():
     fasta:
         string : Path to a fasta file containing the genomes to simulate reads from
     cls:
-        modin.pandas.dataframe.DataFrame : DataFrame containing the classe for each IDs of the original dataset
+        pandas.dataframe.DataFrame : DataFrame containing the classe for each IDs of the original dataset
     genomes:
         list : A list of IDs to use for simulating reads, must be present in fasta and cls files
     sequencing:

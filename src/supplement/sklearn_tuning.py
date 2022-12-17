@@ -6,7 +6,8 @@ import logging
 import warnings
 import argparse
 import numpy as np
-import modin.pandas as pd
+import pandas as pd
+import pyarrow as pa
 
 from glob import glob
 from pathlib import Path
@@ -71,15 +72,34 @@ def merge_database_host(database_data, host_data):
     df_merged.write_parquet(merged_database_host['profile'])
     return merged_database_host
 
+def zip_X_y(X, y):
+    num_blocks = X.num_blocks()
+    len_x = X.count()
+    ensure_length_ds(len_x,len(y))
+    # Convert y -> ray.data.Dataset with arrow schema
+    y = ray.data.from_arrow(pa.Table.from_pandas(y))
+    # Repartition to 1 row/partition
+    X = X.repartition(len_x)
+    y = y.repartition(len_x)
+    # Ensure both ds fully executed
+    for ds in [X,y]:
+        if not ds.is_fully_executed():
+            ds.fully_executed()
+    # Zip X and y
+    df = X.zip(y).repartition(num_blocks)
+# TODO: If still no work : write/read on disk + clear memory
+    return df
+
+def ensure_length_ds(len_x, len_y):
+    if len_x != len_y:
+        raise ValueError('X and y have different lengths: {} and {}'.format(len_x, len_y))
+
 # Function from class function models.ray_sklearn.SklearnModel._training_preprocess
 def preprocess(X, y, taxa, cols, classifier):
     scaler = TensorMinMaxScaler(cols)
     X = scaler.fit_transform(X)
     labels = np.unique(y[taxa])
-    df = X.to_modin()
-    df.index = np.arange(len(df))
-    df[taxa] = y[taxa]
-    df = ray.data.from_modin(df)
+    df = zip_X_y(X, y)
     df, labels = preprocess_labels(df, taxa, labels, classifier)
     return df, labels, scaler
 
@@ -107,14 +127,11 @@ def sim_4_cv(df, kmers_ds, name, taxa, cols, k, scaler):
     sim_data = cv_sim.simulation(k, cols)
     df = ray.data.read_parquet(sim_data['profile'])
     df = scaler.transform(df)
-    df = df.to_modin()
-    df.index = np.arange(len(df))
-    df[taxa] = pd.DataFrame(
+    cls = pd.DataFrame(
         sim_data['classes'],
         columns = [taxa]
     )
-    df = ray.data.from_modin(df)
-    df = df.drop_columns(['__index_level_0__'])
+    df = zip_X_y(df, cls)
     return df
 
 # CLI argument
@@ -158,7 +175,7 @@ cols = data['kmers']
 y = pd.DataFrame({opt['taxa'] : pd.DataFrame(data['classes'], columns = data['taxas']).loc[:,opt['taxa']].astype('string').str.lower()})
 
 if opt['taxa'] == 'domain':
-    y[y == 'archaea'] = 'bacteria'
+    y[y['domain'] == 'archaea'] = 'bacteria'
 
 df, labels_list, scaler = preprocess(X, y, opt['taxa'], cols, opt['classifier'])
 

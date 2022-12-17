@@ -3,7 +3,7 @@ import gzip
 
 import numpy as np
 from Bio import SeqIO
-import modin.pandas as pd
+import pandas as pd
 from subprocess import run
 
 __author__ = 'Nicolas de Montigny'

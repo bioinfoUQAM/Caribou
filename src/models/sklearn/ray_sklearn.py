@@ -2,7 +2,7 @@ import os
 import ray
 import warnings
 import numpy as np
-import modin.pandas as pd
+import pandas as pd
 
 from glob import glob
 from shutil import rmtree
@@ -98,10 +98,7 @@ class SklearnModel(ModelsUtils):
         labels = np.unique(y[self.taxa])
         self._preprocessor = TensorMinMaxScaler(self.kmers)
         self._preprocessor.fit(X)
-        df = X.to_modin()
-        df.index = np.arange(len(df))
-        df[self.taxa] = y[self.taxa]
-        df = ray.data.from_modin(df)
+        df = self._zip_X_y(X, y)
         df = self._label_encode(df, labels)
         return df
 
@@ -112,7 +109,6 @@ class SklearnModel(ModelsUtils):
             self._encoder.fit(df)
             encoded = np.array([1,-1], dtype = np.int32)
             labels = np.array(['bacteria', 'unknown'], dtype = object)
-            df = df.add_column(self.taxa, lambda x : 1)
         else:
             self._encoder = LabelEncoder(self.taxa)
             self._encoder.fit(df)
@@ -131,6 +127,7 @@ class SklearnModel(ModelsUtils):
 
     def train(self, X, y, kmers_ds, cv = True):
         print('train')
+
         df = self._training_preprocess(X, y)
         if cv:
             self._cross_validation(df, kmers_ds)
@@ -143,7 +140,6 @@ class SklearnModel(ModelsUtils):
         print('_cross_validation')
 
         df_train, df_test = df.train_test_split(0.2, shuffle = True)
-
         df_test = self._sim_4_cv(df_test, kmers_ds, '{}_test'.format(self.dataset))
 
         df_train = df_train.drop_columns(['id'])
@@ -153,7 +149,10 @@ class SklearnModel(ModelsUtils):
         self._fit_model(datasets)
 
         df_test = self._encoder.transform(df_test)
-        y_true = df_test.to_modin()[self.taxa]
+        y_true = []
+        for row in df_test.iter_rows():
+            y_true.append(row[self.taxa])
+
         y_pred = self.predict(df_test.drop_columns([self.taxa]), cv = True)
 
         for file in glob(os.path.join( os.path.dirname(kmers_ds['profile']), '*sim*')):
@@ -239,7 +238,7 @@ class SklearnModel(ModelsUtils):
             if self.classifier == 'onesvm':
                 self._predictor = BatchPredictor.from_checkpoint(self._model_ckpt, SklearnPredictor)
                 predictions = self._predictor.predict(df, batch_size = self.batch_size)
-                predictions = np.array(predictions.to_modin()).reshape(-1)
+                predictions = np.array(predictions.to_pandas()).reshape(-1)
             else:
                 self._predictor = BatchPredictor.from_checkpoint(self._model_ckpt, SklearnProbaPredictor)
                 predictions = self._predictor.predict(df, batch_size = self.batch_size)
@@ -263,11 +262,11 @@ class SklearnModel(ModelsUtils):
             return pd.DataFrame(predict['predicted_label'])
 
         if nb_cls == 1:
-            predict = np.round(abs(np.concatenate(predict.to_modin()['predictions'])))
+            predict = np.round(abs(np.concatenate(predict.to_pandas()['predictions'])))
         else:
             mapper = BatchMapper(map_predicted_label, batch_format = 'pandas')
             predict = mapper.transform(predict)
-            predict = np.ravel(np.array(predict.to_modin()))
+            predict = np.ravel(np.array(predict.to_pandas()))
         
         return predict
         

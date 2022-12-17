@@ -3,7 +3,7 @@ import ray
 import cloudpickle
 
 import numpy as np
-import modin.pandas as pd
+import pandas as pd
 
 from glob import glob
 from shutil import rmtree
@@ -73,7 +73,7 @@ class ClassificationMethods():
         # Empty initializations
         self.models = {}
         self._host = False
-        self.X_train = None
+        self._X_train = None
         self._y_train = None
         self._host_data = None
         self._database_data = None
@@ -185,9 +185,9 @@ class ClassificationMethods():
                 )
             self._load_training_data(taxa, merged = True)
         if self._merged_database_host is None:
-            self.models[taxa].train(self.X_train, self._y_train, self._database_data, self._cv)
+            self.models[taxa].train(self._X_train, self._y_train, self._database_data, self._cv)
         else:
-            self.models[taxa].train(self.X_train, self._y_train, self._merged_database_host, self._cv)
+            self.models[taxa].train(self._X_train, self._y_train, self._merged_database_host, self._cv)
         self._save_model(self._model_file, taxa)            
 
     def _multiclass_training(self, taxa):
@@ -219,7 +219,7 @@ class ClassificationMethods():
                 self._verbose
             )
         self._load_training_data(taxa)
-        self.models[taxa].train(self.X_train, self._y_train, self._database_data, self._cv)
+        self.models[taxa].train(self._X_train, self._y_train, self._database_data, self._cv)
         self._save_model(self._model_file, taxa)
         
     # Execute classification using trained model(s)
@@ -443,7 +443,7 @@ class ClassificationMethods():
     def _load_training_data(self, taxa, merged = False):
         if merged:
             # Binary merged
-            self.X_train = ray.data.read_parquet(self._merged_database_host['profile'])
+            self._X_train = ray.data.read_parquet(self._merged_database_host['profile'])
             self._y_train = pd.DataFrame({
                 taxa: pd.DataFrame(
                     self._merged_database_host['classes'],
@@ -452,7 +452,7 @@ class ClassificationMethods():
             })
         else:
         # Binary not merged or multiclass
-            self.X_train = ray.data.read_parquet(self._database_data['profile'])
+            self._X_train = ray.data.read_parquet(self._database_data['profile'])
             self._y_train = pd.DataFrame({
                 taxa: pd.DataFrame(
                     self._database_data['classes'],
@@ -460,5 +460,5 @@ class ClassificationMethods():
                 ).loc[:, taxa].astype('string').str.lower()
             })
             if taxa == 'domain':
-                self._y_train[self._y_train == 'archaea'] = 'bacteria'
+                self._y_train[self._y_train['domain'] == 'archaea'] = 'bacteria'
 

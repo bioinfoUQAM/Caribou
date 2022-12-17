@@ -2,7 +2,7 @@ import os
 import ray
 import warnings
 import numpy as np
-import modin.pandas as pd
+import pandas as pd
 
 from glob import glob
 from shutil import rmtree
@@ -18,7 +18,7 @@ from models.kerasTF.build_neural_networks import *
 # Training
 import tensorflow as tf
 from ray.air import session, Checkpoint
-from ray.air.callbacks.keras import Callback
+from ray.air.integrations.keras import Callback
 from ray.air.config import ScalingConfig, CheckpointConfig
 from ray.train.tensorflow import TensorflowTrainer, TensorflowCheckpoint, prepare_dataset_shard
 
@@ -120,21 +120,13 @@ class KerasTFModel(ModelsUtils):
         print('_training_preprocess')
         self._preprocessor = TensorMinMaxScaler(self.kmers)
         self._preprocessor.fit(X)
-        df = X.to_modin()
-        df.index = np.arange(len(df))
-        df[self.taxa] = y[self.taxa]
-        df = ray.data.from_modin(df)
-        print(df.to_modin())
-        sys.exit()
+        df = self._zip_X_y(X, y)
         self._label_encode(df, y)
-        print(df.to_modin())
         return df
 
     def _label_encode(self, df, y):
-        print(df.to_modin())
         self._nb_classes = len(np.unique(y[self.taxa]))
         self._label_encode_define(df)
-        print(df.to_modin())
         encoded = []
         encoded.append(-1)
         labels = ['unknown']
@@ -167,8 +159,6 @@ class KerasTFModel(ModelsUtils):
     def train(self, X, y, kmers_ds, cv = True):
         print('train')
         df = self._training_preprocess(X, y)
-        print(df.to_modin())
-        sys.exit()
         if cv:
             self._cross_validation(df, kmers_ds)
         else:
@@ -196,7 +186,9 @@ class KerasTFModel(ModelsUtils):
         self._fit_model(datasets)
 
         df_test = self._encoder.preprocessors[0].transform(df_test)
-        y_true = df_test.to_modin()[self.taxa]
+        y_true = []
+        for row in df_test.iter_rows():
+            y_true.append(row[self.taxa])
         y_pred = self.predict(df_test.drop_columns([self.taxa]), cv = True)
 
         for file in glob(os.path.join(os.path.dirname(kmers_ds['profile']), '*sim*')):
@@ -259,7 +251,7 @@ class KerasTFModel(ModelsUtils):
             # Make predictions
             predictions = self._predictor.predict(
                 df,
-                feature_columns = ['__value__'],
+                # feature_columns = ['__value__'],
                 batch_size = self.batch_size
             )
             predictions = self._prob_2_cls(predictions, threshold)
@@ -297,7 +289,7 @@ class KerasTFModel(ModelsUtils):
         else:
             mapper = BatchMapper(map_predicted_label_multiclass, batch_format = 'pandas')
         predict = mapper.transform(predictions)
-        predict = np.ravel(np.array(predict.to_modin()))
+        predict = np.ravel(np.array(predict.to_pandas()))
         
         return predict
 

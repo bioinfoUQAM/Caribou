@@ -2,7 +2,7 @@ import os
 import ray
 import warnings
 import pyarrow as pa
-import modin.pandas as pd
+import pandas as pd
 
 # Class construction
 from abc import ABC, abstractmethod
@@ -129,12 +129,11 @@ class ModelsUtils(ABC):
         cv_sim = readsSimulation(kmers_ds['fasta'], cls, sim_genomes, 'miseq', sim_outdir, name)
         sim_data = cv_sim.simulation(self.k, self.kmers)
         df = ray.data.read_parquet(sim_data['profile'])
-        df = df.to_modin()
-        df[self.taxa] = pd.DataFrame(
+        cls = pd.DataFrame(
             sim_data['classes'],
             columns=[self.taxa]
         )
-        df = ray.data.from_modin(df)
+        df = self._zip_X_y(df, cls)
         return df
 
     def _cv_score(self, y_true, y_pred):
@@ -142,7 +141,14 @@ class ModelsUtils(ABC):
 
         support = precision_recall_fscore_support(y_true, y_pred, average = 'weighted')
 
-        scores = pd.DataFrame({'Classifier':self.classifier,'Precision':support[0],'Recall':support[1],'F-score':support[2]}, index = [1]).T
+        scores = pd.DataFrame({
+            'Classifier':self.classifier,
+            'Precision':support[0],
+            'Recall':support[1],
+            'F-score':support[2]
+            },
+            index = [1]
+        ).T
 
         scores.to_csv(self._cv_csv, header = False)
 
@@ -165,3 +171,25 @@ class ModelsUtils(ABC):
     def _label_decode(self):
         """
         """
+
+    def _zip_X_y(self, X, y):
+        num_blocks = X.num_blocks()
+        len_x = X.count()
+        self._ensure_length_ds(len_x,len(y))
+        # Convert y -> ray.data.Dataset with arrow schema
+        y = ray.data.from_arrow(pa.Table.from_pandas(y))
+        # Repartition to 1 row/partition
+        X = X.repartition(len_x)
+        y = y.repartition(len_x)
+        # Ensure both ds fully executed
+        for ds in [X,y]:
+            if not ds.is_fully_executed():
+                ds.fully_executed()
+        # Zip X and y
+        df = X.zip(y).repartition(num_blocks)
+# TODO: If still no work : write/read on disk + clear memory
+        return df
+
+    def _ensure_length_ds(self, len_x, len_y):
+        if len_x != len_y:
+            raise ValueError('X and y have different lengths: {} and {}'.format(len_x, len_y))
