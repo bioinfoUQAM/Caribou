@@ -173,7 +173,7 @@ class ModelsUtils(ABC):
         """
 
     def _zip_X_y(self, X, y):
-        num_blocks = X.num_blocks()
+        num_blocks = int(X.num_blocks()/self.batch_size)
         len_x = X.count()
         self._ensure_length_ds(len_x,len(y))
         # Convert y -> ray.data.Dataset with arrow schema

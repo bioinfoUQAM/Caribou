@@ -213,10 +213,11 @@ class SklearnPartialTrainer(SklearnTrainer):
                                 Removing the last {} additionnal values, this may influence training.\
                                     If error persists over multiple samples, please rerun the K-mers extraction".format(len(batch_X[i]) - len(self._features_list)))
                             batch_X[i] = batch_X[i][:len(self._features_list)]
+                batch_y = np.ravel(batch_y)
                 try:
-                    self.estimator.partial_fit(batch_X, np.ravel(batch_y), classes = self._labels, **self.fit_params)
+                    self.estimator.partial_fit(batch_X, batch_y, classes = self._labels, **self.fit_params)
                 except TypeError:
-                    self.estimator.partial_fit(batch_X, np.ravel(batch_y), **self.fit_params)
+                    self.estimator.partial_fit(batch_X, batch_y, **self.fit_params)
             fit_time = time() - start_time
 
             with tune.checkpoint_dir(step=1) as checkpoint_dir:

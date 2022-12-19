@@ -28,7 +28,7 @@ class TensorMinMaxScaler(Preprocessor):
         for batch in dataset.iter_batches(batch_format = "numpy"):
             for i in np.arange(len(self._features_list)):
                 local_min = min(batch['__value__'][:,i])
-                local_max = max(batch['__value__'][:, i])
+                local_max = max(batch['__value__'][:,i])
                 if local_min < self._min[i]:
                     self._min[i] = local_min
                 if local_max > self._max[i]:

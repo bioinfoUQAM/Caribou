@@ -259,7 +259,7 @@ tuner = Tuner(
         metric = 'validation/test_score',
         mode = 'max',
         search_alg=BasicVariantGenerator(
-            max_concurrent = int((0.8 * os.cpu_count())/4)
+            max_concurrent = int((0.8 * os.cpu_count())/5)
         ),
         scheduler = ASHAScheduler()
     ),
