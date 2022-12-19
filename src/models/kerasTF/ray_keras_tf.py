@@ -23,8 +23,11 @@ from ray.air.config import ScalingConfig, CheckpointConfig
 from ray.train.tensorflow import TensorflowTrainer, TensorflowCheckpoint, prepare_dataset_shard
 
 # Tuning
-from ray.air.config import RunConfig
 from ray.tune import SyncConfig
+from ray.air.config import RunConfig
+from ray.tune.tuner import Tuner, TuneConfig
+from ray.tune.schedulers import ASHAScheduler
+from ray.tune.search.basic_variant import BasicVariantGenerator
 
 # Predicting
 from ray.train.tensorflow import TensorflowPredictor
@@ -96,6 +99,7 @@ class KerasTFModel(ModelsUtils):
         self._training_epochs = training_epochs
         # Initialize empty
         self._nb_classes = None
+        self._tuner = None
         # Computing variables
         if len(tf.config.list_physical_devices('GPU')) > 0:
             self._use_gpu = True
@@ -208,20 +212,48 @@ class KerasTFModel(ModelsUtils):
             datasets[name] = ds
 
         # Training parameters
+        # self._train_params = {
+        #     'batch_size': self.batch_size,
+        #     'epochs': self._training_epochs,
+        #     'size': self._nb_kmers,
+        #     'nb_cls':self._nb_classes,
+        #     'model': self.classifier
+        # }
+        # Tuning parameters
         self._train_params = {
-            'batch_size': self.batch_size,
-            'epochs': self._training_epochs,
-            'size': self._nb_kmers,
-            'nb_cls':self._nb_classes,
-            'model': self.classifier
+            'scaling_config': ScalingConfig(
+                num_workers = self._n_workers,
+                use_gpu = self._use_gpu
+            ),
+            'train_loop_config': {
+                'batch_size': self.batch_size,
+                'epochs': self._training_epochs,
+                'size': self._nb_kmers,
+                'nb_cls':self._nb_classes,
+                'model': self.classifier
+            }
         }
+
         # Define trainer / tuner
         self._trainer = TensorflowTrainer(
             train_loop_per_worker = train_func,
-            train_loop_config = self._train_params,
+            train_loop_config = {}, # self._train_params,
             scaling_config = ScalingConfig(
                 num_workers = self._n_workers,
                 use_gpu = self._use_gpu
+            ),
+            datasets = datasets
+        )
+        self._tuner = Tuner(
+            trainable = self._trainer,
+            param_space = self._train_params,
+            tune_config=TuneConfig(
+                metric = 'loss',
+                mode = 'min',
+                search_alg = BasicVariantGenerator(
+                    max_concurrent = int((0.8 * os.cpu_count())/5)
+                ),
+                scheduler = ASHAScheduler()
             ),
             run_config = RunConfig(
                 name = self.classifier,
@@ -232,11 +264,12 @@ class KerasTFModel(ModelsUtils):
                     checkpoint_score_order = 'min'
                 )
             ),
-            datasets = datasets
         )
         # Train / tune execution
-        training_result = self._trainer.fit()
-        self._model_ckpt = training_result.best_checkpoints[0][0]
+        # training_result = self._trainer.fit()
+        # self._model_ckpt = training_result.best_checkpoints[0][0]
+        tuning_result = self._tuner.fit()
+        self._model_ckpt = tuning_result.get_best_result(metric = 'loss', mode = 'min').checkpoint
 
     def predict(self, df, threshold = 0.8, cv = False):
         print('predict')
