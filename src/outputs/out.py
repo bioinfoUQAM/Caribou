@@ -102,9 +102,12 @@ class Outputs():
     # Bacteria abundance tables / relative abundance vs total bacteria
     def _abundance_table(self):
         lst_taxa = list(self._abundances.keys())
-        lst_nb_reads = np.zeros(len(lst_taxa), dtype = object)
-        lst_rel_abund = np.zeros(len(lst_taxa), dtype = object)
-        
+        lst_taxa.insert('unknown', 0)
+        lst_nb_reads = np.zeros(len(lst_taxa) + 1, dtype = object)
+        lst_rel_abund = np.zeros(len(lst_taxa) + 1, dtype = object)
+        reads_total = (len(self.classified_data['domain']['classified_ids']) + len(self.classified_data['domain']['unknown_ids']))
+        lst_nb_reads[0] = len(self.classified_data['domain']['unknown_ids'])
+
         if 'domain' in lst_taxa:
             lst_taxa.remove('domain')
         if 'host' in self._abundances:
@@ -128,7 +131,7 @@ class Outputs():
             
         lst_taxa = np.ravel(lst_taxa)
         lst_nb_reads = np.ravel(lst_nb_reads)
-        lst_rel_abund = (lst_nb_reads / nb_total_bacteria) * 100
+        lst_rel_abund = (lst_nb_reads / reads_total) * 100
 
         df = pd.DataFrame({
             'Taxonomic classification': lst_taxa,
