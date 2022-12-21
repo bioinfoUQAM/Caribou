@@ -73,16 +73,19 @@ class Outputs():
         self.order = classified_data['sequence']
         self.data_labels = database_kmers['classes']
         # File names
-        self._abund_file = '{}abundance_K{}_{}_{}.csv'.format(results_dir, k, classifier, dataset)
         self._summary_file = '{}summary_K{}_{}_{}.csv'.format(results_dir, k, classifier, dataset)
         self._krona_file = '{}kronagram_K{}_{}_{}.csv'.format(results_dir, k, classifier, dataset)
         self._krona_out = '{}kronagram_K{}_{}_{}.html'.format(results_dir, k, classifier, dataset)
-        self._report_file = '{}full_report_K{}_{}_{}.csv'.format(results_dir, k, classifier, dataset)
+        self._report_file = '{}abundance_report_K{}_{}_{}.csv'.format(results_dir, k, classifier, dataset)
+        self._mpa_file = '{}mpa_K{}_{}_{}.csv'.format(results_dir, k, classifier, dataset)
         self._fasta_outdir = '{}fasta_by_taxa_k{}_{}_{}'.format(results_dir, k, classifier, dataset)
         # Initialize empty
         self._abundances = {}
         # Get abundances used for other outputs
         self._get_abundances()
+        # Auto output summary
+        self._summary_table()
+        print('Summary table saved to {}'.format(self._summary_file))
 
 
     def _get_abundances(self):
@@ -92,54 +95,6 @@ class Outputs():
                 'counts': df.value_counts(subset = [taxa]),
                 'total': df.value_counts(subset = [taxa]).sum()
             }
-
-    def abundances(self):
-        self._abundance_table()
-        print('Abundance table saved to {}'.format(self._abund_file))
-        self._summary_table()
-        print('Summary table saved to {}'.format(self._summary_file))
-
-    # Bacteria abundance tables / relative abundance vs total bacteria
-    def _abundance_table(self):
-        lst_taxa = list(self._abundances.keys())
-        lst_taxa.insert('unknown', 0)
-        lst_nb_reads = np.zeros(len(lst_taxa) + 1, dtype = object)
-        lst_rel_abund = np.zeros(len(lst_taxa) + 1, dtype = object)
-        reads_total = (len(self.classified_data['domain']['classified_ids']) + len(self.classified_data['domain']['unknown_ids']))
-        lst_nb_reads[0] = len(self.classified_data['domain']['unknown_ids'])
-
-        if 'domain' in lst_taxa:
-            lst_taxa.remove('domain')
-        if 'host' in self._abundances:
-            lst_taxa.remove('host')
-        
-        if 'domain' in self.classified_data.keys():
-            nb_total_bacteria = len(self.classified_data['domain']['classified_ids'])
-        else:
-            nb_total_bacteria = 0
-            for taxa in lst_taxa:
-                nb_total_bacteria += self._abundances[taxa]['total']
-
-        print(lst_taxa)
-        for taxa in lst_taxa:
-            print(taxa)
-            lst_taxa[lst_taxa.index(taxa)] = []
-            lst_taxa[lst_taxa.index(taxa)].append(taxa)
-            lst_taxa[lst_taxa.index(taxa)].extend(list(self._abundances[taxa]['counts'].index))
-            lst_nb_reads[lst_taxa.index(taxa)] = [self._abundances[taxa]['total']]
-            lst_nb_reads[lst_taxa.index(taxa)].extend(list(self._abundances[taxa]['counts'].values))
-            
-        lst_taxa = np.ravel(lst_taxa)
-        lst_nb_reads = np.ravel(lst_nb_reads)
-        lst_rel_abund = (lst_nb_reads / reads_total) * 100
-
-        df = pd.DataFrame({
-            'Taxonomic classification': lst_taxa,
-            'Number of reads': lst_nb_reads,
-            'Relative Abundance (%)': lst_rel_abund
-        })
-
-        df.to_csv(self._abund_file, na_rep = '', header = True, index = False)
 
     # Summary file of operations / counts & proportions of reads at each steps
     def _summary_table(self):
@@ -219,7 +174,10 @@ class Outputs():
         df.to_csv(self._krona_file, na_rep = '', header = False, index = True)
 
     # Report file of classification of each id
-    def report(self):
+    # Bacteria abundance tables / relative abundance vs total bacteria
+# TODO : modifier pour que les colonnes soient les taxas et les lignes les classifications
+    # Essentially : concat les dataframes de classification + abundance / relative
+    def abundance_report(self):
         taxas = self.order.copy()
         if 'domain' in taxas:
             taxas.remove('domain')
@@ -233,7 +191,55 @@ class Outputs():
 
         df.to_csv(self._report_file, na_rep = '', header = True, index = False)
 
+# TODO : Convertir cette fonction pour mpa-style
+    def mpa_style(self):
+        print('Abundance table saved to {}'.format(self._abund_file))
+
+    
+
+        lst_taxa = list(self._abundances.keys())
+        lst_taxa.insert(0, 'unknown')
+        lst_nb_reads = np.zeros(len(lst_taxa) + 1, dtype = object)
+        lst_rel_abund = np.zeros(len(lst_taxa) + 1, dtype = object)
+        reads_total = (len(self.classified_data['domain']['classified_ids']) + len(self.classified_data['domain']['unknown_ids']))
+        lst_nb_reads[0] = len(self.classified_data['domain']['unknown_ids'])
+
+        if 'domain' in lst_taxa:
+            lst_taxa.remove('domain')
+        if 'host' in self._abundances:
+            lst_taxa.remove('host')
+        
+        if 'domain' in self.classified_data.keys():
+            nb_total_bacteria = len(self.classified_data['domain']['classified_ids'])
+        else:
+            nb_total_bacteria = 0
+            for taxa in lst_taxa:
+                nb_total_bacteria += self._abundances[taxa]['total']
+
+        print(lst_taxa)
+        for taxa in lst_taxa:
+            print(taxa)
+            lst_taxa[lst_taxa.index(taxa)] = []
+            lst_taxa[lst_taxa.index(taxa)].append(taxa)
+            lst_taxa[lst_taxa.index(taxa)].extend(list(self._abundances[taxa]['counts'].index))
+            lst_nb_reads[lst_taxa.index(taxa)] = [self._abundances[taxa]['total']]
+            lst_nb_reads[lst_taxa.index(taxa)].extend(list(self._abundances[taxa]['counts'].values))
+            
+        lst_taxa = np.ravel(lst_taxa)
+        lst_nb_reads = np.ravel(lst_nb_reads)
+        lst_rel_abund = (lst_nb_reads / reads_total) * 100
+
+        df = pd.DataFrame({
+            'Taxonomic classification': lst_taxa,
+            'Number of reads': lst_nb_reads,
+            'Relative Abundance (%)': lst_rel_abund
+        })
+
+        df.to_csv(self._abund_file, na_rep = '', header = True, index = False)
+
+
     def fasta(self):
+        print('Fasta files saved to {}'.format(self._fasta_outdir))
         os.mkdir(self._fasta_outdir)
         path, ext = os.path.splitext(self.fasta_file)
         if ext == '.gz':
