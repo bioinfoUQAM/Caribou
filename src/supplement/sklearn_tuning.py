@@ -125,12 +125,15 @@ def sim_4_cv(df, kmers_ds, name, taxa, cols, k, scaler):
     sim_outdir = os.path.dirname(kmers_ds['profile'])
     cv_sim = readsSimulation(kmers_ds['fasta'], cls, sim_genomes, 'miseq', sim_outdir, name)
     sim_data = cv_sim.simulation(k, cols)
+    sim_ids = pd.DataFrame({'id':sim_data.kmers_data['ids']})
+    cls = cls.join(sim_ids, on='id', how='inner')
+    cls = cls.drop('id', axis=1)
     df = ray.data.read_parquet(sim_data['profile'])
     df = scaler.transform(df)
-    cls = pd.DataFrame(
-        sim_data['classes'],
-        columns = [taxa]
-    )
+    # cls = pd.DataFrame(
+    #     sim_data['classes'],
+    #     columns = [taxa]
+    # )
     df = zip_X_y(df, cls)
     return df
 
