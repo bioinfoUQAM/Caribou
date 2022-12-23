@@ -249,7 +249,7 @@ class Outputs():
             with open(self.fasta_file, 'rt') as handle:
                 records = SeqIO.index(handle, 'fasta')
 
-        list_taxa = [order[i] for i in range(len(order)-1, -1, -1)]
+        list_taxa = [self.order[i] for i in range(len(self.order)-1, -1, -1)]
         list_taxa.remove('unknown')
         for taxa in list_taxa:
             taxa_dir = os.path.join(self._fasta_outdir,taxa)

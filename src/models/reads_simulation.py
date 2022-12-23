@@ -79,8 +79,8 @@ class readsSimulation():
         self._prefix = os.path.join(outdir,'sim_{}'.format(self._name))
         # Files paths
         self._fasta_tmp = os.path.join(outdir, 'sim_{}_tmp.fasta'.format(self._name))
-        self._R1_fastq = os.path.join(outdir, 'sim_{}_R1.fastq.gz'.format(self._name))
-        self._R2_fastq = os.path.join(outdir, 'sim_{}_R2.fastq.gz'.format(self._name))
+        self._R1_fastq = os.path.join(outdir, 'sim_{}_R1.fastq'.format(self._name))
+        self._R2_fastq = os.path.join(outdir, 'sim_{}_R2.fastq'.format(self._name))
         self._fasta_out = os.path.join(outdir, 'sim_{}_data.fna.gz'.format(self._name))
         self._cls_out = os.path.join(outdir, 'sim_{}_class.csv'.format(self._name))
         # Dataset variables
@@ -89,7 +89,7 @@ class readsSimulation():
     def simulation(self, k = None, kmers_list = None):
         k, kmers_list = self._verify_sim_arguments(k, kmers_list)
         self._make_tmp_fasta()
-        cmd = "iss generate -g {} -n {} --abundance halfnormal --model {} --output {} --compress --cpus {}".format(self._fasta_tmp,self._nb_reads,self._sequencing,self._prefix,os.cpu_count())
+        cmd = "iss generate -g {} -n {} --abundance halfnormal --model {} --output {} --cpus {}".format(self._fasta_tmp,self._nb_reads,self._sequencing,self._prefix,os.cpu_count())
         os.system(cmd)
         self._fastq2fasta()
         self._write_cls_file()
@@ -118,7 +118,7 @@ class readsSimulation():
                     SeqIO.write(record, handle_out, 'fasta')
 
     def _fastq2fasta(self):
-        with gzip.open(self._R1_fastq, "rt") as handle_R1, gzip.open(self._R2_fastq, "rt") as handle_R2, gzip.open(self._fasta_out, "at") as handle_out:
+        with open(self._R1_fastq, "rt") as handle_R1, open(self._R2_fastq, "rt") as handle_R2, gzip.open(self._fasta_out, "at") as handle_out:
             for record_R1, record_R2 in zip(SeqIO.parse(handle_R1, 'fastq'), SeqIO.parse(handle_R2, 'fastq')):
                 record_R1.id = record_R1.id.replace('/','_')
                 record_R2.id = record_R2.id.replace('/','_')

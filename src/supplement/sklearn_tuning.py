@@ -147,7 +147,7 @@ parser.add_argument('-bs','--batch_size', required=True, help='Size of the batch
 parser.add_argument('-t','--taxa', required=True, help='The taxa for which the tuning should be done')
 parser.add_argument('-k','--kmers_length', required=True, help='Length of k-mers')
 parser.add_argument('-o','--outdir', required=True, type=Path, help='Path to folder for outputing tuning results')
-parser.add_argument('-wd','--workdir', default=None, type=Path, help='Optional. Path to a working directory where Ray Tune will output and spill tuning data')
+parser.add_argument('-wd','--workdir', default='~/ray', type=Path, help='Optional. Path to a working directory where Ray Tune will output and spill tuning data')
 
 args = parser.parse_args()
 
@@ -245,7 +245,7 @@ trainer = SklearnPartialTrainer(
     set_estimator_cpus = True,
     scaling_config = ScalingConfig(
         trainer_resources = {
-            'CPU' : 4
+            'CPU' : 5
         }
     )
 )
@@ -259,7 +259,7 @@ tuner = Tuner(
         metric = 'validation/test_score',
         mode = 'max',
         search_alg=BasicVariantGenerator(
-            max_concurrent = int((0.8 * os.cpu_count())/5)
+            max_concurrent = 8 #int((0.8 * os.cpu_count())/5)
         ),
         scheduler = ASHAScheduler()
     ),
