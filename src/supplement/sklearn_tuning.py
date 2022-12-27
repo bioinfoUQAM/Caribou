@@ -1,4 +1,5 @@
 #!/usr/bin python3
+import re
 import os
 import ray
 import json
@@ -121,20 +122,19 @@ def sim_4_cv(df, kmers_ds, name, taxa, cols, k, scaler):
     for row in df.iter_rows():
         sim_genomes.append(row['id'])
         sim_taxas.append(row[taxa])
-    cls = pd.DataFrame({'id':sim_genomes,taxa:sim_taxas})
+    cls = pd.DataFrame({'id':sim_genomes,taxa:sim_taxas}, dtype = object)
     sim_outdir = os.path.dirname(kmers_ds['profile'])
     cv_sim = readsSimulation(kmers_ds['fasta'], cls, sim_genomes, 'miseq', sim_outdir, name)
     sim_data = cv_sim.simulation(k, cols)
-    sim_ids = pd.DataFrame({'id':sim_data['ids']})
-    cls = cls.join(sim_ids, on='id', how='inner')
-    cls = cls.drop('id', axis=1)
+    sim_ids = sim_data['ids']
+    sim_cls = pd.DataFrame({'sim_id':sim_ids}, dtype = object)
+    sim_cls['id'] = sim_cls['sim_id'].str.replace('_[0-9]+_[0-9]+_[0-9]+', '', regex=True)
+    sim_cls = sim_cls.set_index('id').join(cls.set_index('id'))
+    sim_cls = sim_cls.drop(['sim_id'], axis=1)
+    sim_cls = sim_cls.reset_index(drop = True)
     df = ray.data.read_parquet(sim_data['profile'])
     df = scaler.transform(df)
-    # cls = pd.DataFrame(
-    #     sim_data['classes'],
-    #     columns = [taxa]
-    # )
-    df = zip_X_y(df, cls)
+    df = zip_X_y(df, sim_cls)
     return df
 
 # CLI argument
@@ -150,7 +150,7 @@ parser.add_argument('-bs','--batch_size', required=True, help='Size of the batch
 parser.add_argument('-t','--taxa', required=True, help='The taxa for which the tuning should be done')
 parser.add_argument('-k','--kmers_length', required=True, help='Length of k-mers')
 parser.add_argument('-o','--outdir', required=True, type=Path, help='Path to folder for outputing tuning results')
-parser.add_argument('-wd','--workdir', default='~/ray', type=Path, help='Optional. Path to a working directory where Ray Tune will output and spill tuning data')
+parser.add_argument('-wd','--workdir', default='~/ray', type=Path, help='Optional. Path to a working directory where tuning data will be spilled')
 
 args = parser.parse_args()
 

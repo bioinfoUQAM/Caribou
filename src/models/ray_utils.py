@@ -128,15 +128,16 @@ class ModelsUtils(ABC):
         sim_outdir = os.path.dirname(kmers_ds['profile'])
         cv_sim = readsSimulation(kmers_ds['fasta'], cls, sim_genomes, 'miseq', sim_outdir, name)
         sim_data = cv_sim.simulation(self.k, self.kmers)
-        sim_ids = pd.DataFrame({'id':sim_data['ids']})
-        cls = cls.join(sim_ids, on = 'id', how = 'inner')
-        cls = cls.drop('id', axis=1)
+        sim_ids = sim_data['ids']
+        sim_ids = sim_data['ids']
+        sim_cls = pd.DataFrame({'sim_id':sim_ids}, dtype = object)
+        sim_cls['id'] = sim_cls['sim_id'].str.replace('_[0-9]+_[0-9]+_[0-9]+', '', regex=True)
+        sim_cls = sim_cls.set_index('id').join(cls.set_index('id'))
+        sim_cls = sim_cls.drop(['sim_id'], axis=1)
+        sim_cls = sim_cls.reset_index(drop = True)
         df = ray.data.read_parquet(sim_data['profile'])
-        # cls = pd.DataFrame(
-        #     sim_data['classes'],
-        #     columns=[self.taxa]
-        # )
-        df = self._zip_X_y(df, cls)
+        df = self._scaler.transform(df)
+        df = self._zip_X_y(df, sim_cls)
         return df
 
     def _cv_score(self, y_true, y_pred):
