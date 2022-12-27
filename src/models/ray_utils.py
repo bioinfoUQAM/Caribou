@@ -128,7 +128,7 @@ class ModelsUtils(ABC):
         sim_outdir = os.path.dirname(kmers_ds['profile'])
         cv_sim = readsSimulation(kmers_ds['fasta'], cls, sim_genomes, 'miseq', sim_outdir, name)
         sim_data = cv_sim.simulation(self.k, self.kmers)
-        sim_ids = pd.DataFrame({'id':sim_data.kmers_data['ids']})
+        sim_ids = pd.DataFrame({'id':sim_data['ids']})
         cls = cls.join(sim_ids, on = 'id', how = 'inner')
         cls = cls.drop('id', axis=1)
         df = ray.data.read_parquet(sim_data['profile'])
