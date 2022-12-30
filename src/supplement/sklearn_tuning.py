@@ -122,12 +122,12 @@ def sim_4_cv(df, kmers_ds, name, taxa, cols, k, scaler):
     for row in df.iter_rows():
         sim_genomes.append(row['id'])
         sim_taxas.append(row[taxa])
-    cls = pd.DataFrame({'id':sim_genomes,taxa:sim_taxas}, dtype = object)
+    cls = pd.DataFrame({'id':sim_genomes,taxa:sim_taxas})
     sim_outdir = os.path.dirname(kmers_ds['profile'])
     cv_sim = readsSimulation(kmers_ds['fasta'], cls, sim_genomes, 'miseq', sim_outdir, name)
     sim_data = cv_sim.simulation(k, cols)
     sim_ids = sim_data['ids']
-    sim_cls = pd.DataFrame({'sim_id':sim_ids}, dtype = object)
+    sim_cls = pd.DataFrame({'sim_id':sim_ids})
     sim_cls['id'] = sim_cls['sim_id'].str.replace('_[0-9]+_[0-9]+_[0-9]+', '', regex=True)
     sim_cls = sim_cls.set_index('id').join(cls.set_index('id'))
     sim_cls = sim_cls.drop(['sim_id'], axis=1)
@@ -175,14 +175,16 @@ if 'id' in data['kmers']:
 
 X = ray.data.read_parquet(data['profile'])
 cols = data['kmers']
-y = pd.DataFrame({opt['taxa'] : pd.DataFrame(data['classes'], columns = data['taxas']).loc[:,opt['taxa']].astype('string').str.lower()})
+y = pd.DataFrame({opt['taxa'] : pd.DataFrame(data['classes'], columns = data['taxas']).loc[:,opt['taxa']].astype('string').str.lower()}, dtype = object)
 
 if opt['taxa'] == 'domain':
     y[y['domain'] == 'archaea'] = 'bacteria'
 
-df, labels_list, scaler = preprocess(X, y, opt['taxa'], cols, opt['classifier'])
+df_train, labels_list, scaler = preprocess(X, y, opt['taxa'], cols, opt['classifier'])
 
-df_train, df_val = df.train_test_split(0.2, shuffle = True)
+if (df_train.count() / df_train.num_blocks()) < 10:
+    df_train = df_train.repartition(10)
+df_val = df_train.random_sample(0.2)
 df_val = sim_4_cv(df_val, data, 'tuning_val', opt['taxa'], cols, opt['kmers_length'], scaler)
 df_train = df_train.drop_columns(['id'])
 df_val = df_val.drop_columns(['id'])

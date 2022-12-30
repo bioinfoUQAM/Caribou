@@ -136,10 +136,12 @@ class SklearnModel(ModelsUtils):
             datasets = {'train' : ray.put(df)}
             self._fit_model(datasets)
 
-    def _cross_validation(self, df, kmers_ds):
+    def _cross_validation(self, df_train, kmers_ds):
         print('_cross_validation')
-
-        df_train, df_test = df.train_test_split(0.2, shuffle = True)
+        
+        if (df_train.count() / df_train.num_blocks()) < 10:
+            df_train = df_train.repartition(10)
+        df_test = df_train.random_sample(0.2)
         df_test = self._sim_4_cv(df_test, kmers_ds, '{}_test'.format(self.dataset))
 
         df_train = df_train.drop_columns(['id'])
