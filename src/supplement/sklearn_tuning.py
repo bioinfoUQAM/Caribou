@@ -1,5 +1,5 @@
 #!/usr/bin python3
-import re
+
 import os
 import ray
 import json
@@ -183,7 +183,10 @@ if opt['taxa'] == 'domain':
 df_train, labels_list, scaler = preprocess(X, y, opt['taxa'], cols, opt['classifier'])
 
 if (df_train.count() / df_train.num_blocks()) < 10:
-    df_train = df_train.repartition(10)
+    if (df_train.count() / os.cpu_count()) < 10:
+        df_train = df_train.repartition(10)
+    else:
+        df_train = df_train.repartition(os.cpu_count())
 df_val = df_train.random_sample(0.2)
 df_val = sim_4_cv(df_val, data, 'tuning_val', opt['taxa'], cols, opt['kmers_length'], scaler)
 df_train = df_train.drop_columns(['id'])

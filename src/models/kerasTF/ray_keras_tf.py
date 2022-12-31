@@ -162,26 +162,22 @@ class KerasTFModel(ModelsUtils):
 
     def train(self, X, y, kmers_ds, cv = True):
         print('train')
-        df_train = self._training_preprocess(X, y)
+        df = self._training_preprocess(X, y)
         if cv:
-            self._cross_validation(df_train, kmers_ds)
+            self._cross_validation(df, kmers_ds)
         else:
-            if (df_train.count() / df_train.num_blocks()) < 10:
-                df_train = df_train.repartition(10)
-            df_val = df_train.random_sample(0.2)
+            df_train, df_val = df.train_test_split(0.2, shuffle = True)
             df_val = self._sim_4_cv(df_val, kmers_ds, 'validation')
             df_train = df_train.drop_columns(['id'])
             df_val = df_val.drop_columns(['id'])
             datasets = {'train': ray.put(df_train), 'validation': ray.put(df_val)}
             self._fit_model(datasets)
 
-    def _cross_validation(self, df_train, kmers_ds):
+    def _cross_validation(self, df, kmers_ds):
         print('_cross_validation')
 
-        if (df_train.count() / df_train.num_blocks()) < 10:
-                df_train = df_train.repartition(10)
-        df_test = df_train.random_sample(0.2)
-        df_val = df_train.random_sample(0.2)
+        df_train, df_test = df.train_test_split(0.2, shuffle = True)
+        df_train, df_val = df_train.train_test_split(0.2, shuffle = True)
         
         df_val = self._sim_4_cv(df_val, kmers_ds, '{}_val'.format(self.dataset))
         df_test = self._sim_4_cv(df_test, kmers_ds, '{}_test'.format(self.dataset))

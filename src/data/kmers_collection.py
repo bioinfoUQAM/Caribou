@@ -176,7 +176,7 @@ class KmersCollection():
         id = os.path.splitext(os.path.basename(file))[0]
         os.mkdir(tmp_folder)
         # Count k-mers with KMC
-        cmd_count = os.path.join(self._kmc_path,"kmc -k{} -fm -ci10 -cs1000000000 -hp {} {} {}".format(self.k, file, os.path.join(tmp_folder, str(ind)), tmp_folder))
+        cmd_count = os.path.join(self._kmc_path,"kmc -k{} -fm -ci5 -cs1000000000 -hp {} {} {}".format(self.k, file, os.path.join(tmp_folder, str(ind)), tmp_folder))
         run(cmd_count, shell = True, capture_output=True)
         # Transform k-mers db with KMC
         cmd_transform = os.path.join(self._kmc_path,"kmc_tools transform {} dump {}".format(os.path.join(tmp_folder, str(ind)), os.path.join(self._tmp_dir, "{}.txt".format(ind))))
