@@ -124,13 +124,14 @@ class KerasTFModel(ModelsUtils):
         print('_training_preprocess')
         self._preprocessor = TensorMinMaxScaler(self.kmers)
         self._preprocessor.fit(X)
+        self._label_encode(y)
         df = self._zip_X_y(X, y)
-        self._label_encode(df, y)
         return df
 
-    def _label_encode(self, df, y):
+    def _label_encode(self, y):
         self._nb_classes = len(np.unique(y[self.taxa]))
-        self._label_encode_define(df)
+        y = ray.data.from_pandas(y)
+        self._label_encode_define(y)
         encoded = []
         encoded.append(-1)
         labels = ['unknown']
@@ -139,9 +140,9 @@ class KerasTFModel(ModelsUtils):
             labels.append(k)
 
         self._labels_map = zip(labels, encoded)
-
+        
     def _label_encode_define(self, df):
-        print('_label_encode_multiclass')
+        print('_label_encode_define')
         self._encoder = Chain(
             LabelEncoder(self.taxa),
             OneHotEncoder([self.taxa]),
@@ -151,7 +152,7 @@ class KerasTFModel(ModelsUtils):
             )
         )
         self._encoder.fit(df)
-
+        
     def _label_decode(self, predict):
         print('_label_decode')
         decoded = pd.Series(np.empty(len(predict), dtype=object))

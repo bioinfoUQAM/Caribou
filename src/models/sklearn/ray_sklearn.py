@@ -98,12 +98,13 @@ class SklearnModel(ModelsUtils):
         labels = np.unique(y[self.taxa])
         self._preprocessor = TensorMinMaxScaler(self.kmers)
         self._preprocessor.fit(X)
+        self._label_encode(y, labels)
         df = self._zip_X_y(X, y)
-        df = self._label_encode(df, labels)
         return df
 
     def _label_encode(self, df, labels):
         print('_label_encode')
+        df = ray.data.from_pandas(df)
         if self.classifier == 'onesvm':
             self._encoder = OneClassSVMLabelEncoder(self.taxa)
             self._encoder.fit(df)
@@ -116,7 +117,6 @@ class SklearnModel(ModelsUtils):
             encoded = np.append(self._encoded, -1)
             labels = np.append(labels, 'unknown')
         self._labels_map = zip(labels, encoded)
-        return df
 
     def _label_decode(self, predict):
         print('_label_decode')

@@ -100,8 +100,8 @@ def preprocess(X, y, taxa, cols, classifier):
     scaler = TensorMinMaxScaler(cols)
     X = scaler.fit_transform(X)
     labels = np.unique(y[taxa])
+    y, labels = preprocess_labels(y, taxa, labels, classifier)
     df = zip_X_y(X, y)
-    df, labels = preprocess_labels(df, taxa, labels, classifier)
     return df, labels, scaler
 
 def preprocess_labels(df, taxa, labels, classifier):
