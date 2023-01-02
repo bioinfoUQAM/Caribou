@@ -39,16 +39,13 @@ class Outputs():
     Methods
     ----------
 
-    abundances : Generates an abundances table in csv format
+    mpa_style : Generates an abundances table in tsv format similar to metaphlan's output
         No parameters required
 
     kronagram : Generates a Kronagram (interactive tree) in html format
         No parameters required
 
-    report : Generates a full report on identification of classified sequences
-        No parameters required
-
-    fasta : Generates a fasta file containing each sequences assigned to a taxonomy for classification made
+    abundance_report : Generates a full report on identification of classified sequences
         No parameters required
 
     """
@@ -78,7 +75,6 @@ class Outputs():
         self._krona_out = '{}kronagram_K{}_{}_{}.html'.format(results_dir, k, classifier, dataset)
         self._report_file = '{}abundance_report_K{}_{}_{}.csv'.format(results_dir, k, classifier, dataset)
         self._mpa_file = '{}mpa_K{}_{}_{}.csv'.format(results_dir, k, classifier, dataset)
-        self._fasta_outdir = '{}fasta_by_taxa_k{}_{}_{}'.format(results_dir, k, classifier, dataset)
         # Initialize empty
         self._abundances = {}
         # Get abundances used for other outputs
@@ -237,27 +233,3 @@ class Outputs():
 
         df.to_csv(self._abund_file, na_rep = '', header = True, index = False)
 
-
-    def fasta(self):
-        print('Fasta files saved to {}'.format(self._fasta_outdir))
-        os.mkdir(self._fasta_outdir)
-        path, ext = os.path.splitext(self.fasta_file)
-        if ext == '.gz':
-            with gzip.open(self.fasta_file, 'rt') as handle:
-                records = SeqIO.index(handle, 'fasta')
-        else:
-            with open(self.fasta_file, 'rt') as handle:
-                records = SeqIO.index(handle, 'fasta')
-
-        list_taxa = [self.order[i] for i in range(len(self.order)-1, -1, -1)]
-        list_taxa.remove('unknown')
-        for taxa in list_taxa:
-            taxa_dir = os.path.join(self._fasta_outdir,taxa)
-            df = pd.read_parquet(self.classified_data[taxa]['profile'])
-            for cls in np.unique(df['classes']):
-                outfile_cls = os.path.join(taxa_dir,'{}.fna.gz'.format(cls))
-                df_cls = df[df['classes'].str.match(cls)]
-                ids = list(df_cls['id'])
-                with gzip.open(outfile_cls, 'w') as handle:
-                    for id in ids:
-                        SeqIO.write(records[id], handle, 'fasta')

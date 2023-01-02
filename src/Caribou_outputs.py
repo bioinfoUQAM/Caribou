@@ -27,14 +27,12 @@ def out_2_user(opt):
         classified_data
     )
 
-    if opt['abundance']:
+    if opt['mpa']:
         outs.abundances()
     if opt['kronagram']:
         outs.kronagram()
     if opt['report']:
         outs.report()
-    if opt['fasta']:
-        outs.fasta()
     # if opt['biom']:
     #     outs.biom()
 
@@ -51,10 +49,9 @@ if __name__ == "__main__":
     parser.add_argument('-model','--model_type', required=True, choices=['sgd','mnb','lstm_attention','cnn','widecnn'], help='The type of model used for classification')
     parser.add_argument('-dt','--dataset_name', required=True, help='Name of the classified dataset used to name files')
     parser.add_argument('-dh','--host_name', default=None, help='Name of the host database used to name files')
-    parser.add_argument('-a','--abundance', action='store_true', help='Should the abundance table be generated?')
+    parser.add_argument('-m','--mpa', action='store_true', help='Should the mpa-style output be generated?')
     parser.add_argument('-k','--kronagram', action='store_true', help='Should the interactive kronagram be generated?')
-    parser.add_argument('-r','--report', action='store_true', help='Should the full report be generated?')
-    parser.add_argument('-f', '--fasta', action='store_true', help='Should the fasta file per classified taxa be generated?')
+    parser.add_argument('-r','--report', action='store_true', help='Should the abundance report be generated?')
     # parser.add_argument('-b', '--biom', action='store_true', help='Should the biom file be generated?')
     args = parser.parse_args()
 

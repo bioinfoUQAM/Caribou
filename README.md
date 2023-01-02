@@ -82,7 +82,7 @@ pip install --no-index --upgrade pip
 pip install /path/to/downloaded/Caribou/folder
 ```
 
-To access your virtual environment later on the user will only need to run the following two commands:
+To access it's virtual environment later on, the user will only need to run the following two commands:
 
 ```
 source /path/to/your/environment/folder/bin/activate
@@ -93,7 +93,7 @@ Caribou was developed having in mind that the models should be trained on the [G
 Theoritically, any database could be used to train and classify using Caribou but a certain structure should be used for feeding to the program. The specific structure of the database files necessary for training is explained in more details in the [database section of the wiki](https://github.com/bioinfoUQAM/Caribou/wiki/Building-database).
 
 ### GTDB pre-extracted K-mers
-Extracted K-mers profile files for the [GTDB representatives version 202](https://data.gtdb.ecogenomic.org/releases/release202/202.0/) with a k length of 20 can be found in the folder `Caribou/data/kmers`.
+Extracted K-mers profile files for the [GTDB representatives version 202](https://data.gtdb.ecogenomic.org/releases/release202/202.0/) with a length of k = 20 can be found on Canada's [FRDR]().
 
 ### Building GTDB from another release
 Should the user want to use a more recent release of the GTDB taxonomy, this can be done using the template script to build data in one large fasta file and extract classes into a csv file. This template must be modified by the user to insert filepaths and comment the host section if there is no host to be used.
@@ -120,16 +120,10 @@ sh Caribou/data/build_data_scripts/fasta2class_bact.sh -d [directory] -i [inputF
 sh Caribou/data/build_data_scripts/fasta2class_host.sh -d [directory] -i [inputFile] -o [outputDirectory]
 ```
 
-## Pretrained models
-Pretrained models are available in the folder `Caribou/data/models`.
-
-The pretrained models available were trained using the GTDB taxonomy representatives version 202 and can be used directly for extraction of bacteria without a host as well as for bacteria classification of the associated taxonomic levels.
-Should the user want to use another database or version of the GTDB taxonomy, there will be a training step which can vary in time and computing ressources needed according to its size and the length of the k-mers used. Moreover, the accuracy of the classification depends greatly on the database used and it is recommended to use the [GTDB representatives in the latest release available](https://data.gtdb.ecogenomic.org/releases/latest).
-
 ## Usage
 The Caribou analysis pipeline requires only a [configuration file](https://github.com/bioinfoUQAM/Caribou/wiki/Configuration-file) to be executed. \
-All the informations required by the program are located in this configuration file and are described in the wiki. \
-There is a template config file which can be found here `Caribou/eval_configs/template_config.ini`.
+All the informations required by the program are located in this configuration file and are described in the [wiki](https://github.com/bioinfoUQAM/Caribou/wiki). \
+There is a template config file which can be found here `Caribou/configs/template_config.ini`.
 
 Once the installation is done and the configuration file is ready, the following command can be used to launch the pipeline:
 ```

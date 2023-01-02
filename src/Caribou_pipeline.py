@@ -40,21 +40,19 @@ def caribou(opt):
 
     # settings
     k_length = config.getint('settings', 'k', fallback = 35)
+    cv = config.getboolean('settings', 'cross_validation', fallback = True)
     binary_classifier = config.get('settings', 'host_extractor', fallback = 'attention')
     multi_classifier = config.get('settings', 'bacteria_classifier', fallback = 'lstm_attention')
-    cv = config.getboolean('settings', 'cross_validation', fallback = True)
-    n_cvJobs = config.getint('settings', 'nb_cv_jobs', fallback = 1)
-    verbose = config.getboolean('settings', 'verbose', fallback = True)
     training_batch_size = config.getint('settings', 'training_batch_size', fallback = 32)
     training_epochs = config.getint('settings','neural_network_training_iterations', fallback = 100)
     classif_threshold = config.getfloat('settings', 'classification_threshold', fallback = 0.8)
+    verbose = config.getboolean('settings', 'verbose', fallback = True)
 
     # outputs
-    abundance_stats = config.getboolean('outputs', 'abundance_report', fallback = True)
+    mpa_style = config.getboolean('outputs', 'mpa-style', fallback = True)
     kronagram = config.getboolean('outputs', 'kronagram', fallback = True)
-    full_report = config.getboolean('outputs', 'full_report', fallback = True)
-    extract_fasta = config.getboolean('outputs', 'extract_fasta', fallback = True)
-
+    abundance_report = config.getboolean('outputs', 'abundance_report', fallback = True)
+    
 # Part 0.5 - Validation of parameters and environment
 ################################################################################
 
@@ -65,7 +63,7 @@ def caribou(opt):
     host = verify_host(host)
     if host is not None:
         for file in [host_seq_file, host_cls_file]:
-            file_exist(file)
+            verify_file(file)
     else:
         # Adjust classifier based on host presence or not
         binary_classifier = 'onesvm'
@@ -81,10 +79,9 @@ def caribou(opt):
     verify_0_1(classif_threshold, 'classification threshold')
 
     # outputs
-    verify_boolean(abundance_stats, 'output in abundance table form')
+    verify_boolean(mpa_style, 'output in mpa-style table form')
     verify_boolean(kronagram, 'output in Kronagram form')
-    verify_boolean(full_report, 'output in full report form')
-    verify_boolean(extract_fasta, 'output in fasta extraction form')
+    verify_boolean(abundance_report, 'output in abundance report form')
     
     # Check batch_size
     if multi_classifier in ['cnn','widecnn'] and training_batch_size < 20:
@@ -185,14 +182,12 @@ def caribou(opt):
                       classified_data)
 
     # Output desired files according to parameters
-    if abundance_stats is True:
-        outputs.abundances()
+    if mpa_style is True:
+        outputs.mpa_style()
     if kronagram is True:
         outputs.kronagram()
-    if full_report is True:
-        outputs.report()
-    if extract_fasta is True:
-        outputs.fasta()
+    if abundance_report is True:
+        outputs.abundance_report()
 
     print('Caribou finished executing without faults and all results were outputed in the designated folders')
 
