@@ -169,7 +169,9 @@ class SklearnModel(ModelsUtils):
             print('Training bacterial extractor with One Class SVM')
             self._clf = SGDOneClassSVM()
             self._train_params = {
-                'nu' : 0.05,
+                'nu' : 0.1,
+                'learning_rate': 'invscaling',
+                'eta0' : 1000,
                 'tol' : 1e-4
             }
         elif self.classifier == 'linearsvm':
@@ -177,9 +179,9 @@ class SklearnModel(ModelsUtils):
             self._clf = SGDClassifier()
             self._train_params = {
                 'alpha' : 0.045,
-                'eta0' : 0.045,
-                'learning_rate' : 'constant',
-                'loss' : 'log_loss',
+                'eta0' : 1000,
+                'learning_rate' : 'adaptative',
+                'loss' : 'modified_huber',
                 'penalty' : 'elasticnet'
             }
         elif self.classifier == 'sgd':
@@ -187,16 +189,16 @@ class SklearnModel(ModelsUtils):
             self._clf = SGDClassifier()
             self._train_params = {
                 'alpha' : 0.045,
-                'eta0' : 0.045,
-                'learning_rate' : 'constant',
-                'loss': 'modified_huber',
+                'learning_rate' : 'optimal',
+                'loss': 'log_loss',
                 'penalty' : 'elasticnet'
             }
         elif self.classifier == 'mnb':
             print('Training multiclass Multinomial Naive Bayes classifier')
             self._clf = MultinomialNB()
             self._train_params = {
-                'alpha' : 1.0
+                'alpha' : 1.0,
+                'fit_prior' : True
             }
 
     def _fit_model(self, datasets):

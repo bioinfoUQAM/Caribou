@@ -136,7 +136,6 @@ class ModelsUtils(ABC):
         sim_cls = sim_cls.drop(['sim_id'], axis=1)
         sim_cls = sim_cls.reset_index(drop = True)
         df = ray.data.read_parquet(sim_data['profile'])
-        df = self._scaler.transform(df)
         df = self._zip_X_y(df, sim_cls)
         return df
 
