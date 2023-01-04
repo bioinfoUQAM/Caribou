@@ -52,7 +52,7 @@ def build_load_save_data(file, hostfile, prefix, dataset, host, kmers_list=None,
         # Build Xy_data of host
         if isinstance(hostfile, tuple) and kmers_list is not None:
             if not os.path.isfile(seqfile_host):
-                print('Host seq_data')
+                print('Host/simulated seq_data')
                 seq_data_host = SeqCollection((list(hostfile)[0], list(hostfile)[1]))
                 with open(seqfile_host, 'wb') as handle:
                     pickle.dump(seq_data_host, handle)
@@ -61,7 +61,7 @@ def build_load_save_data(file, hostfile, prefix, dataset, host, kmers_list=None,
                     seq_data_host = pickle.load(handle)
 
             # Build Xy_data to drive
-            print('Host Xy_data, k = {}'.format(k))
+            print('Host/simulated Xy_data, k = {}'.format(k))
             data_host = build_Xy_data(seq_data_host, k, Xy_file_host, dataset, kmers_list)
             save_Xy_data(data_host, data_file_host)
 

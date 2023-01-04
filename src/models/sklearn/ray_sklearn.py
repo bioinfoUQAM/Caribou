@@ -180,7 +180,7 @@ class SklearnModel(ModelsUtils):
             self._train_params = {
                 'alpha' : 0.045,
                 'eta0' : 1000,
-                'learning_rate' : 'adaptative',
+                'learning_rate': 'adaptive',
                 'loss' : 'modified_huber',
                 'penalty' : 'elasticnet'
             }
@@ -220,7 +220,7 @@ class SklearnModel(ModelsUtils):
             set_estimator_cpus = True,
             scaling_config = ScalingConfig(
                 trainer_resources = {
-                    'CPU' : 5 if os.cpu_count() > 4 else 3
+                    'CPU' : int(os.cpu_count()*0.8)
                 }
             ),
             run_config = RunConfig(

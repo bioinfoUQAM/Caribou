@@ -448,7 +448,7 @@ class ClassificationMethods():
                 taxa: pd.DataFrame(
                     self._merged_database_host['classes'],
                     columns=self._merged_database_host['taxas']
-                ).loc[:, taxa].astype('string').str.lower()
+                ).loc[:, taxa].astype('string')
             })
         else:
         # Binary not merged or multiclass
@@ -457,7 +457,7 @@ class ClassificationMethods():
                 taxa: pd.DataFrame(
                     self._database_data['classes'],
                     columns=self._database_data['taxas']
-                ).loc[:, taxa].astype('string').str.lower()
+                ).loc[:, taxa].astype('string')
             })
             if taxa == 'domain':
                 self._y_train[self._y_train['domain'] == 'archaea'] = 'bacteria'

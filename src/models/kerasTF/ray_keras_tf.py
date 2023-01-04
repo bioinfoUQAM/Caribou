@@ -6,6 +6,7 @@ import pandas as pd
 
 from glob import glob
 from shutil import rmtree
+from psutil import virtual_memory
 
 # Preprocessing
 from models.ray_tensor_min_max import TensorMinMaxScaler
@@ -19,7 +20,7 @@ from models.kerasTF.build_neural_networks import *
 import tensorflow as tf
 from ray.air import session, Checkpoint
 from ray.air.integrations.keras import Callback
-from ray.air.config import ScalingConfig, CheckpointConfig
+from ray.air.config import ScalingConfig, CheckpointConfig, DatasetConfig
 from ray.train.tensorflow import TensorflowTrainer, TensorflowCheckpoint, prepare_dataset_shard
 
 # Tuning
@@ -100,13 +101,20 @@ class KerasTFModel(ModelsUtils):
         # Initialize empty
         self._nb_classes = None
         self._tuner = None
+        self._nb_CPU_per_worker = 0
         # Computing variables
         if len(tf.config.list_physical_devices('GPU')) > 0:
             self._use_gpu = True
             self._n_workers = len(tf.config.list_physical_devices('GPU'))
+            self._nb_CPU_per_worker = int((os.cpu_count()*0.8) / self._n_workers)
         else:
             self._use_gpu = False
-        self._n_workers = int(np.floor(os.cpu_count()*.8))
+            if int(os.cpu_count()*0.8) % 5 == 0:
+                self._nb_CPU_per_worker = 5
+            else:
+                self._nb_CPU_per_worker = 3
+            self._n_workers = int((os.cpu_count()*0.8)/self._nb_CPU_per_worker)
+
         if self.classifier == 'attention':
             print('Training bacterial / host classifier based on Attention Weighted Neural Network')
         elif self.classifier == 'lstm':
@@ -213,64 +221,82 @@ class KerasTFModel(ModelsUtils):
             datasets[name] = ds
 
         # Training parameters
-        # self._train_params = {
-        #     'batch_size': self.batch_size,
-        #     'epochs': self._training_epochs,
-        #     'size': self._nb_kmers,
-        #     'nb_cls':self._nb_classes,
-        #     'model': self.classifier
-        # }
-        # Tuning parameters
         self._train_params = {
-            'scaling_config': ScalingConfig(
-                num_workers = self._n_workers,
-                use_gpu = self._use_gpu
-            ),
-            'train_loop_config': {
-                'batch_size': self.batch_size,
-                'epochs': self._training_epochs,
-                'size': self._nb_kmers,
-                'nb_cls':self._nb_classes,
-                'model': self.classifier
-            }
+            'batch_size': self.batch_size,
+            'epochs': self._training_epochs,
+            'size': self._nb_kmers,
+            'nb_cls':self._nb_classes,
+            'model': self.classifier
         }
+        # Tuning parameters
+        # self._train_params = {
+        #     'scaling_config': ScalingConfig(
+        #         num_workers = self._n_workers,
+        #         use_gpu = self._use_gpu
+        #     ),
+        #     'train_loop_config': {
+        #         'batch_size': self.batch_size,
+        #         'epochs': self._training_epochs,
+        #         'size': self._nb_kmers,
+        #         'nb_cls':self._nb_classes,
+        #         'model': self.classifier
+        #     }
+        # }
 
         # Define trainer / tuner
         self._trainer = TensorflowTrainer(
             train_loop_per_worker = train_func,
-            train_loop_config = {}, # self._train_params,
+            train_loop_config = self._train_params, #{},
             scaling_config = ScalingConfig(
+                trainer_resources={'CPU': 1},
                 num_workers = self._n_workers,
-                use_gpu = self._use_gpu
+                use_gpu = self._use_gpu,
+                resources_per_worker={'CPU': self._nb_CPU_per_worker}
             ),
-            datasets = datasets
-        )
-        self._tuner = Tuner(
-            trainable = self._trainer,
-            param_space = self._train_params,
-            tune_config=TuneConfig(
-                metric = 'loss',
-                mode = 'min',
-                search_alg = BasicVariantGenerator(
-                    max_concurrent = int((0.8 * os.cpu_count())/5)
+            dataset_config = {
+                'train': DatasetConfig(
+                    fit = False,
+                    transform = False,
+                    split = True
                 ),
-                scheduler = ASHAScheduler()
-            ),
+                'validation': DatasetConfig(
+                    fit = False,
+                    transform = False,
+                    split = True
+                )
+            },
             run_config = RunConfig(
                 name = self.classifier,
                 local_dir = self._workdir,
-                sync_config = SyncConfig(syncer=None),
-                checkpoint_config = CheckpointConfig(
-                    checkpoint_score_attribute = 'loss',
-                    checkpoint_score_order = 'min'
-                )
             ),
+            datasets = datasets
         )
+        # self._tuner = Tuner(
+        #     trainable = self._trainer,
+        #     param_space = self._train_params,
+        #     tune_config=TuneConfig(
+        #         metric = 'loss',
+        #         mode = 'min',
+        #         search_alg = BasicVariantGenerator(
+        #             max_concurrent = 8
+        #         ),
+        #         scheduler = ASHAScheduler()
+        #     ),
+        #     run_config = RunConfig(
+        #         name = self.classifier,
+        #         local_dir = self._workdir,
+        #         sync_config = SyncConfig(syncer=None),
+        #         checkpoint_config = CheckpointConfig(
+        #             checkpoint_score_attribute = 'loss',
+        #             checkpoint_score_order = 'min'
+        #         )
+        #     ),
+        # )
         # Train / tune execution
-        # training_result = self._trainer.fit()
-        # self._model_ckpt = training_result.best_checkpoints[0][0]
-        tuning_result = self._tuner.fit()
-        self._model_ckpt = tuning_result.get_best_result(metric = 'loss', mode = 'min').checkpoint
+        training_result = self._trainer.fit()
+        self._model_ckpt = training_result.best_checkpoints[0][0]
+        # tuning_result = self._tuner.fit()
+        # self._model_ckpt = tuning_result.get_best_result(metric = 'loss', mode = 'min').checkpoint
 
     def predict(self, df, threshold = 0.8, cv = False):
         print('predict')
@@ -348,7 +374,7 @@ def train_func(config):
     def to_tf_dataset(data, batch_size):
         def to_tensor_iterator():
             for batch in data.iter_tf_batches(
-                batch_size=batch_size, dtypes=tf.float32,
+                batch_size=batch_size#, dtypes=tf.float32,
             ):
                 yield batch['__value__'], batch['labels']
 

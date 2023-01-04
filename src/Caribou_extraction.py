@@ -6,6 +6,7 @@ import argparse
 
 from utils import *
 from pathlib import Path
+from time import time
 from models.classification import ClassificationMethods
 
 __author__ = "Nicolas de Montigny"
@@ -67,7 +68,10 @@ def bacteria_extraction(opt):
             verbose = opt['verbose'],
             cv = False
         )
+    t_start = time()
     clf.execute_training()
+    t_end = time()
+    t_train = t_end - t_start
 
 # Execution of bacteria extraction / host removal on metagenome + save results
 ################################################################################
@@ -86,12 +90,18 @@ def bacteria_extraction(opt):
         clf_file = os.path.join(outdirs['results_dir'], opt['metagenome_name'] + '_extracted.npz')
         save_Xy_data(clf_data, clf_file)
         
+    t_start = time()
     end_taxa = clf.execute_classification(data_metagenome)
+    t_end = time()
+    t_classify = t_end - t_start
+
     if end_taxa is None:
         populate_save_data(clf)
-        print("Caribou finished training the {} model and extracting bacteria with it".format(opt['model_type']))
+        print(f"Caribou finished training the {opt['model_type']} model and extracting bacteria with it. \
+            The training step took {t_train} seconds and the classification step took {t_classify} seconds.")
     else:
-        print("Caribou finished training the {} model but there was no data to classify".format(opt['model_type']))
+        print(f"Caribou finished training the {opt['model_type']} model but there was no data to classify. \
+            The training step took {t_train} seconds and the classification step took {t_classify} seconds.")
 
 # Argument parsing from CLI
 ################################################################################

@@ -67,7 +67,8 @@ def bacteria_extraction_train_cv(opt):
             cv = True
         ).execute_training()
 
-    print("Caribou finished training and cross-validating the {} model".format(opt['model_type']))
+    print(
+        f"Caribou finished training and cross-validating the {opt['model_type']} model")
 
 
 # Argument parsing from CLI

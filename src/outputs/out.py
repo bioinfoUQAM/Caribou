@@ -16,6 +16,18 @@ class Outputs():
     Attributes
     ----------
 
+    database_kmers : dictionnary
+        The database of K-mers and their associated classes used for classifying the dataset
+
+    results_dir : string
+        Path to a folder to output results
+
+    k : int
+        Length of k-mers used for classification
+    
+    classifier : string
+        Name of the classifier used
+
     dataset : string
         Name of the dataset
 
@@ -24,16 +36,6 @@ class Outputs():
 
     classified_data : dictionnary
         The classes that were predicted by models
-
-    data_labels : list
-        Labels used to classify the sequences
-
-    taxas : list
-        Taxa levels that were classified
-
-    order : list
-        The order in which the classification was made
-        Should be from the most specific to less specific
 
     ----------
     Methods
@@ -45,7 +47,7 @@ class Outputs():
     kronagram : Generates a Kronagram (interactive tree) in html format
         No parameters required
 
-    abundance_report : Generates a full report on identification of classified sequences
+    report : Generates a full report on identification of classified sequences
         No parameters required
 
     """
@@ -86,11 +88,11 @@ class Outputs():
 
     def _get_abundances(self):
         for taxa in self.order:
-            df = self.classified_data[taxa]['classification'] # Should already be pd.DataFrame
+            df = self.classified_data[taxa]['classification']
             self._abundances[taxa] = {
                 'counts': df.value_counts(subset = [taxa]),
                 'total': df.value_counts(subset = [taxa]).sum()
-            }
+            }     
 
     # Summary file of operations / counts & proportions of reads at each steps
     def _summary_table(self):
@@ -173,7 +175,7 @@ class Outputs():
     # Bacteria abundance tables / relative abundance vs total bacteria
 # TODO : modifier pour que les colonnes soient les taxas et les lignes les classifications
     # Essentially : concat les dataframes de classification + abundance / relative
-    def abundance_report(self):
+    def report(self):
         taxas = self.order.copy()
         if 'domain' in taxas:
             taxas.remove('domain')

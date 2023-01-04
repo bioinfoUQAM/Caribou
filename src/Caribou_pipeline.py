@@ -5,6 +5,7 @@ import argparse
 import configparser
 
 from utils import *
+from time import time
 from pathlib import Path
 from outputs.out import Outputs
 from data.build_data import build_load_save_data
@@ -95,7 +96,7 @@ def caribou(opt):
 
 # Part 1 - K-mers profile extraction
 ################################################################################
-
+    t_start = time()
     if host is not None:
         # Reference Database and Host
         k_profile_database, k_profile_host = build_load_save_data((database_seq_file, database_cls_file),
@@ -123,6 +124,8 @@ def caribou(opt):
         host,
         kmers_list = k_profile_database['kmers']
     )
+    t_end = time()
+    t_kmers = t_end - t_start
 
 # Part 2 - Instanciation of the classifiers
 ################################################################################
@@ -162,10 +165,16 @@ def caribou(opt):
 ################################################################################
 
     # Train the models
+    t_start = time()
     recursive_classifier.execute_training()
+    t_end = time()
+    t_train = t_end - t_start
 
     # Classify the data from the metagenome
+    t_start = time()
     recursive_classifier.execute_classication(k_profile_metagenome)
+    t_end = time()
+    t_classif = t_end - t_start
 
     # Get classification results dictionnary
     classified_data = recursive_classifier.classified_data
@@ -173,6 +182,7 @@ def caribou(opt):
 # Part 4 - Outputs for biological analysis of bacterial population
 ################################################################################
 
+    t_start = time()
     outputs = Outputs(k_profile_database,
                       outdirs['results_dir'],
                       k_length,
@@ -188,8 +198,14 @@ def caribou(opt):
         outputs.kronagram()
     if abundance_report is True:
         outputs.abundance_report()
+    t_end = time()
+    t_outputs = t_end - t_start
 
-    print('Caribou finished executing without faults and all results were outputed in the designated folders')
+    print(f'Caribou finished executing without faults and all results were outputed in the designated folders. \
+        K-mers extraction step : {t_kmers} \
+        Models training step : {t_train} \
+        Classification step : {t_classif} \
+        Outputs generation : {t_outputs}')
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='This script runs the entire Caribou analysis Pipeline')

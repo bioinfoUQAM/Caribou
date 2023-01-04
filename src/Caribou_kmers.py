@@ -6,6 +6,7 @@ import os.path
 import argparse
 
 from utils import *
+from time import time
 from data.build_data import build_load_save_data
 
 __author__ = "Nicolas de Montigny"
@@ -41,6 +42,7 @@ def kmers_dataset(opt):
 ################################################################################
 
     if kmers_list is None:
+        t_start = time()
         # Reference Database Only
         if opt['seq_file'] is not None and opt['cls_file'] is not None and opt['seq_file_host'] is None and opt['cls_file_host'] is None:
             k_profile_database = build_load_save_data((opt['seq_file'],opt['cls_file']),
@@ -56,12 +58,15 @@ def kmers_dataset(opt):
             kmers_list = k_profile_database['kmers']
             with open(os.path.join(outdirs["data_dir"],'kmers_list.txt'),'w') as handle:
                 handle.writelines("%s\n" % item for item in kmers_list)
+            t_end = time()
+            t_kmers = t_end - t_start
 
-            print("Caribou finished extracting k-mers of {}".format(opt['dataset_name']))
+            print(f"Caribou finished extracting k-mers of {opt['dataset_name']} in {t_kmers} seconds.")
 
         # Reference database and host
         elif opt['seq_file'] is not None and opt['cls_file'] is not None and opt['seq_file_host'] is not None and opt['cls_file_host'] is not None:
 
+            t_start = time()
             k_profile_database, k_profile_host  = build_load_save_data((opt['seq_file'],opt['cls_file']),
                 (opt['seq_file_host'],opt['cls_file_host']),
                 outdirs["data_dir"],
@@ -75,12 +80,15 @@ def kmers_dataset(opt):
             kmers_list = k_profile_database['kmers']
             with open(os.path.join(outdirs["data_dir"],'kmers_list.txt'),'w') as handle:
                 handle.writelines("%s\n" % item for item in kmers_list)
+            t_end = time()
+            t_kmers = t_end - t_start
 
-            print("Caribou finished extracting k-mers of {} and {}".format(opt['dataset_name'],opt['host_name']))
+            print(f"Caribou finished extracting k-mers of {opt['dataset_name']} and {opt['host_name']} in {t_kmers} seconds.")
     else:
         # Reference Host only
         if opt['seq_file'] is not None and opt['cls_file'] is not None:
 
+            t_start = time()
             k_profile_host = build_load_save_data(None,
             (opt['seq_file'],opt['cls_file']),
             outdirs["data_dir"],
@@ -89,11 +97,14 @@ def kmers_dataset(opt):
             k = opt['k_length'],
             kmers_list = kmers_list
             )
-            print("Caribou finished extracting k-mers of {}".format(opt['host_name']))
+            t_end = time()
+            t_kmers = t_end - t_start
+            print(f"Caribou finished extracting k-mers of {opt['host_name']} in {t_kmers} seconds.")
 
         # Dataset to analyse only
         elif opt['seq_file'] is not None and opt['cls_file'] is None:
 
+            t_start = time()
             k_profile_metagenome = build_load_save_data(opt['seq_file'],
             None,
             outdirs["data_dir"],
@@ -102,7 +113,10 @@ def kmers_dataset(opt):
             k = opt['k_length'],
             kmers_list = kmers_list
             )
-            print("Caribou finished extracting k-mers of {}".format(opt['dataset_name']))
+            t_end = time()
+            t_kmers = t_end - t_start
+            
+            print(f"Caribou finished extracting k-mers of {opt['dataset_name']} in {t_kmers} seconds.")
 
         else:
             raise ValueError(

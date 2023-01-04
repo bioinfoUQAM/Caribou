@@ -6,6 +6,7 @@ import argparse
 
 from utils import *
 from pathlib import Path
+from time import time
 from models.classification import ClassificationMethods
 
 __author__ = "Nicolas de Montigny"
@@ -50,8 +51,10 @@ def bacteria_classification(opt):
         verbose = opt['verbose'],
         cv = False
     )
+    t_start = time()
     clf.execute_training()
-
+    t_end = time()
+    t_train = t_end - t_start
 # Execution of bacteria taxonomic classification on metagenome + save results
 ################################################################################
     def populate_save_data(clf, end_taxa):
@@ -85,12 +88,17 @@ def bacteria_classification(opt):
         clf_file = os.path.join(outdirs['results_dir'], opt['metagenome_name'] + '_classified.npz')
         save_Xy_data(clf_data, clf_file)
 
+    t_start = time()
     end_taxa = clf.execute_classification(data_metagenome)
+    t_end = time()
+    t_classif = t_end - t_start
     populate_save_data(clf, end_taxa)
     if end_taxa is None:
-        print("Caribou finished training the {} model and classifying bacterial sequences at {} taxonomic level with it".format(opt['model_type'], opt['taxa']))
+        print(f"Caribou finished training the {opt['model_type']} model and classifying bacterial sequences at {opt['taxa']} taxonomic level with it. \
+            The training step took {t_train} seconds to execute and the classification step took {t_classif} seconds to execute.")
     else:
-        print("Caribou finished training the {} model and classifying bacterial sequences at {} taxonomic level until {} because there were no more sequences to classify".format(opt['model_type'], opt['taxa'], end_taxa))
+        print(f"Caribou finished training the {opt['model_type']} model and classifying bacterial sequences at {opt['taxa']} taxonomic level until {end_taxa} because there were no more sequences to classify. \
+            The training step took {t_train} seconds to execute and the classification step took {t_classif} seconds to execute.")
 
 # Argument parsing from CLI
 ################################################################################
