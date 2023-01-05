@@ -248,9 +248,6 @@ class ClassificationMethods():
             not_pred_df = pred_df[pred_df[taxa] == 'unknown']
             pred_df = pred_df[pred_df[taxa] != 'unknown']
 
-            print(pred_df)
-            print(not_pred_df)
-
             self._classified_ids = list(pred_df['id'].values)
             self._not_classified_ids = list(not_pred_df['id'].values)
 

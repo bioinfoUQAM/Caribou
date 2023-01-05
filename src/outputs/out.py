@@ -70,12 +70,15 @@ class Outputs():
         self.classified_data = classified_data
         self.taxas = database_kmers['taxas']
         self.order = classified_data['sequence']
-        self.data_labels = database_kmers['classes']
+        self.data_labels = pd.DataFrame(
+            database_kmers['classes'],
+            columns = database_kmers['taxas']
+        )
         # File names
         self._summary_file = '{}summary_K{}_{}_{}.csv'.format(results_dir, k, classifier, dataset)
         self._krona_file = '{}kronagram_K{}_{}_{}.csv'.format(results_dir, k, classifier, dataset)
         self._krona_out = '{}kronagram_K{}_{}_{}.html'.format(results_dir, k, classifier, dataset)
-        self._report_file = '{}abundance_report_K{}_{}_{}.csv'.format(results_dir, k, classifier, dataset)
+        self._report_file = '{}report_K{}_{}_{}.csv'.format(results_dir, k, classifier, dataset)
         self._mpa_file = '{}mpa_K{}_{}_{}.csv'.format(results_dir, k, classifier, dataset)
         # Initialize empty
         self._abundances = {}
@@ -83,7 +86,6 @@ class Outputs():
         self._get_abundances()
         # Auto output summary
         self._summary_table()
-        print('Summary table saved to {}'.format(self._summary_file))
 
 
     def _get_abundances(self):
@@ -142,16 +144,19 @@ class Outputs():
         })
 
         df.to_csv(self._summary_file, na_rep = '', header = True)
+        print(f'Summary table saved to {self._summary_file}')
 
     # Kronagram / interactive tree
     def kronagram(self):
         self._create_krona_file()
         cmd = '{} {} {} -o {} -n {}'.format(self._perl_loc, self._krona_path, self._krona_file, self._krona_out, self.dataset)
         run(cmd, shell = True)
+        print(f'Kronagram saved to {self._krona_out}')
 
     def _create_krona_file(self):
-        db_labs = pd.DataFrame(self.data_labels, columns = self.taxas)
-        db_labs = db_labs[db_labs.columns[::-1]] # Reverse order of columns
+        # Reverse order of columns
+        db_labels = self.data_labels.copy(deep = True)
+        db_labels = db_labels[db_labels.columns[::-1]]
         taxas = self.order.copy()
         if 'domain' in taxas:
             taxas.remove('domain')
@@ -163,19 +168,19 @@ class Outputs():
             abund_per_tax = pd.DataFrame(self._abundances[taxa]['counts'])
             abund_per_tax.reset_index(level = 0, inplace = True)
             abund_per_tax.columns = [taxa, 'abundance']
-            abund_per_tax = abund_per_tax.join(db_labs, how = 'left', on = taxa)
+            abund_per_tax = abund_per_tax.join(db_labels, how = 'left', on = taxa)
             abund_per_tax.index = abund_per_tax['abundance'] # Index is abundance
             df = pd.concat([df, abund_per_tax], axis = 0, ignore_index = False) # Keep abundance on index when concatenating
         
         #taxas.insert(0, 'abundance')
         #df.reset_index(level = 0, inplace = True)
         df.to_csv(self._krona_file, na_rep = '', header = False, index = True)
+        print(f'Abundance file required for Kronagram saved to {self._krona_file}')
 
     # Report file of classification of each id
-    # Bacteria abundance tables / relative abundance vs total bacteria
-# TODO : modifier pour que les colonnes soient les taxas et les lignes les classifications
-    # Essentially : concat les dataframes de classification + abundance / relative
     def report(self):
+        lst_ids = []
+        db_labels = self.data_labels.copy(deep = True)
         taxas = self.order.copy()
         if 'domain' in taxas:
             taxas.remove('domain')
@@ -183,17 +188,25 @@ class Outputs():
         taxas.append('id')
 
         taxas = [taxa for taxa in reversed(taxas)]
+        
         df = pd.DataFrame(columns = taxas)
         for taxa in taxas:
-            df = pd.concat([df, self.classified_data[taxa]['classification']], axis = 0, ignore_index = True)
-
+            tmp_df = self.classified_data[taxa]['classification']
+            lst_ids.extend(self.classified_data[taxa]['classified_ids'])
+            for classif in tmp_df[taxa]:
+                row = db_labels[db_labels[taxa] == classif]
+                df = pd.concat([df, row], axis = 0, ignore_index = True)
+            db_labels = db_labels.drop(taxa, axis = 1)
+            db_labels = db_labels.drop_duplicates()
+        
+        df['id'] = lst_ids
         df.to_csv(self._report_file, na_rep = '', header = True, index = False)
+        print(f'Classification report saved to {self._report_file}')
 
 # TODO : Convertir cette fonction pour mpa-style
+    # Bacteria abundance tables / relative abundance vs total bacteria
     def mpa_style(self):
-        print('Abundance table saved to {}'.format(self._abund_file))
-
-    
+        
 
         lst_taxa = list(self._abundances.keys())
         lst_taxa.insert(0, 'unknown')
@@ -234,4 +247,5 @@ class Outputs():
         })
 
         df.to_csv(self._abund_file, na_rep = '', header = True, index = False)
+        print(f'mpa-style file saved to {self._mpa_file}')
 

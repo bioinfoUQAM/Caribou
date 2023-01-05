@@ -95,10 +95,10 @@ def bacteria_classification(opt):
     populate_save_data(clf, end_taxa)
     if end_taxa is None:
         print(f"Caribou finished training the {opt['model_type']} model and classifying bacterial sequences at {opt['taxa']} taxonomic level with it. \
-            The training step took {t_train} seconds to execute and the classification step took {t_classif} seconds to execute.")
+            \nThe training step took {t_train} seconds to execute and the classification step took {t_classif} seconds to execute.")
     else:
         print(f"Caribou finished training the {opt['model_type']} model and classifying bacterial sequences at {opt['taxa']} taxonomic level until {end_taxa} because there were no more sequences to classify. \
-            The training step took {t_train} seconds to execute and the classification step took {t_classif} seconds to execute.")
+            \nThe training step took {t_train} seconds to execute and the classification step took {t_classif} seconds to execute.")
 
 # Argument parsing from CLI
 ################################################################################

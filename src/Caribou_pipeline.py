@@ -202,10 +202,10 @@ def caribou(opt):
     t_outputs = t_end - t_start
 
     print(f'Caribou finished executing without faults and all results were outputed in the designated folders. \
-        K-mers extraction step : {t_kmers} \
-        Models training step : {t_train} \
-        Classification step : {t_classif} \
-        Outputs generation : {t_outputs}')
+        \nK-mers extraction step : {t_kmers} seconds \
+        \nModels training step : {t_train} seconds \
+        \nClassification step : {t_classif} seconds \
+        \nOutputs generation : {t_outputs} seconds')
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='This script runs the entire Caribou analysis Pipeline')

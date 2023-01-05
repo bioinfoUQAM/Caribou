@@ -98,10 +98,10 @@ def bacteria_extraction(opt):
     if end_taxa is None:
         populate_save_data(clf)
         print(f"Caribou finished training the {opt['model_type']} model and extracting bacteria with it. \
-            The training step took {t_train} seconds and the classification step took {t_classify} seconds.")
+            \nThe training step took {t_train} seconds and the classification step took {t_classify} seconds.")
     else:
         print(f"Caribou finished training the {opt['model_type']} model but there was no data to classify. \
-            The training step took {t_train} seconds and the classification step took {t_classify} seconds.")
+            \nThe training step took {t_train} seconds and the classification step took {t_classify} seconds.")
 
 # Argument parsing from CLI
 ################################################################################

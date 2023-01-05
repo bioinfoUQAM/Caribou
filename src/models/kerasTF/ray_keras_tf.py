@@ -109,11 +109,13 @@ class KerasTFModel(ModelsUtils):
             self._nb_CPU_per_worker = int((os.cpu_count()*0.8) / self._n_workers)
         else:
             self._use_gpu = False
-            if int(os.cpu_count()*0.8) % 5 == 0:
-                self._nb_CPU_per_worker = 5
-            else:
-                self._nb_CPU_per_worker = 3
-            self._n_workers = int((os.cpu_count()*0.8)/self._nb_CPU_per_worker)
+
+            # if int(os.cpu_count()*0.8) % 5 == 0:
+            #     self._nb_CPU_per_worker = 5
+            # else:
+            #     self._nb_CPU_per_worker = 3
+            self._n_workers = 1#int((os.cpu_count()*0.8)/self._nb_CPU_per_worker)
+            self._nb_CPU_per_worker = int(os.cpu_count()*0.8)
 
         if self.classifier == 'attention':
             print('Training bacterial / host classifier based on Attention Weighted Neural Network')
@@ -228,20 +230,6 @@ class KerasTFModel(ModelsUtils):
             'nb_cls':self._nb_classes,
             'model': self.classifier
         }
-        # Tuning parameters
-        # self._train_params = {
-        #     'scaling_config': ScalingConfig(
-        #         num_workers = self._n_workers,
-        #         use_gpu = self._use_gpu
-        #     ),
-        #     'train_loop_config': {
-        #         'batch_size': self.batch_size,
-        #         'epochs': self._training_epochs,
-        #         'size': self._nb_kmers,
-        #         'nb_cls':self._nb_classes,
-        #         'model': self.classifier
-        #     }
-        # }
 
         # Define trainer / tuner
         self._trainer = TensorflowTrainer(
@@ -271,32 +259,10 @@ class KerasTFModel(ModelsUtils):
             ),
             datasets = datasets
         )
-        # self._tuner = Tuner(
-        #     trainable = self._trainer,
-        #     param_space = self._train_params,
-        #     tune_config=TuneConfig(
-        #         metric = 'loss',
-        #         mode = 'min',
-        #         search_alg = BasicVariantGenerator(
-        #             max_concurrent = 8
-        #         ),
-        #         scheduler = ASHAScheduler()
-        #     ),
-        #     run_config = RunConfig(
-        #         name = self.classifier,
-        #         local_dir = self._workdir,
-        #         sync_config = SyncConfig(syncer=None),
-        #         checkpoint_config = CheckpointConfig(
-        #             checkpoint_score_attribute = 'loss',
-        #             checkpoint_score_order = 'min'
-        #         )
-        #     ),
-        # )
+
         # Train / tune execution
         training_result = self._trainer.fit()
         self._model_ckpt = training_result.best_checkpoints[0][0]
-        # tuning_result = self._tuner.fit()
-        # self._model_ckpt = tuning_result.get_best_result(metric = 'loss', mode = 'min').checkpoint
 
     def predict(self, df, threshold = 0.8, cv = False):
         print('predict')
