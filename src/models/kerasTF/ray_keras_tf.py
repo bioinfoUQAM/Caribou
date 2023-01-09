@@ -6,7 +6,6 @@ import pandas as pd
 
 from glob import glob
 from shutil import rmtree
-from psutil import virtual_memory
 
 # Preprocessing
 from models.ray_tensor_min_max import TensorMinMaxScaler
@@ -109,13 +108,12 @@ class KerasTFModel(ModelsUtils):
             self._nb_CPU_per_worker = int((os.cpu_count()*0.8) / self._n_workers)
         else:
             self._use_gpu = False
-
-            # if int(os.cpu_count()*0.8) % 5 == 0:
-            #     self._nb_CPU_per_worker = 5
-            # else:
-            #     self._nb_CPU_per_worker = 3
-            self._n_workers = 1#int((os.cpu_count()*0.8)/self._nb_CPU_per_worker)
-            self._nb_CPU_per_worker = int(os.cpu_count()*0.8)
+            if int(os.cpu_count()*0.8) % 5 == 0:
+                self._nb_CPU_per_worker = 5
+            else:
+                self._nb_CPU_per_worker = 3
+            self._n_workers = int((os.cpu_count()*0.8)/self._nb_CPU_per_worker)
+            # self._nb_CPU_per_worker = int(os.cpu_count()*0.8) #for using with self._n_workers = 1
 
         if self.classifier == 'attention':
             print('Training bacterial / host classifier based on Attention Weighted Neural Network')
@@ -181,7 +179,7 @@ class KerasTFModel(ModelsUtils):
             df_val = self._sim_4_cv(df_val, kmers_ds, 'validation')
             df_train = df_train.drop_columns(['id'])
             df_val = df_val.drop_columns(['id'])
-            datasets = {'train': ray.put(df_train), 'validation': ray.put(df_val)}
+            datasets = {'train': df_train, 'validation': df_val}
             self._fit_model(datasets)
 
     def _cross_validation(self, df, kmers_ds):
@@ -197,7 +195,7 @@ class KerasTFModel(ModelsUtils):
         df_test = df_test.drop_columns(['id'])
         df_val = df_val.drop_columns(['id'])
 
-        datasets = {'train' : ray.put(df_train), 'validation' : ray.put(df_val)}
+        datasets = {'train' : df_train, 'validation' : df_val}
         self._fit_model(datasets)
 
         df_test = self._encoder.preprocessors[0].transform(df_test)
@@ -217,7 +215,6 @@ class KerasTFModel(ModelsUtils):
     def _fit_model(self, datasets):
         print('_fit_model')
         for name, ds in datasets.items():
-            ds = ray.get(ds)
             ds = self._preprocessor.transform(ds)
             ds = self._encoder.transform(ds)
             datasets[name] = ds

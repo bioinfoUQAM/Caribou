@@ -228,6 +228,8 @@ class ClassificationMethods():
         df_file = data2classify['profile']
         df = ray.data.read_parquet(df_file)
         ids = data2classify['ids']
+        if len(self.classified_data['sequence']) == 0:
+            raise ValueError('Please train a model before executing classification')
         for i, taxa in enumerate(self.classified_data['sequence']):
             try:
                 if i == 0:
