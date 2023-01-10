@@ -23,11 +23,7 @@ from ray.air.config import ScalingConfig, CheckpointConfig, DatasetConfig
 from ray.train.tensorflow import TensorflowTrainer, TensorflowCheckpoint, prepare_dataset_shard
 
 # Tuning
-from ray.tune import SyncConfig
 from ray.air.config import RunConfig
-from ray.tune.tuner import Tuner, TuneConfig
-from ray.tune.schedulers import ASHAScheduler
-from ray.tune.search.basic_variant import BasicVariantGenerator
 
 # Predicting
 from ray.train.tensorflow import TensorflowPredictor
