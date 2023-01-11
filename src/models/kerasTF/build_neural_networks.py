@@ -2,7 +2,7 @@
 from keras.models import Model, Sequential
 from keras.layers import Dense, Input, LSTM, Embedding, Dropout, Conv1D, Conv2D, MaxPooling1D, MaxPooling2D, ReLU, Concatenate, Flatten, Attention, Activation, Bidirectional, ReLU, Reshape
 
-from models.attentionLayer import AttentionWeightedAverage
+from models.kerasTF.attentionLayer import AttentionWeightedAverage
 
 __author__ = "Nicolas de Montigny"
 
@@ -24,7 +24,7 @@ def build_attention(nb_kmers):
 
     x = Dense(128, activation = "relu")(x)
     x = Dropout(0.1)(x)
-    x = Dense(1, activation = "sigmoid")(x)
+    x = Dense(1, activation = "tanh")(x)
 
     model = Model(inputs = inputs, outputs = x)
     model.compile(loss = 'binary_crossentropy', optimizer = 'adam', metrics = ['accuracy'])
@@ -38,11 +38,14 @@ def build_LSTM(nb_kmers):
     Seeker package [Auslander et al. 2020]
     https://github.com/gussow/seeker/blob/master/train_model/train_model.py
     """
-
+    
     inputs = Input(shape = (nb_kmers,))
     x = Embedding(nb_kmers, 128)(inputs)
-    x = LSTM(128, return_sequences = True, dropout = 0.1, recurrent_dropout = 0.1 )(x)
+
+    x = LSTM(128, recurrent_dropout = 0.1, dropout = 0.1)(x)
+
     x = Dense(1, activation = 'tanh')(x)
+    
     model = Model(inputs = inputs, outputs = x)
     model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
 

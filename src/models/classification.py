@@ -1,130 +1,463 @@
 import os
-import sys
 import ray
-import pickle
 import cloudpickle
 
+import numpy as np
 import pandas as pd
 
-from models.ray_sklearn import SklearnModel
-from models.ray_keras_tf import KerasTFModel
-from utils import load_Xy_data, save_Xy_data
+from glob import glob
+from shutil import rmtree
+from utils import load_Xy_data
+from models.sklearn.ray_sklearn import SklearnModel
+from models.kerasTF.ray_keras_tf import KerasTFModel
+
 
 __author__ = 'Nicolas de Montigny'
 
-__all__ = ['bacteria_classification','classify']
+__all__ = ['ClassificationMethods']
 
-def bacteria_classification(classified_data, database_k_mers, k, outdirs, dataset, training_epochs = 100, classifier = 'lstm_attention', batch_size = 32, threshold = 0.8, verbose = True, cv = True, classifying = False):
-    if classified_data is None:
-        classified_data = {}
-        classified_data['order'] = []
-    previous_taxa_unclassified = None
+class ClassificationMethods():
+    """
+    Utilities class for classifying sequences from metagenomes using ray
 
-    taxas = database_k_mers['taxas'].copy()
+    ----------
+    Attributes
+    ----------
+    
+    classified_data : dictionary
+        Dictionary containing the classified data for each classified taxonomic level
 
-    for taxa in taxas:
-        train = False
-        model_file = '{}{}_{}.pkl'.format(outdirs['models_dir'], classifier, taxa)
-        classified_kmers_file = '{}Xy_classified_{}_K{}_{}_database_{}_data'.format(outdirs['data_dir'], taxa, k, classifier, dataset)
-        unclassified_kmers_file = '{}Xy_unclassified_{}_K{}_{}_database_{}_data'.format(outdirs['data_dir'], taxa, k, classifier, dataset)
+    models : dictionary
+        Dictionary containing the trained models for each taxonomic level
 
-        if taxa == taxas[-1]:
-            classified_data[taxa] = previous_taxa_unclassified
-            classified_data['order'].append(taxa)
+    ----------
+    Methods
+    ----------
+
+    execute_training : launch the training of the models for the chosen taxonomic levels
+        no parameters to pass
+
+    execute_classification : 
+        data2classify : a dictionnary containing the data to classify produced by the function Caribou.src.data.build_data.build_X_data
+
+    """
+    def __init__(
+        self,
+        database_k_mers,
+        k,
+        outdirs,
+        database,
+        classifier_binary = 'deeplstm',
+        classifier_multiclass = 'widecnn',
+        taxa = None,
+        threshold = 0.8,
+        batch_size = 32,
+        training_epochs = 100,
+        verbose = True,
+        cv = False
+    ):
+        # Parameters
+        self._k = k
+        self._cv = cv
+        self._taxas = taxa
+        self._outdirs = outdirs
+        self._database = database
+        self._verbose = verbose
+        self._threshold = threshold
+        self._classifier_binary = classifier_binary
+        self._classifier_multiclass = classifier_multiclass
+        self._batch_size = batch_size
+        self._training_epochs = training_epochs
+        # Initialize with values
+        self.classified_data = {'sequence': []}
+        # Empty initializations
+        self.models = {}
+        self._host = False
+        self._X_train = None
+        self._y_train = None
+        self._host_data = None
+        self._database_data = None
+        self._classified_ids = []
+        self._not_classified_ids = []
+        self._merged_database_host = None
+        self.previous_taxa_unclassified = None
+        if isinstance(database_k_mers, tuple):
+            self._host = True
+            self._database_data = database_k_mers[0]
+            self._host_data = database_k_mers[1]
         else:
-            if classifier in ['sgd','mnb']:
-                model = SklearnModel(classifier, dataset, outdirs['models_dir'], outdirs['results_dir'], batch_size, k, taxa, database_k_mers['kmers'], verbose)
-            elif classifier in ['lstm_attention','cnn','widecnn']:
-                model = KerasTFModel(classifier, dataset, outdirs['models_dir'], outdirs['results_dir'], batch_size, training_epochs, k, taxa, database_k_mers['kmers'], verbose)
+            self._database_data = database_k_mers
+        # Remove 'id' form kmers if present
+        if 'id' in self._database_data['kmers']:
+            self._database_data['kmers'].remove('id')
+        if self._host and 'id' in self._host_data['kmers']:
+            self._host_data['kmers'].remove('id')
+        # Automatic executions
+        self._verify_assign_taxas(taxa)
+        
+    # Main functions
+    #########################################################################################################
+
+    # Execute training of model(s)
+    def execute_training(self):
+        print('execute_training')
+        for taxa in self._taxas:
+            if taxa in ['domain','bacteria','host']:
+                clf = self._classifier_binary
             else:
-                print('Bacteria classifier type unknown !!!\n\tModels implemented at this moment are :\n\tLinear models :  Ridge regressor (sgd), Linear SVM (svm), Multiple Logistic Regression (mlr)\n\tProbability classifier : Multinomial Bayes (mnb)\n\tNeural networks : Deep hybrid between LSTM and Attention (lstm_attention), CNN (cnn) and Wide CNN (widecnn)')
-                sys.exit()
+                clf = self._classifier_multiclass
+            self._data_file = os.path.join(
+                self._outdirs['data_dir'],
+                'Xy_{}_database_K{}_{}_{}_data.npz'.format(
+                    taxa,
+                    self._k,
+                    clf,
+                    self._database
+                )
+            )
+            self._model_file = os.path.join(
+                self._outdirs['models_dir'],
+                '{}_{}.pkl'.format(
+                    clf,
+                    taxa
+                )
+            )
+            train = self._verify_load_data_model(self._data_file, self._model_file, taxa)
+            if train:
+                self._train_model(taxa)
 
-            if not os.path.isfile(model_file):
-                train = True
-
-            # Load extracted data if already exists or train and classify bacteria depending on chosen method and taxonomic rank
-            if os.path.isdir(classified_kmers_file) and os.path.isdir(unclassified_kmers_file):
-                if verbose:
-                    print('Bacteria sequences at {} level already classified'.format(taxa))
-                previous_taxa_unclassified = ray.data.read_parquet(unclassified_kmers_file)
-                classified_data['order'].append(taxa)
-            else:
-                if verbose:
-                    print('Training classifier with bacteria sequences at {} level'.format(taxa))
-                # If classifier exists load it or train if not
-                if train is True:
-                    # Get training dataset and assign to variables
-                    # Keep only classes of sequences that were not removed in kmers extraction
-                    X_train = ray.data.read_parquet(database_k_mers['profile'])
-                    ids = []
-                    for row in X_train.iter_rows():
-                        ids.append(row['__index_level_0__'])
-                    y_train = pd.DataFrame(
-                        {taxa : pd.DataFrame(database_k_mers['classes'], columns = database_k_mers['taxas']).loc[:,taxa].astype('string').str.lower(),
-                        'id' : ids}
-                    )
-                    y_train.index = ids
-
-                    model.train(X_train, y_train, database_k_mers, cv)
-
-                    with open(model_file, 'wb') as handle:
-                        pickle.dump(cloudpickle.dumps(model), handle)
+    # Train model according to passed taxa
+    def _train_model(self, taxa):
+        print('_train_model')
+        if taxa in ['domain','bacteria','host']:
+            self._binary_training(taxa)
+        else:
+            self._multiclass_training(taxa)
+        if isinstance(self.models[taxa], KerasTFModel):
+            for file in glob(os.path.join(self._outdirs['data_dir'], '*sim*')):
+                if os.path.isdir(file):
+                    rmtree(file)
                 else:
-                    with open(model_file, 'rb') as handle:
-                        model = pickle.load(cloudpickle.loads(handle))
+                    os.remove(file)
 
-                # Classify sequences into taxa and build k-mers profiles for classified and unclassified data
-                # Keep previous taxa to reclassify only unclassified reads at a higher taxonomic level
-                if classifying is True:
-                    if previous_taxa_unclassified is None:
-                        if verbose:
-                            print('Classifying bacteria sequences at {} level'.format(taxa))
-                        df = ray.data.read_parquet(classified_data['bacteria']['profile'])
-                        classified_data[taxa], previous_taxa_unclassified = classify(df, model, taxa, classified_kmers_file, unclassified_kmers_file, threshold = threshold, verbose = verbose)
-                    else:
-                        if verbose:
-                            print('Classifying bacteria sequences at {} level'.format(taxa))
-                        classified_data[taxa], previous_taxa_unclassified = classify(previous_taxa_unclassified['profile'], model, threshold, verbose)
+    def _binary_training(self, taxa):
+        print('_binary_training')
+        self._verify_classifier_binary()
+        if self._classifier_binary == 'onesvm':
+            self.models[taxa] = SklearnModel(
+                self._classifier_binary,
+                self._database,
+                self._outdirs['models_dir'],
+                self._outdirs['results_dir'],
+                self._batch_size,
+                self._k,
+                taxa,
+                self._database_data['kmers'],
+                self._verbose
+            )
+            self._load_training_data(taxa)
+        else:
+            self._merge_database_host(self._database_data, self._host_data)
+            if self._classifier_binary == 'linearsvm':
+                self.models[taxa] = SklearnModel(
+                    self._classifier_binary,
+                    self._database,
+                    self._outdirs['models_dir'],
+                    self._outdirs['results_dir'],
+                    self._batch_size,
+                    self._k,
+                    taxa,
+                    self._merged_database_host['kmers'],
+                    self._verbose
+                )
+            else:
+                self.models[taxa] = KerasTFModel(
+                    self._classifier_binary,
+                    self._database,
+                    self._outdirs['models_dir'],
+                    self._outdirs['results_dir'],
+                    self._batch_size,
+                    self._training_epochs,
+                    self._k,
+                    taxa,
+                    self._merged_database_host['kmers'],
+                    self._verbose
+                )
+            self._load_training_data(taxa, merged = True)
+        if self._merged_database_host is None:
+            self.models[taxa].train(self._X_train, self._y_train, self._database_data, self._cv)
+        else:
+            self.models[taxa].train(self._X_train, self._y_train, self._merged_database_host, self._cv)
+        self._save_model(self._model_file, taxa)            
 
-                    save_Xy_data(classified_data[taxa], classified_kmers_file)
-                    save_Xy_data(previous_taxa_unclassified, unclassified_kmers_file)
-                    classified_data['order'].append(taxa)
+    def _multiclass_training(self, taxa):
+        print('_multiclass_training')
+        self._verify_classifier_multiclass()
+        if self._classifier_multiclass in ['sgd','mnb']:
+            self.models[taxa] = SklearnModel(
+                self._classifier_multiclass,
+                self._database,
+                self._outdirs['models_dir'],
+                self._outdirs['results_dir'],
+                self._batch_size,
+                self._k,
+                taxa,
+                self._database_data['kmers'],
+                self._verbose
+            )
+        else:
+            self.models[taxa] = KerasTFModel(
+                self._classifier_multiclass,
+                self._database,
+                self._outdirs['models_dir'],
+                self._outdirs['results_dir'],
+                self._batch_size,
+                self._training_epochs,
+                self._k,
+                taxa,
+                self._database_data['kmers'],
+                self._verbose
+            )
+        self._load_training_data(taxa)
+        self.models[taxa].train(self._X_train, self._y_train, self._database_data, self._cv)
+        self._save_model(self._model_file, taxa)
+        
+    # Execute classification using trained model(s)
+    def execute_classification(self, data2classify):
+        print('execute_classification')
+        df_file = data2classify['profile']
+        df = ray.data.read_parquet(df_file)
+        ids = data2classify['ids']
+        if len(self.classified_data['sequence']) == 0:
+            raise ValueError('Please train a model before executing classification')
+        for i, taxa in enumerate(self.classified_data['sequence']):
+            try:
+                if i == 0:
+                    df = self._classify_first(df, taxa, ids, df_file)
+                else:
+                    df = self._classify_subsequent(df, taxa, ids, df_file)
+            except ValueError:
+                print('Stopping classification prematurelly because there are no more sequences to classify')
+                return taxa
+        return None
+                
 
-    return classified_data
+    # Classify sequences for first iteration
+    def _classify_first(self, df, taxa, ids, df_file):
+        print('_classify_first')
+        try:
+            pred_df = self._predict_sequences(df, taxa, ids)
+            not_pred_df = pred_df[pred_df[taxa] == 'unknown']
+            pred_df = pred_df[pred_df[taxa] != 'unknown']
 
-def classify(df_file, model, threshold = 0.8, verbose = True):
-    if verbose:
-        print('Extracting predicted sequences at {} taxonomic level'.format(taxa))
+            self._classified_ids = list(pred_df['id'].values)
+            self._not_classified_ids = list(not_pred_df['id'].values)
 
-    df = ray.data.read_parquet(df_file)
+            if taxa == 'domain':
+                if self._host == True:
+                    pred_df_host = pred_df[pred_df['domain'] == 'host']
+                    pred_df = pred_df[pred_df['domain'] != 'host']
+                    self.classified_data['host'] = {
+                        'classification' : pred_df_host,
+                        'classified_ids': list(pred_df_host['id'].values)
+                    }
+                
+                classified, classified_file = self._extract_subset(df, df_file, self._classified_ids, taxa, 'bacteria')
+                self.classified_data[taxa]['bacteria'] = classified_file
+                self.classified_data[taxa]['bacteria_ids'] = self._classified_ids.copy()
+                not_classified, not_classified_file = self._extract_subset(df, df_file, self._not_classified_ids, taxa, 'unknown')
+                self.classified_data[taxa]['unknown'] = not_classified_file
+                self.classified_data[taxa]['unknown_ids'] = self._not_classified_ids.copy()
+                return classified
+            else:
+                self.classified_data[taxa]['classification'] = pred_df
+                self.classified_data[taxa]['classified_ids'] = list(pred_df['id'].values)
+                not_classified, not_classified_file = self._extract_subset(df, df_file, self._not_classified_ids, taxa, 'unknown')
+                self.classified_data[taxa]['unknown'] = not_classified_file
+                self.classified_data[taxa]['unknown_ids'] = self._not_classified_ids.copy()
+                return not_classified
+        except:
+            raise ValueError('No sequences to classify for {}.'.format(taxa))
 
-    classified_data = {}
+    # Classify sequences according to passed taxa and model
+    def _classify_subsequent(self, df, taxa, ids, df_file):
+        print('_classify_subsequent')
+        try:
+            pred_df = self._predict_sequences(df, taxa, ids)
+            not_pred_df = pred_df[pred_df[taxa] == 'unknown']
+            pred_df = pred_df[pred_df[taxa] != 'unknown']
 
-    pred = model.predict(df, threshold)
+            self._classified_ids = self._classified_ids.extend(list(pred_df['id'].values))
+            self._not_classified_ids = list(not_pred_df['id'].values)
 
-    df = df.to_pandas()
+            self.classified_data[taxa]['classification'] = pred_df
+            self.classified_data[taxa]['classified_ids'] = list(pred_df['id'].values)
+            not_classified, not_classified_file = self._extract_subset(df, df_file, self._not_classified_ids, taxa, 'unknown')
+            self.classified_data[taxa]['unknown'] = not_classified_file
+            self.classified_data[taxa]['unknown_ids'] = self._not_classified_ids.copy()
 
-    # Make sure classes are writen in lowercase
-    pred['class'] = pred['class'].str.lower()
+            return not_classified
+        except:
+            raise ValueError('No sequences to classify for {}.'.format(taxa))
 
-    df_classified = df[pred['class'].str.notequals('unknown')]
-    df_unclassified = df[pred['class'].str.match('unknown')]
+    # Make predictions
+    def _predict_sequences(self, df, taxa, ids):
+        print('_predict_sequences')
+        try:
+            predictions = self.models[taxa].predict(df, self._threshold)
+            pred_df = pd.DataFrame({'id': ids, taxa: predictions.values})
 
-    # Save / add to classified/unclassified data
-    try:
-        df_classified.to_parquet(classified_kmers_file)
-        classified_data['classified'] = {}
-        classified_data['classified']['profile'] = str(classified_kmers_file)
-    except:
-        if verbose:
-            print('No classified data at {} taxonomic level, cannot save it to file or add it to classified data'.format(taxa))
-    try:
-        df_unclassified.to_parquet(unclassified_kmers_file)
-        classified_data['unclassified'] = {}
-        classified_data['unclassified']['profile'] = str(unclassified_kmers_file)
-    except:
-        if verbose:
-            print('No unclassified data at {} taxonomic level, cannot save it to file or add it to unclassified data'.format(taxa))
+            taxa_pos = self.classified_data['sequence'].index(taxa)
+            lst_taxa = self.classified_data['sequence'][taxa_pos:]
+            db_df = pd.DataFrame(
+                self._database_data['classes'],
+                columns=self._database_data['taxas']
+            )[lst_taxa]
+            pred_df = pred_df.merge(db_df, on=taxa, how='left')
+            
+            return pred_df
+        except ValueError:
+            raise ValueError('No sequences to classify for {}.'.format(taxa))
 
-    return classified_data, unclassified_data
+    # Extract subset of classified or not classified sequences
+    def _extract_subset(self, df, df_file, ids, taxa, status):
+        print('_extract_subset')
+        clf_file = df_file + '_{}_{}'.format(taxa, status)
+        rows_clf = []
+        for row in df.iter_rows():
+            if row['id'] in ids:
+                rows_clf.append(row)
+        df_clf = ray.data.from_items(rows_clf)
+        if df_clf.count() > 0:
+            df_clf.write_parquet(clf_file)
+        return df_clf, clf_file
+
+    # Utils functions
+    #########################################################################################################
+    
+     # Merge database and host reference data for bacteria extraction training
+    def _merge_database_host(self, database_data, host_data):
+        print('_merge_database_host')
+        self._merged_database_host = {}
+
+        self._merged_database_host['profile'] = "{}_host_merged".format(os.path.splitext(database_data["profile"])[0]) # Kmers profile
+
+        df_classes = pd.DataFrame(database_data["classes"], columns=database_data["taxas"])
+        df_cls_host = pd.DataFrame(host_data["classes"], columns=host_data["taxas"])
+
+        if len(np.unique(df_classes['domain'])) != 1:
+            df_classes[df_classes != 'bacteria'] = 'bacteria'
+
+        if len(df_cls_host) > len(host_data['ids']):
+            to_remove = np.arange(len(df_cls_host) - len(host_data['ids']))
+            df_cls_host.drop(to_remove, axis=0, inplace=True)
+        elif len(df_cls_host) < len(host_data['ids']):
+            diff = len(host_data['ids']) - len(df_cls_host)
+            row = df_cls_host.iloc[0]
+            for i in range(diff):
+                df_cls_host = pd.concat([df_cls_host, row.to_frame().T], ignore_index=True)
+
+        df_classes = pd.concat([df_classes, df_cls_host], ignore_index=True)
+        self._merged_database_host['classes'] = np.array(df_classes)  # Class labels
+        self._merged_database_host['ids'] = np.concatenate((database_data["ids"], host_data["ids"]))  # IDs
+        self._merged_database_host['kmers'] = database_data["kmers"]  # Features
+        self._merged_database_host['taxas'] = database_data["taxas"]  # Known taxas for classification
+        self._merged_database_host['fasta'] = (database_data['fasta'], host_data['fasta'])  # Fasta file needed for reads simulation
+
+        df_db = ray.data.read_parquet(database_data["profile"])
+        df_host = ray.data.read_parquet(host_data["profile"])
+        df_merged = df_db.union(df_host)
+        df_merged.write_parquet(self._merged_database_host['profile'])
+
+    # Verify taxas and assign to class variable
+    def _verify_assign_taxas(self, taxa):
+        print('_verify_assign_taxas')
+        if taxa is None:
+            self._taxas = self._database_data['taxas'].copy()
+        elif isinstance(taxa, list):
+            self._taxas = taxa
+        elif isinstance(taxa, str):
+            self._taxas = [taxa]
+        else:
+            raise ValueError("Invalid taxa option, it must either be absent/None, be a list of taxas to extract or a string identifiying a taxa to extract")
+        self._verify_taxas()
+
+    # Verify if selected taxas are in database
+    def _verify_taxas(self):
+        print('_verify_taxas')
+        for taxa in self._taxas:
+            if taxa not in self._database_data['taxas']:
+                raise ValueError("Taxa {} not found in database".format(taxa))
+
+    # Caller function for verifying if the data and model already exist
+    def _verify_load_data_model(self, data_file, model_file, taxa):
+        print('_verify_load_data_model')
+        self._verify_files(data_file, taxa)
+        return self._verify_load_model(model_file, taxa)
+        
+    # Load extracted data if already exists
+    def _verify_files(self, file, taxa):
+        print('_verify_files')
+        self.classified_data['sequence'].append(taxa)
+        if os.path.isfile(file):
+            self.classified_data[taxa] = load_Xy_data(file)
+        else:
+            self.classified_data[taxa] = {}
+
+    # Load model if already exists
+    def _verify_load_model(self, model_file, taxa):
+        print('_verify_load_model')
+        if os.path.exists(model_file):
+            with open(model_file, 'rb') as f:
+                self.models[taxa] = cloudpickle.load(f)
+            return False
+        else:
+            return True
+
+    def _save_model(self, model_file, taxa):
+        print('_save_model')
+        with open(model_file, 'wb') as f:
+            cloudpickle.dump(self.models[taxa], f)
+
+    def _verify_classifier_binary(self):
+        print('_verify_classifier_binary')
+        if self._classifier_binary == 'onesvm' and self._host == True:
+            raise ValueError('Classifier One-Class SVM cannot be used with host data!\nEither remove host data from config file or choose another bacteria extraction method')
+        elif self._classifier_binary == 'onesvm' and self._host == False:
+            pass
+        elif self._classifier_binary in ['linearsvm','attention','lstm','deeplstm'] and self._host == True:
+            pass
+        elif self._classifier_binary in ['linearsvm','attention','lstm','deeplstm'] and self._host == False:
+            raise ValueError('Classifier {} cannot be used without host data!\nEither add host data to config file or choose the One-Class SVM classifier'.format(self._classifier_binary))
+        else:
+            raise ValueError('Invalid classifier option for bacteria extraction!\n\tModels implemented at this moment are :\n\tBacteria isolator :  One Class SVM (onesvm)\n\tClassic algorithm : Linear SVM (linearsvm)\n\tNeural networks : Attention (attention), Shallow LSTM (lstm) and Deep LSTM (deeplstm)')
+
+    def _verify_classifier_multiclass(self):
+        print('_verify_classifier_multiclass')
+        if self._classifier_multiclass in ['sgd','mnb','lstm_attention','cnn','widecnn']:
+            pass
+        else:
+            raise ValueError('Invalid classifier option for bacteria classification!\n\tModels implemented at this moment are :\n\tClassic algorithm : Stochastic Gradient Descent (sgd) and Multinomial Naïve Bayes (mnb)\n\tNeural networks : Deep hybrid between LSTM and Attention (lstm_attention), CNN (cnn) and Wide CNN (widecnn)')
+
+    def _load_training_data(self, taxa, merged = False):
+        if merged:
+            # Binary merged
+            self._X_train = ray.data.read_parquet(self._merged_database_host['profile'])
+            self._y_train = pd.DataFrame({
+                taxa: pd.DataFrame(
+                    self._merged_database_host['classes'],
+                    columns=self._merged_database_host['taxas']
+                ).loc[:, taxa].astype('string')
+            })
+        else:
+        # Binary not merged or multiclass
+            self._X_train = ray.data.read_parquet(self._database_data['profile'])
+            self._y_train = pd.DataFrame({
+                taxa: pd.DataFrame(
+                    self._database_data['classes'],
+                    columns=self._database_data['taxas']
+                ).loc[:, taxa].astype('string')
+            })
+            if taxa == 'domain':
+                self._y_train[self._y_train['domain'] == 'archaea'] = 'bacteria'
+

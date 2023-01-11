@@ -1,8 +1,8 @@
-import re
+
 import copy
 import gzip
 import random
-from os.path import splitext, dirname, isfile
+from os.path import splitext, isfile
 from collections import UserList, defaultdict
 
 from Bio import SeqIO

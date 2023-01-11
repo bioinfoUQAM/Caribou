@@ -1,17 +1,11 @@
 import os
 import ray
 import warnings
-import numpy as np
+import pyarrow as pa
 import pandas as pd
-
-from glob import glob
-from shutil import rmtree
 
 # Class construction
 from abc import ABC, abstractmethod
-
-# Data preprocessing
-from ray.data.preprocessors import MinMaxScaler, Chain, SimpleImputer
 
 # CV metrics
 from sklearn.metrics import precision_recall_fscore_support
@@ -66,7 +60,18 @@ class ModelsUtils(ABC):
     predict : abstract method to predict the classes of a dataset
 
     """
-    def __init__(self, classifier, dataset, outdir_model, outdir_results, batch_size, k, taxa, kmers_list, verbose):
+    def __init__(
+        self,
+        classifier,
+        dataset,
+        outdir_model,
+        outdir_results,
+        batch_size,
+        k,
+        taxa,
+        kmers_list,
+        verbose
+    ):
         # Parameters
         self.classifier = classifier
         self.dataset = dataset
@@ -98,25 +103,10 @@ class ModelsUtils(ABC):
         """
         """
 
-    def _predict_preprocess(self, df):
-        print('_predict_preprocess')
-        for row in df.iter_rows():
-            self._predict_ids.append(row['__index_level_0__'])
-        self._preprocessor = Chain(SimpleImputer(
-            self.kmers, strategy='constant', fill_value=0), MinMaxScaler(self.kmers))
-        df = self._preprocessor.fit_transform(df)
-        return df
-
-    def train(self, X, y, kmers_ds, cv = True):
-        print('train')
-        # cv = False
-        df = self._training_preprocess(X, y)
-        if cv:
-            self._cross_validation(df, kmers_ds)
-        else:
-            df_train, df_val = df.drop_columns(['id']).train_test_split(0.2, shuffle = True)
-            datasets = {'train' : ray.put(df_train), 'validation': ray.put(df_val)}
-            self._fit_model(datasets)
+    @abstractmethod
+    def train(self):
+        """
+        """
 
     @abstractmethod
     def _fit_model(self):
@@ -130,18 +120,23 @@ class ModelsUtils(ABC):
 
     def _sim_4_cv(self, df, kmers_ds, name):
         sim_genomes = []
+        sim_taxas = []
         for row in df.iter_rows():
             sim_genomes.append(row['id'])
-        cls = pd.DataFrame({'id':sim_genomes,self.taxa:df.to_pandas()[self.taxa]})
+            sim_taxas.append(row[self.taxa])
+        cls = pd.DataFrame({'id':sim_genomes,self.taxa:sim_taxas})
         sim_outdir = os.path.dirname(kmers_ds['profile'])
         cv_sim = readsSimulation(kmers_ds['fasta'], cls, sim_genomes, 'miseq', sim_outdir, name)
         sim_data = cv_sim.simulation(self.k, self.kmers)
+        sim_ids = sim_data['ids']
+        sim_ids = sim_data['ids']
+        sim_cls = pd.DataFrame({'sim_id':sim_ids}, dtype = object)
+        sim_cls['id'] = sim_cls['sim_id'].str.replace('_[0-9]+_[0-9]+_[0-9]+', '', regex=True)
+        sim_cls = sim_cls.set_index('id').join(cls.set_index('id'))
+        sim_cls = sim_cls.drop(['sim_id'], axis=1)
+        sim_cls = sim_cls.reset_index(drop = True)
         df = ray.data.read_parquet(sim_data['profile'])
-        ids = []
-        for row in df.iter_rows():
-            ids.append(row['__index_level_0__'])
-        labels = pd.DataFrame(sim_data['classes'], index = ids)
-        df = df.add_column(self.taxa, lambda x : labels)
+        df = self._zip_X_y(df, sim_cls)
         return df
 
     def _cv_score(self, y_true, y_pred):
@@ -149,12 +144,24 @@ class ModelsUtils(ABC):
 
         support = precision_recall_fscore_support(y_true, y_pred, average = 'weighted')
 
-        scores = pd.DataFrame({'Classifier':self.classifier,'Precision':support[0],'Recall':support[1],'F-score':support[2]}, index = [1]).T
+        scores = pd.DataFrame({
+            'Classifier':self.classifier,
+            'Precision':support[0],
+            'Recall':support[1],
+            'F-score':support[2]
+            },
+            index = [1]
+        ).T
 
         scores.to_csv(self._cv_csv, header = False)
 
     @abstractmethod
     def predict(self):
+        """
+        """
+
+    @abstractmethod
+    def _prob_2_cls(self):
         """
         """
 
@@ -167,3 +174,25 @@ class ModelsUtils(ABC):
     def _label_decode(self):
         """
         """
+
+    def _zip_X_y(self, X, y):
+        num_blocks = X.num_blocks()
+        len_x = X.count()
+        self._ensure_length_ds(len_x,len(y))
+        # Convert y -> ray.data.Dataset with arrow schema
+        y = ray.data.from_arrow(pa.Table.from_pandas(y))
+        # Repartition to 1 row/partition
+        X = X.repartition(len_x)
+        y = y.repartition(len_x)
+        # Ensure both ds fully executed
+        for ds in [X,y]:
+            if not ds.is_fully_executed():
+                ds.fully_executed()
+        # Zip X and y
+        df = X.zip(y).repartition(num_blocks)
+# TODO: If still no work : write/read on disk + clear memory
+        return df
+
+    def _ensure_length_ds(self, len_x, len_y):
+        if len_x != len_y:
+            raise ValueError('X and y have different lengths: {} and {}'.format(len_x, len_y))

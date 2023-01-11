@@ -1,18 +1,14 @@
 import os
 import ray
-import logging
-import warnings
 from time import time
+from warnings import warn
 from traceback import format_exc
 from collections import defaultdict
-from typing import TYPE_CHECKING, Any, Callable, Dict, Iterable, Optional, Union, Tuple
 
 import numpy as np
 import pandas as pd
 from joblib import parallel_backend
 from sklearn.metrics import check_scoring
-from sklearn.base import BaseEstimator, clone
-from sklearn.model_selection import BaseCrossValidator, cross_validate
 
 # we are using a private API here, but it's consistent across versions
 from sklearn.model_selection._validation import _check_multimetric_scoring, _score
@@ -22,20 +18,17 @@ import ray.cloudpickle as cpickle
 from ray.air._internal.checkpointing import (
     save_preprocessor_to_dir,
 )
-from ray.util import PublicAPI
 from ray.util.joblib import register_ray
 from ray.air.config import RunConfig, ScalingConfig
-from ray.train.trainer import BaseTrainer, GenDataset
 from ray.train.constants import MODEL_KEY, TRAIN_DATASET_KEY
-from ray.train.sklearn._sklearn_utils import _has_cpu_params, _set_cpu_params
+from ray.train.sklearn._sklearn_utils import _set_cpu_params
 
 from ray.train.sklearn import SklearnTrainer
 
-if TYPE_CHECKING:
-    from ray.data.preprocessor import Preprocessor
-
 class SklearnPartialTrainer(SklearnTrainer):
-    """docstring for raySkLearnPartial."""
+    """
+    Class adapted from Ray's SklearnTrainer class to allow for partial_fit and usage of tensors as inputs.
+    """
 
     def __init__(
         self,
@@ -44,6 +37,7 @@ class SklearnPartialTrainer(SklearnTrainer):
         datasets,
         label_column = None,
         labels_list = None,
+        features_list = None,
         params = None,
         scoring = None,
         cv = None,
@@ -73,6 +67,7 @@ class SklearnPartialTrainer(SklearnTrainer):
         )
         self._batch_size = batch_size
         self._labels = labels_list
+        self._features_list = features_list
 
     def _validate_attributes(self):
         # Run config
@@ -163,14 +158,18 @@ class SklearnPartialTrainer(SklearnTrainer):
         out_datasets = {}
         for key, ray_dataset in self.datasets.items():
             ray_dataset = ray.get(ray_dataset)
+            cols = ray_dataset.schema().names
+            cols.remove(self.label_column)
             out_datasets[key] = (
                 ray_dataset.drop_columns([self.label_column]),
-                ray.data.from_pandas(pd.DataFrame(ray_dataset.to_pandas()[self.label_column], columns = [self.label_column])),
+                ray_dataset.drop_columns(cols)
             )
         return out_datasets
 
     def training_loop(self):
         register_ray()
+
+        self.preprocess_datasets()
 
         self.estimator.set_params(**self.params)
 
@@ -198,17 +197,27 @@ class SklearnPartialTrainer(SklearnTrainer):
             for batch_X, batch_y in zip(
                 X_train.iter_batches(
                     batch_size = self._batch_size,
-                    batch_format = 'pandas'
+                    batch_format = 'numpy'
                 ),
                 y_train.iter_batches(
                     batch_size = self._batch_size,
-                    batch_format = 'pandas'
+                    batch_format = 'numpy'
                 )
-            ):
+            ):  
                 try:
-                    self.estimator.partial_fit(batch_X, np.ravel(batch_y), classes = self._labels, **self.fit_params)
-                except TypeError as e:
-                    self.estimator.partial_fit(batch_X, np.ravel(batch_y), **self.fit_params)
+                    batch_X = pd.DataFrame(batch_X, columns = self._features_list)
+                except ValueError:
+                    for i in range(len(batch_X)):
+                        if len(batch_X[i]) != len(self._features_list):
+                            warn("The features list length for some reads are not the same as for other reads.\
+                                Removing the last {} additionnal values, this may influence training.\
+                                    If error persists over multiple samples, please rerun the K-mers extraction".format(len(batch_X[i]) - len(self._features_list)))
+                            batch_X[i] = batch_X[i][:len(self._features_list)]
+                batch_y = np.ravel(batch_y)
+                try:
+                    self.estimator.partial_fit(batch_X, batch_y, classes = self._labels, **self.fit_params)
+                except TypeError:
+                    self.estimator.partial_fit(batch_X, batch_y, **self.fit_params)
             fit_time = time() - start_time
 
             with tune.checkpoint_dir(step=1) as checkpoint_dir:
@@ -254,25 +263,33 @@ class SklearnPartialTrainer(SklearnTrainer):
 
         for key, X_y_tuple in datasets.items():
             X_test, y_test = X_y_tuple
+
+            test_scores = []
+
             start_time = time()
-            try:
-                test_scores = _score(estimator, X_test.to_pandas(), y_test.to_pandas(), scorers)
-            except Exception:
-                if isinstance(scorers, dict):
-                    test_scores = {k: np.nan for k in scorers}
-                else:
-                    test_scores = np.nan
-                warnings.warn(
-                    f"Scoring on validation set {key} failed. The score(s) for "
-                    f"this set will be set to nan. Details: \n"
-                    f"{format_exc()}",
-                    UserWarning,
+            for batch, labels in zip(X_test.iter_batches(
+                    batch_size = self._batch_size,
+                    batch_format = 'numpy'
+                ), y_test.iter_batches(
+                    batch_size=self._batch_size,
+                    batch_format = 'pandas'
                 )
+            ):
+                batch = pd.DataFrame(batch, columns = self._features_list)
+                try:
+                    test_scores.append(_score(estimator, batch, labels, scorers))
+                except Exception:
+                    if isinstance(scorers, dict):
+                        test_scores = {k: np.nan for k in scorers}
+                    else:
+                        test_scores.append(np.nan)
+                    warn(
+                        f"Scoring on validation set {key} failed. The score(s) for "
+                        f"this set will be set to nan. Details: \n"
+                        f"{format_exc()}",
+                        UserWarning,
+                    )
             score_time = time() - start_time
             results[key]["score_time"] = score_time
-            if not isinstance(test_scores, dict):
-                test_scores = {"score": test_scores}
-
-            for name in test_scores:
-                results[key][f"test_{name}"] = test_scores[name]
+            results[key][f"test_score"] = np.mean(test_scores)
         return results

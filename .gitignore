@@ -1,8 +1,10 @@
+build/
+.vscode/
 __pycache__/
+references.bibtex
+src/__pycache__/
 src/data/__pycache__/
 src/models/__pycache__/
 src/outputs/__pycache__/
 src/supplement/__pycache__/
-build/
 src/Caribou.egg-info/
-.vscode/

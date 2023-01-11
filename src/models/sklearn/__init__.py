@@ -13,4 +13,4 @@
 
 __author__ = "Nicolas de Montigny"
 
-__all__ = ['classification', 'ray_utils', 'reads_simulation', 'sklearn', 'kerasTF']
+__all__ = ['ray_sklearn', 'ray_sklearn_partial_trainer', 'ray_sklearn_probability_predictor']

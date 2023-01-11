@@ -1,13 +1,9 @@
-import numpy as np
-import pandas as pd
-
-from Bio import SeqIO
-from copy import copy
-
 import os
-import ray
 import gzip
 
+import numpy as np
+from Bio import SeqIO
+import pandas as pd
 from subprocess import run
 
 __author__ = 'Nicolas de Montigny'
@@ -20,6 +16,18 @@ class Outputs():
     Attributes
     ----------
 
+    database_kmers : dictionnary
+        The database of K-mers and their associated classes used for classifying the dataset
+
+    results_dir : string
+        Path to a folder to output results
+
+    k : int
+        Length of k-mers used for classification
+    
+    classifier : string
+        Name of the classifier used
+
     dataset : string
         Name of the dataset
 
@@ -29,21 +37,11 @@ class Outputs():
     classified_data : dictionnary
         The classes that were predicted by models
 
-    data_labels : list
-        Labels used to classify the sequences
-
-    taxas : list
-        Taxa levels that were classified
-
-    order : list
-        The order in which the classification was made
-        Should be from the most specific to less specific
-
     ----------
     Methods
     ----------
 
-    abundances : Generates an abundances table in csv format
+    mpa_style : Generates an abundances table in tsv format similar to metaphlan's output
         No parameters required
 
     kronagram : Generates a Kronagram (interactive tree) in html format
@@ -52,11 +50,17 @@ class Outputs():
     report : Generates a full report on identification of classified sequences
         No parameters required
 
-    fasta : Generates a fasta file containing each sequences assigned to a taxonomy for classification made
-        No parameters required
-
     """
-    def __init__(database_kmers, results_dir, k, classifier, dataset, host, classified_data):
+    def __init__(
+        self,
+        database_kmers,
+        results_dir,
+        k,
+        classifier,
+        dataset,
+        host,
+        classified_data
+    ):
         # Third-party path
         self._krona_path = os.path.join(os.path.dirname(os.path.realpath(__file__)),'KronaTools','scripts','ImportText.pl')
         self._perl_loc = run('which perl', shell = True, capture_output = True, text = True).stdout.strip('\n')
@@ -65,187 +69,178 @@ class Outputs():
         self.dataset = dataset
         self.classified_data = classified_data
         self.taxas = database_kmers['taxas']
-        self.order = classified_data['order']
-        self.data_labels = database_kmers['classes']
+        self.order = classified_data['sequence']
+        self.data_labels = pd.DataFrame(
+            database_kmers['classes'],
+            columns = database_kmers['taxas']
+        )
+        # Number of reads classified
+        self.reads_total = 0
+        self.reads_bacteria = 0
+        self.reads_host = 0
+        self.reads_classified = 0
+        self.reads_unknown = 0
         # File names
-        self._abund_file = '{}abundance_K{}_{}_{}.csv'.format(results_dir, k, classifier, dataset)
         self._summary_file = '{}summary_K{}_{}_{}.csv'.format(results_dir, k, classifier, dataset)
         self._krona_file = '{}kronagram_K{}_{}_{}.csv'.format(results_dir, k, classifier, dataset)
         self._krona_out = '{}kronagram_K{}_{}_{}.html'.format(results_dir, k, classifier, dataset)
-        self._report_file = '{}full_report_K{}_{}_{}.csv'.format(results_dir, k, classifier, dataset)
-        self._fasta_outdir = '{}fasta_by_taxa_k{}_{}_{}'.format(results_dir, k, classifier, dataset)
+        self._report_file = '{}report_K{}_{}_{}.csv'.format(results_dir, k, classifier, dataset)
+        self._mpa_file = '{}mpa_K{}_{}_{}.csv'.format(results_dir, k, classifier, dataset)
         # Initialize empty
         self._abundances = {}
-        self._summary = {}
         # Get abundances used for other outputs
         self._get_abundances()
+        self._nb_reads_classif()
+        # Auto output summary
+        self._summary_table()
 
 
     def _get_abundances(self):
         for taxa in self.order:
-            df = pd.read_parquet(self.classified_data[taxa]['profile'])
-            if taxa in ['bacteria','host','unclassified']:
-                self._abundances[taxa] = len(df)
+            df = self.classified_data[taxa]['classification']
+            self._abundances[taxa] = {
+                'counts': df.value_counts(subset = [taxa]),
+                'total': df.value_counts(subset = [taxa]).sum()
+            }     
+
+    def _nb_reads_classif(self):
+        if 'domain' in self.order:
+            self.reads_total = (len(self.classified_data['domain']['classified_ids']) + len(self.classified_data['domain']['unknown_ids']))
+            self.reads_bacteria = len(self.classified_data['domain']['classified_ids'])
+            if self.host is not None:
+                self.reads_host = len(self.classified_data['domain']['host_ids'])
+                self.reads_classified = self.reads_bacteria + self.reads_host
             else:
-                self._abundances[taxa] = {}
-                for cls in np.unique(df['classes']):
-                    if cls in self._abundances[taxa]:
-                        self._abundances[taxa][cls] += 1
-                    else:
-                        self._abundances[taxa][cls] = 1
+                self.reads_classified = self.reads_bacteria
+            self.reads_unknown = len(self.classified_data['domain']['unknown_ids'])
+        else:
+            self.reads_bacteria = 0
+            for taxa in self.order:
+                self.reads_bacteria += self._abundances[taxa]['total']
+            self.reads_classified = self.reads_bacteria
+            self.reads_unknown = len(self.classified_data[self.order[-1]]['unknown_ids'])
+            self.reads_total = self.reads_classified + self.reads_unknown
 
-    def abundances(self):
-        self._abundance_table()
-        print('Abundance table saved to {}'.format(self._abund_file))
-        self._summary['initial'] = len(self.data_labels)
-        self._summary_table()
-        print('Summary table saved to {}'.format(self._summary_file))
-
-    def _abundance_table(self):
-        # Abundance tables / relative abundance
-        self._summary['total'] = 0
-        cols = ['Taxonomic classification','Number of reads','Relative Abundance (%)']
-        nrows = 0
-        for taxa in self._abundances:
-            if taxa not in ['bacteria','host','unclassified']:
-                nrows += 1
-
-        df = pd.DataFrame(np.zeros((nrows,len(cols)), dtype = int), index = np.arange(nrows), columns = cols)
-
-        index = 0
-        total_abund = 0
-
-        for taxa in self.order:
-            if taxa in ['bacteria','host','unclassified']:
-                self._summary[taxa] = self._abundances[taxa]
-            else:
-                df.loc[index, 'Taxonomic classification'] = taxa
-                taxa_ind = copy(index)
-                taxa_abund = 0
-                index += 1
-                for k, v in self._abundances[taxa].items():
-                    df.loc[index, 'Taxonomic classification'] = k
-                    df.loc[index, 'Number of reads'] = v
-                    taxa_abund += v
-                    total_abund += v
-                    index += 1
-                df.loc[taxa_ind, 'Number of reads'] = taxa_abund
-                self._summary[taxa] = taxa_abund
-        df['Relative Abundance (%)'] = (df['Number of reads']/total_abund)*100
-        self._summary['total'] = total_abund
-        df.to_csv(self._abund_file, na_rep = '', header = True, index = False)
-
+    # Summary file of operations / counts & proportions of reads at each steps
     def _summary_table(self):
-        # Summary file of operations / counts & proportions of reads at each steps
-        cols = ['Value']
-        rows = ['Abundance','','Number of reads before classification', 'Number of reads classified','Number of unclassified reads','Number of reads identified as bacteria']
-        values = np.array([np.NaN, np.NaN, self._summary['initial'], self._summary['total'], self._summary['unclassified'], self._summary['bacteria']])
-        if self.host is not None:
-            rows.append('Number of reads identified as {}'.format(self.host))
-            values = np.append(values, self._summary['host'])
+        rows = [
+            'Total number of reads',
+            'Total number of classified reads',
+            'Total Number of unknown reads'
+        ]
+        values_raw = [
+            self.reads_total,
+            self.reads_classified,
+            self.reads_unknown
+        ]
+        # Relative abundances
+        values_rel = [
+            np.NaN,
+            ((self.reads_classified/self.reads_total)*100),
+            ((self.reads_unknown/self.reads_total)*100)
+        ]
         for taxa in self.order:
-            if taxa not in ['bacteria','host','unclassified']:
-                rows.append('Number of reads classified at {} level'.format(taxa))
-                values = np.append(values, self._summary[taxa])
-        rows.extend(['','Relative abundances','','Percentage of reads classified', 'Percentage of reads unclassified','Percentage of reads identified as bacteria'])
-        values = np.append(values, [np.NaN,np.NaN,np.NaN,(self._summary['total']/self._summary['initial']*100),(self._summary['unclassified']/self._summary['initial']*100),(self._summary['bacteria']/self._summary['initial']*100)])
-        if self.host is not None:
-            rows.append('Percentage of reads identified as {}'.format(self.host))
-            values = np.append(values, self._summary['host']/self._summary['initial']*100)
-        for taxa in self.order:
-            if taxa not in ['bacteria','host','unclassified']:
-                rows.append('Percentage of reads classified at {} level'.format(taxa))
-                values = np.append(values, self._summary[taxa]/self._summary['initial']*100)
-        df = pd.DataFrame(values, index = rows, columns = cols)
-        df.to_csv(self._summary_file, na_rep = '', header = False, index = True)
+            if taxa == 'domain':
+                rows.append('bacteria')
+                values_raw.append(self.reads_bacteria)
+                values_rel.append((self.reads_bacteria/self.reads_total)*100)
+                if self.host is not None:
+                    rows.append(self.host)
+                    values_raw.append(self.reads_host)
+                    values_rel.append((self.reads_host/self.reads_total)*100)
+            else:
+                rows.append(taxa)
+                values_raw.append(self._abundances[taxa]['total'])
+                values_rel.append((self._abundances[taxa]['total']/self.reads_total)*100)
 
+        df = pd.DataFrame({
+            'Taxa' : rows,
+            'Abundance': values_raw,
+            'Relative abundance (%)': values_rel
+        })
+
+        df.to_csv(self._summary_file, na_rep = '', header = True)
+        print(f'Summary table saved to {self._summary_file}')
+
+    # Kronagram / interactive tree
     def kronagram(self):
-        # Kronagram / interactive tree
         self._create_krona_file()
         cmd = '{} {} {} -o {} -n {}'.format(self._perl_loc, self._krona_path, self._krona_file, self._krona_out, self.dataset)
         run(cmd, shell = True)
+        print(f'Kronagram saved to {self._krona_out}')
 
     def _create_krona_file(self):
-        cols = ['Abundance']
-        [cols.append(self.taxas[i]) for i in range(len(self.taxas)-1, -1, -1)]
-        nrows = 0
-        for taxa in self._abundances:
-            if taxa not in ['bacteria','host','unclassified']:
-                nrows += len(self._abundances[taxa])
+        # Reverse order of columns
+        db_labels = self.data_labels.copy(deep = True)
+        db_labels = db_labels[db_labels.columns[::-1]]
+        taxas = self.order.copy()
+        if 'domain' in taxas:
+            taxas.remove('domain')
+            taxas.append('domain')
+        
+        df = pd.DataFrame(columns=[taxa for taxa in reversed(taxas)])
+        
+        for taxa in taxas:
+            abund_per_tax = pd.DataFrame(self._abundances[taxa]['counts'])
+            abund_per_tax.reset_index(level = 0, inplace = True)
+            abund_per_tax.columns = [taxa, 'abundance']
+            abund_per_tax = abund_per_tax.join(db_labels, how = 'left', on = taxa)
+            abund_per_tax.index = abund_per_tax['abundance'] # Index is abundance
+            df = pd.concat([df, abund_per_tax], axis = 0, ignore_index = False) # Keep abundance on index when concatenating
+        
+        df.to_csv(self._krona_file, na_rep = '', header = False, index = True)
+        print(f'Abundance file required for Kronagram saved to {self._krona_file}')
 
-        df = pd.DataFrame(np.zeros((nrows,len(cols)), dtype = int), index = np.arange(nrows), columns = cols)
-
-        unique_rows = np.vstack(list({tuple(row) for row in self.data_labels}))
-
-        index = 0
-        for taxa in self.order:
-            if taxa not in ['bacteria','host','unclassified']:
-                col_taxa = df.columns.get_loc(taxa)
-                for k, v in abundances[taxa].items():
-                    if k in df[taxa]:
-                        ind = df[df[taxa] == k].index.values
-                        df.loc[ind, taxa] = k
-                        df.loc[ind, 'Abundance'] += v
-                        if col_taxa != 1:
-                            for col in range(1, col_taxa+1):
-                                df.iloc[ind,col] = np.flip(unique_rows[np.where(unique_rows == k)[0]])[0][col-1]
-                    else:
-                        df.loc[index, taxa] = k
-                        df.loc[index, 'Abundance'] += v
-                        if col_taxa != 1:
-                            for col in range(1, col_taxa+1):
-                                df.iloc[index,col] = np.flip(unique_rows[np.where(unique_rows == k)[0]])[0][col-1]
-                        index += 1
-        df = df.fillna(0)
-        df.to_csv(self._krona_file, na_rep = '', header = False, index = False)
-
+    # Report file of classification of each id
     def report(self):
-        # Report file of classification of each id
-        cols = ['Sequence ID']
-        [cols.append(self.taxas[i]) for i in range(len(self.taxas)-1, -1, -1)]
-        nrows = 0
-        for taxa in self.order:
-            if taxa not in ['bacteria','host','unclassified']:
-                nrows += len(self.classified_data[taxa]['ids'])
+        report = self._produce_report()
+        report.to_csv(self._report_file, na_rep = '', header = True, index = False)
+        print(f'Classification report saved to {self._report_file}')
 
-        df = pd.DataFrame(np.zeros((nrows,len(cols)), dtype = int), index = np.arange(nrows), columns = cols)
+    def _produce_report(self):
+        lst_ids = []
+        db_labels = self.data_labels.copy(deep = True)
+        taxas = self.order.copy()
+        if 'domain' in taxas:
+            taxas.remove('domain')
+            taxas.append('domain')
+        taxas.append('id')
 
-        unique_rows = np.vstack(list({tuple(row) for row in self.data_labels}))
+        taxas = [taxa for taxa in reversed(taxas)]
+        
+        df = pd.DataFrame(columns = taxas)
+        for taxa in taxas:
+            tmp_df = self.classified_data[taxa]['classification']
+            lst_ids.extend(self.classified_data[taxa]['classified_ids'])
+            for classif in tmp_df[taxa]:
+                row = db_labels[db_labels[taxa] == classif]
+                df = pd.concat([df, row], axis = 0, ignore_index = True)
+            db_labels = db_labels.drop(taxa, axis = 1)
+            db_labels = db_labels.drop_duplicates()
+        
+        df['id'] = lst_ids
+        return df
 
-        index = 0
-        for taxa in self.order:
-            if taxa not in ['bacteria','host','unclassified']:
-                col_taxa = df.columns.get_loc(taxa)
-                for id, classification in zip(self.classified_data[taxa]['ids'], self.classified_data[taxa]['classification']):
-                    df.loc[index, 'Sequence ID'] = id
-                    df.loc[index, taxa] = classification
-                    if col_taxa != 1:
-                        for col in range(1, col_taxa+1):
-                            df.iloc[index,col] = np.flip(unique_rows[np.where(unique_rows == classification)[0]])[0][col-1]
-                    index += 1
+    # Bacteria abundance tables / relative abundance vs total bacteria
+    def mpa_style(self):
+        mpa = self._produce_report()
+        
+        mpa.drop('id', axis = 1, inplace = True)
+        cols = list(mpa.columns)
+        for col in cols:
+            prefix = col[0] + '__'
+            mpa[col] = prefix + mpa[col].astype(str)
+        
+        mpa['taxonomy'] = ''
+        for col in cols:
+            mpa['taxonomy'] = mpa['taxonomy'].str.cat(mpa[col], sep = '|')
+            mpa = mpa.drop(col, axis = 1)
+        mpa['taxonomy'] = mpa['taxonomy'].str.lstrip('|')
 
-        df = df.fillna(0)
-        df.to_csv(self._report_file, na_rep = '', header = True, index = False)
+        mpa['reads_abundance'] = mpa['taxonomy'].value_counts()[0]
+        mpa = mpa.drop_duplicates()
 
-    def fasta(self):
-        os.mkdir(self._fasta_outdir)
-        path, ext = os.path.splitext(self.fasta_file)
-        if ext == '.gz':
-            with gzip.open(self.fasta_file, 'rt') as handle:
-                records = SeqIO.index(handle, 'fasta')
-        else:
-            with open(self.fasta_file, 'rt') as handle:
-                records = SeqIO.index(handle, 'fasta')
+        mpa['relative_abundance'] = (mpa['reads_abundance']/self.reads_total)*100
 
-        list_taxa = [order[i] for i in range(len(order)-1, -1, -1)]
-        list_taxa.remove('unclassified')
-        for taxa in list_taxa:
-            taxa_dir = os.path.join(self._fasta_outdir,taxa)
-            df = pd.read_parquet(self.classified_data[taxa]['profile'])
-            for cls in np.unique(df['classes']):
-                outfile_cls = os.path.join(taxa_dir,'{}.fna.gz'.format(cls))
-                df_cls = df[df['classes'].str.match(cls)]
-                ids = list(df_cls['id'])
-                with gzip.open(outfile_cls, 'w') as handle:
-                    for id in ids:
-                        SeqIO.write(records[id], handle, 'fasta')
+        mpa.to_csv(self._mpa_file, na_rep = '', header = True, index = False)
+        print(f'mpa-style file saved to {self._mpa_file}')
