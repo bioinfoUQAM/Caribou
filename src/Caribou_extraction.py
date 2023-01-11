@@ -1,7 +1,6 @@
 #!/usr/bin python3
 
 import ray
-import os.path
 import argparse
 
 from utils import *
@@ -75,28 +74,20 @@ def bacteria_extraction(opt):
 
 # Execution of bacteria extraction / host removal on metagenome + save results
 ################################################################################
-    def populate_save_data(clf):
-        clf_data = {
-            'sequence': clf.classified_data['sequence'].copy(),
-            'profile' : clf.classified_data['domain']['bacteria'],
-            'kmers' : data_metagenome['kmers'],
-            'ids' : clf.classified_data['domain']['bacteria_ids'],
-            'unknown_profile' : clf.classified_data['domain']['unknown'],
-            'unknown_ids' : clf.classified_data['domain']['unknown_ids'],
-        }
-        if 'host' in clf.classified_data.keys():
-            clf_data['host_profile'] = clf.classified_data['host']['classification']
-            clf_data['host_ids'] = clf.classified_data['host']['classified_ids']
-        clf_file = os.path.join(outdirs['results_dir'], opt['metagenome_name'] + '_extracted.npz')
-        save_Xy_data(clf_data, clf_file)
-        
+    
     t_start = time()
     end_taxa = clf.execute_classification(data_metagenome)
     t_end = time()
     t_classify = t_end - t_start
 
     if end_taxa is None:
-        populate_save_data(clf)
+        clf_data = populate_save_data(
+            clf.classified_data,
+            data_bacteria,
+            end_taxa,
+            outdirs['results_dir'],
+            opt['metagenome_name'],
+        )
         print(f"Caribou finished training the {opt['model_type']} model and extracting bacteria with it. \
             \nThe training step took {t_train} seconds and the classification step took {t_classify} seconds.")
     else:

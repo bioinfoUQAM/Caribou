@@ -1,7 +1,6 @@
 #!/usr/bin python3
 
 import ray
-import os.path
 import argparse
 
 from utils import *
@@ -19,6 +18,7 @@ def bacteria_classification(opt):
     # Verify existence of files and load data
     data_bacteria = verify_load_data(opt['data_bacteria'])
     data_metagenome = verify_load_data(opt['data_metagenome'])
+    preclassified = verify_preclassified(data_metagenome)
     k_length = len(data_bacteria['kmers'][0])
 
     # Verify that model type is valid / choose default depending on host presence
@@ -55,44 +55,25 @@ def bacteria_classification(opt):
     clf.execute_training()
     t_end = time()
     t_train = t_end - t_start
+
 # Execution of bacteria taxonomic classification on metagenome + save results
 ################################################################################
-    def populate_save_data(clf, end_taxa):
-        clf_data = {'sequence' : clf.classified_data['sequence'].copy()}
-        if end_taxa is not None:
-            clf_data['sequence'] = clf_data['sequence'][:clf_data['sequence'].index(end_taxa)]
-        
-        if 'domain' in clf_data['sequence'] and len(data_metagenome['classified_ids']) > 0:
-            clf_data['domain'] = {
-                'profile' : data_metagenome['profile'],
-                'kmers' : data_metagenome['kmers'],
-                'ids' : data_metagenome['ids'],
-                'classification' : data_metagenome['classification'],
-                'classified_ids' : data_metagenome['classified_ids'],
-                'unknown_profile' : data_metagenome['unknown_profile'],
-                'unknown_ids' : data_metagenome['unknown_ids']
-            }
-        if 'host' in clf_data.keys():
-            clf_data['domain']['host_classification'] = data_metagenome['host_classification']
-            clf_data['domain']['host_ids'] = data_metagenome['host_ids']
-
-        for taxa in clf_data['sequence']:
-            clf_data[taxa] = {
-                'profile' : clf.classified_data[taxa]['unknown'],
-                'kmers' : data_metagenome['kmers'],
-                'ids' : clf.classified_data[taxa]['unknown_ids'],
-                'classification' : clf.classified_data[taxa]['classification'],
-                'classified_ids' : clf.classified_data[taxa]['classified_ids'],
-            }
-
-        clf_file = os.path.join(outdirs['results_dir'], opt['metagenome_name'] + '_classified.npz')
-        save_Xy_data(clf_data, clf_file)
-
+    
     t_start = time()
-    end_taxa = clf.execute_classification(data_metagenome)
+    if preclassified is not None:
+        end_taxa = clf.execute_classification(data_metagenome[preclassified])
+    else:
+        end_taxa = clf.execute_classification(data_metagenome)
     t_end = time()
     t_classif = t_end - t_start
-    populate_save_data(clf, end_taxa)
+    clf_data = populate_save_data(
+        clf.classified_data,
+        data_metagenome,
+        end_taxa,
+        outdirs['results_dir'],
+        opt['metagenome_name'],
+        preclassified = preclassified,
+    )
     if end_taxa is None:
         print(f"Caribou finished training the {opt['model_type']} model and classifying bacterial sequences at {opt['taxa']} taxonomic level with it. \
             \nThe training step took {t_train} seconds to execute and the classification step took {t_classif} seconds to execute.")
