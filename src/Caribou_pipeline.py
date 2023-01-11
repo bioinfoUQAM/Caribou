@@ -20,8 +20,7 @@ __all__ = ['caribou']
 def caribou(opt):
     # Get argument values from config file
     config_file = opt['config']
-    config = configparser.ConfigParser(
-            interpolation=configparser.ExtendedInterpolation())
+    config = configparser.ConfigParser(interpolation=configparser.ExtendedInterpolation())
 
     with open(config_file, 'r') as cf:
         config.read_file(cf)
@@ -61,7 +60,7 @@ def caribou(opt):
     for file in [database_seq_file, database_cls_file, metagenome_seq_file]:
         verify_file(file)
 
-    host = verify_host(host)
+    verify_host_params(host, host_seq_file, host_cls_file)
     if host is not None:
         for file in [host_seq_file, host_cls_file]:
             verify_file(file)
@@ -172,7 +171,7 @@ def caribou(opt):
 
     # Classify the data from the metagenome
     t_start = time()
-    recursive_classifier.execute_classication(k_profile_metagenome)
+    recursive_classifier.execute_classification(k_profile_metagenome)
     t_end = time()
     t_classif = t_end - t_start
 

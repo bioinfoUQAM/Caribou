@@ -14,6 +14,7 @@ __all__ = [
     'verify_data_path',
     'verify_saving_path',
     'verify_host',
+    'verify_host_params',
     'verify_boolean',
     'verify_positive_int',
     'verify_0_1',
@@ -61,6 +62,12 @@ def verify_host(host : str):
         return host
     else:
         return None
+
+def verify_host_params(host : str, host_seq_file : Path, host_cls_file : Path):
+    host = verify_host(host)
+    if host is not None:
+        if host_seq_file is None or host_cls_file is None:
+            raise ValueError('Please provide host sequence and classification files or remove the host name from config file!')
 
 def verify_boolean(val : bool, parameter : str):
     if val not in [True,False,None]:

@@ -74,6 +74,12 @@ class Outputs():
             database_kmers['classes'],
             columns = database_kmers['taxas']
         )
+        # Number of reads classified
+        self.reads_total = 0
+        self.reads_bacteria = 0
+        self.reads_host = 0
+        self.reads_classified = 0
+        self.reads_unknown = 0
         # File names
         self._summary_file = '{}summary_K{}_{}_{}.csv'.format(results_dir, k, classifier, dataset)
         self._krona_file = '{}kronagram_K{}_{}_{}.csv'.format(results_dir, k, classifier, dataset)
@@ -84,6 +90,7 @@ class Outputs():
         self._abundances = {}
         # Get abundances used for other outputs
         self._get_abundances()
+        self._nb_reads_classif()
         # Auto output summary
         self._summary_table()
 
@@ -96,46 +103,55 @@ class Outputs():
                 'total': df.value_counts(subset = [taxa]).sum()
             }     
 
+    def _nb_reads_classif(self):
+        if 'domain' in self.order:
+            self.reads_total = (len(self.classified_data['domain']['classified_ids']) + len(self.classified_data['domain']['unknown_ids']))
+            self.reads_bacteria = len(self.classified_data['domain']['classified_ids'])
+            if self.host is not None:
+                self.reads_host = len(self.classified_data['domain']['host_ids'])
+                self.reads_classified = self.reads_bacteria + self.reads_host
+            else:
+                self.reads_classified = self.reads_bacteria
+            self.reads_unknown = len(self.classified_data['domain']['unknown_ids'])
+        else:
+            self.reads_bacteria = 0
+            for taxa in self.order:
+                self.reads_bacteria += self._abundances[taxa]['total']
+            self.reads_classified = self.reads_bacteria
+            self.reads_unknown = len(self.classified_data[self.order[-1]]['unknown_ids'])
+            self.reads_total = self.reads_classified + self.reads_unknown
+
     # Summary file of operations / counts & proportions of reads at each steps
     def _summary_table(self):
-        # Raw abundances
-        reads_total = (len(self.classified_data['domain']['classified_ids']) + len(self.classified_data['domain']['unknown_ids']))
-        reads_bacteria = len(self.classified_data['domain']['classified_ids'])
-        if self.host is not None:
-            reads_host = len(self.classified_data['domain']['host_ids'])
-            reads_classified = (reads_bacteria + reads_host)
-        else:
-            reads_classified = reads_bacteria
-        reads_unknown = len(self.classified_data['domain']['unknown_ids'])
         rows = [
             'Total number of reads',
             'Total number of classified reads',
             'Total Number of unknown reads'
         ]
         values_raw = [
-            reads_total,
-            reads_classified,
-            reads_unknown
+            self.reads_total,
+            self.reads_classified,
+            self.reads_unknown
         ]
         # Relative abundances
         values_rel = [
             np.NaN,
-            ((reads_classified/reads_total)*100),
-            ((reads_unknown/reads_total)*100)
+            ((self.reads_classified/self.reads_total)*100),
+            ((self.reads_unknown/self.reads_total)*100)
         ]
         for taxa in self.order:
             if taxa == 'domain':
                 rows.append('bacteria')
-                values_raw.append(reads_bacteria)
-                values_rel.append((reads_bacteria/reads_total)*100)
+                values_raw.append(self.reads_bacteria)
+                values_rel.append((self.reads_bacteria/self.reads_total)*100)
                 if self.host is not None:
                     rows.append(self.host)
-                    values_raw.append(reads_host)
-                    values_rel.append((reads_host/reads_total)*100)
+                    values_raw.append(self.reads_host)
+                    values_rel.append((self.reads_host/self.reads_total)*100)
             else:
                 rows.append(taxa)
                 values_raw.append(self._abundances[taxa]['total'])
-                values_rel.append((self._abundances[taxa]['total']/reads_total)*100)
+                values_rel.append((self._abundances[taxa]['total']/self.reads_total)*100)
 
         df = pd.DataFrame({
             'Taxa' : rows,
@@ -172,13 +188,16 @@ class Outputs():
             abund_per_tax.index = abund_per_tax['abundance'] # Index is abundance
             df = pd.concat([df, abund_per_tax], axis = 0, ignore_index = False) # Keep abundance on index when concatenating
         
-        #taxas.insert(0, 'abundance')
-        #df.reset_index(level = 0, inplace = True)
         df.to_csv(self._krona_file, na_rep = '', header = False, index = True)
         print(f'Abundance file required for Kronagram saved to {self._krona_file}')
 
     # Report file of classification of each id
     def report(self):
+        report = self._produce_report()
+        report.to_csv(self._report_file, na_rep = '', header = True, index = False)
+        print(f'Classification report saved to {self._report_file}')
+
+    def _produce_report(self):
         lst_ids = []
         db_labels = self.data_labels.copy(deep = True)
         taxas = self.order.copy()
@@ -200,52 +219,28 @@ class Outputs():
             db_labels = db_labels.drop_duplicates()
         
         df['id'] = lst_ids
-        df.to_csv(self._report_file, na_rep = '', header = True, index = False)
-        print(f'Classification report saved to {self._report_file}')
+        return df
 
-# TODO : Convertir cette fonction pour mpa-style
     # Bacteria abundance tables / relative abundance vs total bacteria
     def mpa_style(self):
+        mpa = self._produce_report()
         
-
-        lst_taxa = list(self._abundances.keys())
-        lst_taxa.insert(0, 'unknown')
-        lst_nb_reads = np.zeros(len(lst_taxa) + 1, dtype = object)
-        lst_rel_abund = np.zeros(len(lst_taxa) + 1, dtype = object)
-        reads_total = (len(self.classified_data['domain']['classified_ids']) + len(self.classified_data['domain']['unknown_ids']))
-        lst_nb_reads[0] = len(self.classified_data['domain']['unknown_ids'])
-
-        if 'domain' in lst_taxa:
-            lst_taxa.remove('domain')
-        if 'host' in self._abundances:
-            lst_taxa.remove('host')
+        mpa.drop('id', axis = 1, inplace = True)
+        cols = list(mpa.columns)
+        for col in cols:
+            prefix = col[0] + '__'
+            mpa[col] = prefix + mpa[col].astype(str)
         
-        if 'domain' in self.classified_data.keys():
-            nb_total_bacteria = len(self.classified_data['domain']['classified_ids'])
-        else:
-            nb_total_bacteria = 0
-            for taxa in lst_taxa:
-                nb_total_bacteria += self._abundances[taxa]['total']
+        mpa['taxonomy'] = ''
+        for col in cols:
+            mpa['taxonomy'] = mpa['taxonomy'].str.cat(mpa[col], sep = '|')
+            mpa = mpa.drop(col, axis = 1)
+        mpa['taxonomy'] = mpa['taxonomy'].str.lstrip('|')
 
-        print(lst_taxa)
-        for taxa in lst_taxa:
-            print(taxa)
-            lst_taxa[lst_taxa.index(taxa)] = []
-            lst_taxa[lst_taxa.index(taxa)].append(taxa)
-            lst_taxa[lst_taxa.index(taxa)].extend(list(self._abundances[taxa]['counts'].index))
-            lst_nb_reads[lst_taxa.index(taxa)] = [self._abundances[taxa]['total']]
-            lst_nb_reads[lst_taxa.index(taxa)].extend(list(self._abundances[taxa]['counts'].values))
-            
-        lst_taxa = np.ravel(lst_taxa)
-        lst_nb_reads = np.ravel(lst_nb_reads)
-        lst_rel_abund = (lst_nb_reads / reads_total) * 100
+        mpa['reads_abundance'] = mpa['taxonomy'].value_counts()[0]
+        mpa = mpa.drop_duplicates()
 
-        df = pd.DataFrame({
-            'Taxonomic classification': lst_taxa,
-            'Number of reads': lst_nb_reads,
-            'Relative Abundance (%)': lst_rel_abund
-        })
+        mpa['relative_abundance'] = (mpa['reads_abundance']/self.reads_total)*100
 
-        df.to_csv(self._abund_file, na_rep = '', header = True, index = False)
+        mpa.to_csv(self._mpa_file, na_rep = '', header = True, index = False)
         print(f'mpa-style file saved to {self._mpa_file}')
-
