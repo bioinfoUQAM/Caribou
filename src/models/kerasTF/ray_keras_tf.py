@@ -221,7 +221,7 @@ class KerasTFModel(ModelsUtils):
             'epochs': self._training_epochs,
             'size': self._nb_kmers,
             'nb_cls':self._nb_classes,
-            'model': self.classifier
+            'model': self.classifier,
         }
 
         # Define trainer / tuner
@@ -238,12 +238,14 @@ class KerasTFModel(ModelsUtils):
                 'train': DatasetConfig(
                     fit = False,
                     transform = False,
-                    split = True
+                    split = True,
+                    use_stream_api = True
                 ),
                 'validation': DatasetConfig(
                     fit = False,
                     transform = False,
-                    split = True
+                    split = False,
+                    use_stream_api = True
                 )
             },
             run_config = RunConfig(
@@ -270,7 +272,6 @@ class KerasTFModel(ModelsUtils):
             # Make predictions
             predictions = self._predictor.predict(
                 df,
-                # feature_columns = ['__value__'],
                 batch_size = self.batch_size
             )
             predictions = self._prob_2_cls(predictions, threshold)
@@ -316,62 +317,59 @@ class KerasTFModel(ModelsUtils):
 # https://discuss.ray.io/t/statuscode-resource-exhausted/4379/16
 ################################################################################
 
+# Data streaming in PipelineDataset for larger than memory data, should prevent OOM
+# https://docs.ray.io/en/latest/ray-air/check-ingest.html#enabling-streaming-ingest
 def train_func(config):
+    # Parameters
     batch_size = config.get('batch_size', 128)
     epochs = config.get('epochs', 10)
     size = config.get('size')
     nb_cls = config.get('nb_cls')
     model = config.get('model')
 
+    # Model setup 
     strategy = tf.distribute.MultiWorkerMirroredStrategy()
     with strategy.scope():
         model = build_model(model, nb_cls, size)
 
+    # Load data directly to workers instead of serializing it?
     train_data = session.get_dataset_shard('train')
     val_data = session.get_dataset_shard('validation')
 
-    def to_tf_dataset(data, batch_size):
-        def to_tensor_iterator():
-            for batch in data.iter_tf_batches(
-                batch_size=batch_size#, dtypes=tf.float32,
-            ):
-                yield batch['__value__'], batch['labels']
+    def to_tf_dataset(data):
+        ds = tf.data.Dataset.from_tensors((
+        tf.convert_to_tensor(list(data['__value__'])),
+        tf.convert_to_tensor(list(data['labels']))
+        ))
+        return ds
 
-        output_signature = (
-            tf.TensorSpec(shape=(None, size), dtype=tf.float32),
-            tf.TensorSpec(shape=(None, nb_cls), dtype=tf.int64),
-        )
-        tf_data = tf.data.Dataset.from_generator(
-            to_tensor_iterator, output_signature=output_signature
-        )
-        return prepare_dataset_shard(tf_data)
-
+    # Fit the model on streaming data
     results = []
-    for epoch in range(epochs):
-        tf_train_data = to_tf_dataset(
-            data = train_data,
-            batch_size = batch_size
-        )
-        tf_val_data = to_tf_dataset(
-            data = val_data,
-            batch_size = batch_size
-        )
-        history = model.fit(
-            tf_train_data,
-            validation_data = tf_val_data,
-            callbacks=[Callback()],
-            verbose=0
-        )
-        results.append(history.history)
-        session.report({
-            'accuracy' : history.history['accuracy'][0],
-            'loss' : history.history['loss'][0],
-            'val_accuracy' : history.history['val_accuracy'][0],
-            'val_loss' : history.history['val_loss'][0]
-            },
-            checkpoint = TensorflowCheckpoint.from_model(model)
-        )
+    batch_val = pd.DataFrame(columns = ['__value__', 'labels'])
+    for epoch in val_data.iter_epochs(1):
+        for batch in epoch.iter_batches():
+            batch_val = pd.concat([batch_val,batch])
+    batch_val = to_tf_dataset(batch_val)
 
+    for epoch_train in train_data.iter_epochs(epochs):
+        for batch_train in epoch_train.iter_batches():
+            batch_train = to_tf_dataset(batch_train)
+            history = model.fit(
+                batch_train,
+                validation_data = batch_val,
+                callbacks=[Callback()],
+                verbose=0
+            )
+            results.append(history.history)
+            session.report({
+                'accuracy' : history.history['accuracy'][0],
+                'loss' : history.history['loss'][0],
+                'val_accuracy' : history.history['val_accuracy'][0],
+                'val_loss' : history.history['val_loss'][0]
+                },
+                checkpoint = TensorflowCheckpoint.from_model(model)
+            )
+    
 def build_model(classifier, nb_cls, nb_kmers):
     if classifier == 'attention':
         clf = build_attention(nb_kmers)
