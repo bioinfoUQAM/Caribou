@@ -1,6 +1,7 @@
 #!/usr/bin python3
 
 import ray
+import json
 import pathlib
 import os.path
 import argparse
@@ -36,7 +37,13 @@ def kmers_dataset(opt):
     outdirs = define_create_outdirs(opt['outdir'])
     
     # Initialize cluster
-    ray.init()
+    ray.init(
+        address = 'auto',
+        _system_config = {
+            'object_spilling_config': json.dumps(
+                {'type': 'filesystem', 'params': {'directory_path': str(opt['workdir'])}})
+        }
+    )
 
 # K-mers profile extraction
 ################################################################################
@@ -139,6 +146,8 @@ if __name__ == "__main__":
     parser.add_argument('-k','--k_length', required=True, type=int, help='Length of k-mers to extract')
     parser.add_argument('-l','--kmers_list', default=None, type=pathlib.Path, help='PATH to a file containing a list of k-mers to be extracted if the dataset is not a training database')
     parser.add_argument('-o','--outdir', required=True, type=pathlib.Path, help='PATH to a directory on file where outputs will be saved')
+    parser.add_argument('-o','--outdir', required=True, type=pathlib.Path, help='PATH to a directory on file where outputs will be saved')
+    parser.add_argument('-wd','--workdir', default='/tmp/spill', type=Path, help='Optional. Path to a working directory where tuning data will be spilled')
     args = parser.parse_args()
 
     opt = vars(args)

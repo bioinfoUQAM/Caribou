@@ -1,6 +1,7 @@
 #!/usr/bin python3
 
 import ray
+import json
 import argparse
 
 from utils import *
@@ -35,7 +36,13 @@ def bacteria_classification(opt):
     list_taxas = verify_taxas(opt['taxa'], data_bacteria['taxas'])
 
     # Initialize cluster
-    ray.init()
+    ray.init(
+        address = 'auto',
+        _system_config = {
+            'object_spilling_config': json.dumps(
+                {'type': 'filesystem', 'params': {'directory_path': str(opt['workdir'])}})
+        }
+    )
 
 # Definition of model for bacteria taxonomic classification + training
 ################################################################################
@@ -95,7 +102,7 @@ if __name__ == "__main__":
     parser.add_argument('-e','--training_epochs', default=100, type=int, help='The number of training iterations for the neural networks models if one ise chosen, defaults to 100')
     parser.add_argument('-v','--verbose', action='store_true', help='Should the program be verbose')
     parser.add_argument('-o','--outdir', required=True, type=Path, help='PATH to a directory on file where outputs will be saved')
-    parser.add_argument('-wd','--workdir', default=None, type=Path, help='Optional. Path to a working directory where Ray Tune will output and spill tuning data')
+    parser.add_argument('-wd','--workdir', default='/tmp/spill', type=Path, help='Optional. Path to a working directory where Ray Tune will output and spill tuning data')
     args = parser.parse_args()
 
     opt = vars(args)

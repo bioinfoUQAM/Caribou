@@ -1,6 +1,7 @@
 #!/usr/bin python3
 
 import ray
+import json
 import argparse
 import configparser
 
@@ -37,6 +38,7 @@ def caribou(opt):
     host_cls_file = config.get('io', 'host_cls_file', fallback = None)
     metagenome_seq_file = config.get('io', 'metagenome_seq_file')
     outdir = config.get('io', 'outdir')
+    workdir = config.get('io', 'workdir', fallback = '/tmp/spill')
 
     # settings
     k_length = config.getint('settings', 'k', fallback = 35)
@@ -91,7 +93,13 @@ def caribou(opt):
     outdirs = define_create_outdirs(outdir)
     
     # Initialize cluster
-    ray.init()
+    ray.init(
+        address = 'auto',
+        _system_config = {
+            'object_spilling_config': json.dumps(
+                {'type': 'filesystem', 'params': {'directory_path': str(opt['workdir'])}})
+        }
+    )
 
 # Part 1 - K-mers profile extraction
 ################################################################################
