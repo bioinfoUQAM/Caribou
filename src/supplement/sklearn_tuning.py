@@ -150,13 +150,19 @@ parser.add_argument('-bs','--batch_size', required=True, help='Size of the batch
 parser.add_argument('-t','--taxa', required=True, help='The taxa for which the tuning should be done')
 parser.add_argument('-k','--kmers_length', required=True, help='Length of k-mers')
 parser.add_argument('-o','--outdir', required=True, type=Path, help='Path to folder for outputing tuning results')
-parser.add_argument('-wd','--workdir', default='~/ray', type=Path, help='Optional. Path to a working directory where tuning data will be spilled')
+parser.add_argument('-wd','--workdir', default='/tmp/spill', type=Path, help='Optional. Path to a working directory where tuning data will be spilled')
 
 args = parser.parse_args()
 
 opt = vars(args)
 
-ray.init(logging_level=logging.ERROR, _system_config={'object_spilling_config': json.dumps({'type': 'filesystem', 'params': {'directory_path': str(opt['workdir'])}})})
+ray.init(
+    logging_level=logging.ERROR,
+    _system_config={
+        'object_spilling_config': json.dumps(
+            {'type': 'filesystem', 'params': {'directory_path': str(opt['workdir'])}})
+    }
+)
 
 # Data
 ################################################################################

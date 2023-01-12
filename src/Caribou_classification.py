@@ -1,7 +1,7 @@
 #!/usr/bin python3
 
 import ray
-import os.path
+import json
 import argparse
 
 from utils import *
@@ -19,6 +19,7 @@ def bacteria_classification(opt):
     # Verify existence of files and load data
     data_bacteria = verify_load_data(opt['data_bacteria'])
     data_metagenome = verify_load_data(opt['data_metagenome'])
+    preclassified = verify_preclassified(data_metagenome)
     k_length = len(data_bacteria['kmers'][0])
 
     # Verify that model type is valid / choose default depending on host presence
@@ -35,7 +36,12 @@ def bacteria_classification(opt):
     list_taxas = verify_taxas(opt['taxa'], data_bacteria['taxas'])
 
     # Initialize cluster
-    ray.init()
+    ray.init(
+        _system_config = {
+            'object_spilling_config': json.dumps(
+                {'type': 'filesystem', 'params': {'directory_path': str(opt['workdir'])}})
+        }
+    )
 
 # Definition of model for bacteria taxonomic classification + training
 ################################################################################
@@ -55,44 +61,25 @@ def bacteria_classification(opt):
     clf.execute_training()
     t_end = time()
     t_train = t_end - t_start
+
 # Execution of bacteria taxonomic classification on metagenome + save results
 ################################################################################
-    def populate_save_data(clf, end_taxa):
-        clf_data = {'sequence' : clf.classified_data['sequence'].copy()}
-        if end_taxa is not None:
-            clf_data['sequence'] = clf_data['sequence'][:clf_data['sequence'].index(end_taxa)]
-        
-        if 'domain' in clf_data['sequence'] and len(data_metagenome['classified_ids']) > 0:
-            clf_data['domain'] = {
-                'profile' : data_metagenome['profile'],
-                'kmers' : data_metagenome['kmers'],
-                'ids' : data_metagenome['ids'],
-                'classification' : data_metagenome['classification'],
-                'classified_ids' : data_metagenome['classified_ids'],
-                'unknown_profile' : data_metagenome['unknown_profile'],
-                'unknown_ids' : data_metagenome['unknown_ids']
-            }
-        if 'host' in clf_data.keys():
-            clf_data['domain']['host_classification'] = data_metagenome['host_classification']
-            clf_data['domain']['host_ids'] = data_metagenome['host_ids']
-
-        for taxa in clf_data['sequence']:
-            clf_data[taxa] = {
-                'profile' : clf.classified_data[taxa]['unknown'],
-                'kmers' : data_metagenome['kmers'],
-                'ids' : clf.classified_data[taxa]['unknown_ids'],
-                'classification' : clf.classified_data[taxa]['classification'],
-                'classified_ids' : clf.classified_data[taxa]['classified_ids'],
-            }
-
-        clf_file = os.path.join(outdirs['results_dir'], opt['metagenome_name'] + '_classified.npz')
-        save_Xy_data(clf_data, clf_file)
-
+    
     t_start = time()
-    end_taxa = clf.execute_classification(data_metagenome)
+    if preclassified is not None:
+        end_taxa = clf.execute_classification(data_metagenome[preclassified])
+    else:
+        end_taxa = clf.execute_classification(data_metagenome)
     t_end = time()
     t_classif = t_end - t_start
-    populate_save_data(clf, end_taxa)
+    clf_data = populate_save_data(
+        clf.classified_data,
+        data_metagenome,
+        end_taxa,
+        outdirs['results_dir'],
+        opt['metagenome_name'],
+        preclassified = preclassified,
+    )
     if end_taxa is None:
         print(f"Caribou finished training the {opt['model_type']} model and classifying bacterial sequences at {opt['taxa']} taxonomic level with it. \
             \nThe training step took {t_train} seconds to execute and the classification step took {t_classif} seconds to execute.")
@@ -114,7 +101,7 @@ if __name__ == "__main__":
     parser.add_argument('-e','--training_epochs', default=100, type=int, help='The number of training iterations for the neural networks models if one ise chosen, defaults to 100')
     parser.add_argument('-v','--verbose', action='store_true', help='Should the program be verbose')
     parser.add_argument('-o','--outdir', required=True, type=Path, help='PATH to a directory on file where outputs will be saved')
-    parser.add_argument('-wd','--workdir', default=None, type=Path, help='Optional. Path to a working directory where Ray Tune will output and spill tuning data')
+    parser.add_argument('-wd','--workdir', default='/tmp/spill', type=Path, help='Optional. Path to a working directory where Ray Tune will output and spill tuning data')
     args = parser.parse_args()
 
     opt = vars(args)

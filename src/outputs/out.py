@@ -1,8 +1,6 @@
 import os
-import gzip
 
 import numpy as np
-from Bio import SeqIO
 import pandas as pd
 from subprocess import run
 

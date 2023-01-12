@@ -26,7 +26,10 @@ __all__ = [
     'verify_load_data',
     'verify_concordance_klength',
     'verify_taxas',
-    'verify_load_classified'
+    'verify_preclassified',
+    'verify_load_classified',
+    'populate_save_data_domain',
+    'populate_save_data'
 ]
 
 # Data handling
@@ -46,11 +49,11 @@ def save_Xy_data(df, Xy_file):
 
 def verify_file(file : Path):
     if file is not None and not os.path.exists(file):
-        raise ValueError('Cannot find file {} !'.format(file))
+        raise ValueError(f'Cannot find file {file} !')
 
 def verify_data_path(dir : Path):
     if not os.path.exists(dir):
-        raise ValueError("Cannot find data folder {} ! Exiting".format(dir))
+        raise ValueError(f"Cannot find data folder {dir} ! Exiting")
 
 def verify_saving_path(dir : Path):
     path, folder = os.path.split(dir)
@@ -72,23 +75,23 @@ def verify_host_params(host : str, host_seq_file : Path, host_cls_file : Path):
 def verify_boolean(val : bool, parameter : str):
     if val not in [True,False,None]:
         raise ValueError(
-            'Invalid value for {} ! Please use boolean values !\n'.format(parameter) +
+            f'Invalid value for {parameter} ! Please use boolean values !\n' +
             'Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
 
 def verify_positive_int(val : int, parameter : str):
     if type(val) != int or val < 0:
         raise ValueError(
-            'Invalid value for {} ! Please use a positive integer !\n'.format(parameter) +
+            f'Invalid value for {parameter} ! Please use a positive integer !\n' +
             'Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
 
 def verify_0_1(val : float, parameter : str):
     if type(val) != float:
         raise ValueError(
-            'Invalid value for {} ! Please use a float between 0 and 1 !\n'.format(parameter) +
+            f'Invalid value for {parameter} ! Please use a float between 0 and 1 !\n' +
             'Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
     elif not 0 <= val <= 1:
         raise ValueError(
-            'Invalid value for {} ! Please use a float between 0 and 1 !\n'.format(parameter) +
+            f'Invalid value for {parameter} ! Please use a float between 0 and 1 !\n' +
             'Please refer to the wiki for further details : https://github.com/bioinfoUQAM/Caribou/wiki')
 
 def verify_binary_classifier(clf : str):
@@ -110,7 +113,7 @@ def verify_seqfiles(seqfile : Path, seqfile_host : Path):
 def verify_concordance_klength(klen1 : int, klen2 : int):
     if klen1 != klen2:
         raise ValueError("K length between datasets is inconsistent ! Exiting\n" +
-                "K length of bacteria dataset is {} while K length from host is {}").format(klen1, klen2)
+                f"K length of bacteria dataset is {klen1} while K length from host is {klen2}")
 
 # Verif + handling
 #########################################################################################################
@@ -176,11 +179,75 @@ def verify_load_classified(classified_data: Path):
             
     return data
 
-
 def verify_taxas(taxas : str, db_taxas : list):
     taxas = str.split(taxas, ',')
     for taxa in taxas:
         if taxa not in db_taxas:
-            raise ValueError("One of the chosen classification taxa {} is not present in the database!".format(taxas))
+            raise ValueError(f"One of the chosen classification taxa {taxas} is not present in the database!")
     return taxas
+
+
+def verify_preclassified(data: dict):
+    preclassified = None
+    if 'sequence' in data.keys():
+        preclassified = data.keys()
+        preclassified.remove('sequence')
+        preclassified.remove('kmers')
+        if len(preclassified) > 1:
+            raise ValueError('More than one classified taxa present in data.\n' +
+                             'Please provide data containing only one or relaunch classification with an empty k-mers dataset !')
+        else:
+            preclassified = preclassified[0]
+    return preclassified
+
+# Saving
+#########################################################################################################
+
+def populate_save_data_domain(clf_data : dict):
+    clf_dict = {
+        'profile' : clf_data['domain']['bacteria'],
+        'ids' : clf_data['domain']['bacteria_ids'],
+        'unknown_profile' : clf_data['domain']['unknown'],
+        'unknown_ids' : clf_data['domain']['unknown_ids'],
+    }
+    if 'host' in clf_data.keys():
+        clf_data['host_profile'] = clf_data['host']['classification']
+        clf_data['host_ids'] = clf_data['host']['classified_ids']
     
+    return clf_dict
+
+def populate_save_data(
+    clf_data : dict,
+    db_data : dict,
+    end_taxa : str,
+    outdir : Path,
+    metagenome : str,
+    preclassified : str = None,
+):
+    clf_dict = {
+        'sequence':clf_data['sequence'].copy(),
+        'kmers': db_data['kmers'],
+    }
+    if end_taxa is not None:
+        clf_dict['sequence'] = clf_dict['sequence'][:clf_dict['sequence'].index(end_taxa)]
+
+    for taxa in clf_dict['sequence']:
+        if taxa == 'domain':
+            clf_dict[taxa] = populate_save_data_domain(
+                clf_data
+            )
+        else:
+            clf_dict[taxa] = {
+                'profile': clf_data[taxa]['unknown'],
+                'ids': clf_data[taxa]['unknown_ids'],
+                'classification': clf_data[taxa]['classification'],
+                'classified_ids': clf_data[taxa]['classified_ids'],
+            }
+
+    if preclassified is not None:
+        clf_dict[preclassified] = db_data[preclassified]
+        clf_dict['sequence'].insert(0, preclassified)
+
+    clf_file = os.path.join(outdir, f'{metagenome}_classified.npz')
+    save_Xy_data(clf_dict, clf_file)
+    return clf_dict

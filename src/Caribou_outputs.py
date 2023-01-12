@@ -1,5 +1,7 @@
 #!/usr/bin python3
 
+import ray
+import json
 import argparse
 
 from utils import *
@@ -52,9 +54,17 @@ if __name__ == "__main__":
     parser.add_argument('-m','--mpa', action='store_true', help='Should the mpa-style output be generated?')
     parser.add_argument('-k','--kronagram', action='store_true', help='Should the interactive kronagram be generated?')
     parser.add_argument('-r','--report', action='store_true', help='Should the abundance report be generated?')
+    parser.add_argument('-wd','--workdir', default='/tmp/spill', type=Path, help='Optional. Path to a working directory where tuning data will be spilled')
     # parser.add_argument('-b', '--biom', action='store_true', help='Should the biom file be generated?')
     args = parser.parse_args()
 
     opt = vars(args)
+
+    ray.init(
+        _system_config = {
+            'object_spilling_config': json.dumps(
+                {'type': 'filesystem', 'params': {'directory_path': str(opt['workdir'])}})
+        }
+    )
 
     out_2_user(opt)

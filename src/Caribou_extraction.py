@@ -1,7 +1,7 @@
 #!/usr/bin python3
 
 import ray
-import os.path
+import json
 import argparse
 
 from utils import *
@@ -38,7 +38,12 @@ def bacteria_extraction(opt):
     outdirs = define_create_outdirs(opt['outdir'])
     
     # Initialize cluster
-    ray.init()
+    ray.init(
+        _system_config = {
+            'object_spilling_config': json.dumps(
+                {'type': 'filesystem', 'params': {'directory_path': str(opt['workdir'])}})
+        }
+    )
     
 # Definition of model for bacteria extraction / host removal + execution
 ################################################################################
@@ -75,28 +80,20 @@ def bacteria_extraction(opt):
 
 # Execution of bacteria extraction / host removal on metagenome + save results
 ################################################################################
-    def populate_save_data(clf):
-        clf_data = {
-            'sequence': clf.classified_data['sequence'].copy(),
-            'profile' : clf.classified_data['domain']['bacteria'],
-            'kmers' : data_metagenome['kmers'],
-            'ids' : clf.classified_data['domain']['bacteria_ids'],
-            'unknown_profile' : clf.classified_data['domain']['unknown'],
-            'unknown_ids' : clf.classified_data['domain']['unknown_ids'],
-        }
-        if 'host' in clf.classified_data.keys():
-            clf_data['host_profile'] = clf.classified_data['host']['classification']
-            clf_data['host_ids'] = clf.classified_data['host']['classified_ids']
-        clf_file = os.path.join(outdirs['results_dir'], opt['metagenome_name'] + '_extracted.npz')
-        save_Xy_data(clf_data, clf_file)
-        
+    
     t_start = time()
     end_taxa = clf.execute_classification(data_metagenome)
     t_end = time()
     t_classify = t_end - t_start
 
     if end_taxa is None:
-        populate_save_data(clf)
+        clf_data = populate_save_data(
+            clf.classified_data,
+            data_bacteria,
+            end_taxa,
+            outdirs['results_dir'],
+            opt['metagenome_name'],
+        )
         print(f"Caribou finished training the {opt['model_type']} model and extracting bacteria with it. \
             \nThe training step took {t_train} seconds and the classification step took {t_classify} seconds.")
     else:
@@ -118,7 +115,7 @@ if __name__ == "__main__":
     parser.add_argument('-e','--training_epochs', default=100, type=int, help='The number of training iterations for the neural networks models if one ise chosen, defaults to 100')
     parser.add_argument('-v','--verbose', action='store_true', help='Should the program be verbose')
     parser.add_argument('-o','--outdir', required=True, type=Path, help='PATH to a directory on file where outputs will be saved')
-    parser.add_argument('-wd','--workdir', default=None, type=Path, help='Optional. Path to a working directory where Ray Tune will output and spill tuning data')
+    parser.add_argument('-wd','--workdir', default='/tmp/spill', type=Path, help='Optional. Path to a working directory where Ray Tune will output and spill tuning data')
     args = parser.parse_args()
 
     opt = vars(args)
