@@ -1,17 +1,16 @@
 import os
 import ray
 import warnings
-import pyarrow as pa
 import pandas as pd
 
 # Class construction
 from abc import ABC, abstractmethod
 
+# Preprocessing
+from models.ray_tensor_min_max import TensorMinMaxScaler
+
 # CV metrics
 from sklearn.metrics import precision_recall_fscore_support
-
-# Simulation class
-from models.reads_simulation import readsSimulation
 
 __author__ = 'Nicolas de Montigny'
 
@@ -98,10 +97,11 @@ class ModelsUtils(ABC):
         # Files
         self._cv_csv = os.path.join(self.outdir_results,'{}_{}_K{}_cv_scores.csv'.format(self.classifier, self.taxa, self.k))
 
-    @abstractmethod
-    def _training_preprocess(self):
-        """
-        """
+    def _training_preprocess(self, df):
+        print('_training_preprocess')
+        self._preprocessor = TensorMinMaxScaler(self.kmers)
+        self._preprocessor.fit(df)
+        self._label_encode(df)
 
     @abstractmethod
     def train(self):
@@ -117,27 +117,6 @@ class ModelsUtils(ABC):
     def _cross_validation(self):
         """
         """
-
-    def _sim_4_cv(self, df, kmers_ds, name):
-        sim_genomes = []
-        sim_taxas = []
-        for row in df.iter_rows():
-            sim_genomes.append(row['id'])
-            sim_taxas.append(row[self.taxa])
-        cls = pd.DataFrame({'id':sim_genomes,self.taxa:sim_taxas})
-        sim_outdir = os.path.dirname(kmers_ds['profile'])
-        cv_sim = readsSimulation(kmers_ds['fasta'], cls, sim_genomes, 'miseq', sim_outdir, name)
-        sim_data = cv_sim.simulation(self.k, self.kmers)
-        sim_ids = sim_data['ids']
-        sim_ids = sim_data['ids']
-        sim_cls = pd.DataFrame({'sim_id':sim_ids}, dtype = object)
-        sim_cls['id'] = sim_cls['sim_id'].str.replace('_[0-9]+_[0-9]+_[0-9]+', '', regex=True)
-        sim_cls = sim_cls.set_index('id').join(cls.set_index('id'))
-        sim_cls = sim_cls.drop(['sim_id'], axis=1)
-        sim_cls = sim_cls.reset_index(drop = True)
-        df = ray.data.read_parquet(sim_data['profile'])
-        df = self._zip_X_y(df, sim_cls)
-        return df
 
     def _cv_score(self, y_true, y_pred):
         print('_cv_score')
@@ -174,25 +153,3 @@ class ModelsUtils(ABC):
     def _label_decode(self):
         """
         """
-
-    def _zip_X_y(self, X, y):
-        num_blocks = X.num_blocks()
-        len_x = X.count()
-        self._ensure_length_ds(len_x,len(y))
-        # Convert y -> ray.data.Dataset with arrow schema
-        y = ray.data.from_arrow(pa.Table.from_pandas(y))
-        # Repartition to 1 row/partition
-        X = X.repartition(len_x)
-        y = y.repartition(len_x)
-        # Ensure both ds fully executed
-        for ds in [X,y]:
-            if not ds.is_fully_executed():
-                ds.fully_executed()
-        # Zip X and y
-        df = X.zip(y).repartition(num_blocks)
-# TODO: If still no work : write/read on disk + clear memory
-        return df
-
-    def _ensure_length_ds(self, len_x, len_y):
-        if len_x != len_y:
-            raise ValueError('X and y have different lengths: {} and {}'.format(len_x, len_y))

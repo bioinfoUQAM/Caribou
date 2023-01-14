@@ -8,7 +8,6 @@ from glob import glob
 from shutil import rmtree
 
 # Preprocessing
-from models.ray_tensor_min_max import TensorMinMaxScaler
 from ray.data.preprocessors import BatchMapper, LabelEncoder
 from models.sklearn.ray_sklearn_onesvm_encoder import OneClassSVMLabelEncoder
 
@@ -94,27 +93,21 @@ class SklearnModel(ModelsUtils):
         # Computes
         self._build()
 
-    def _training_preprocess(self, X, y):
-        print('_training_preprocess')
-        labels = np.unique(y[self.taxa])
-        self._preprocessor = TensorMinMaxScaler(self.kmers)
-        self._preprocessor.fit(X)
-        self._label_encode(y, labels)
-        df = self._zip_X_y(X, y)
-        return df
-
-    def _label_encode(self, df, labels):
+    def _label_encode(self, df):
         print('_label_encode')
-        df = ray.data.from_pandas(df)
         if self.classifier == 'onesvm':
             self._encoder = OneClassSVMLabelEncoder(self.taxa)
             self._encoder.fit(df)
             encoded = np.array([1,-1], dtype = np.int32)
             labels = np.array(['bacteria', 'unknown'], dtype = object)
         else:
+            labels = []
+            for row in df.iter_rows():
+                labels.append(row[self.taxa])
+            labels = np.unique(row)
             self._encoder = LabelEncoder(self.taxa)
             self._encoder.fit(df)
-            self._encoded = np.arange(len(labels))
+            self._encoded = [v for k,v in self._encoder.stats_['unique_values({})'.format(self.taxa)].items()]
             encoded = np.append(self._encoded, -1)
             labels = np.append(labels, 'unknown')
         self._labels_map = zip(labels, encoded)
@@ -126,23 +119,24 @@ class SklearnModel(ModelsUtils):
             decoded[predict == encoded] = label
         return decoded
 
-    def train(self, X, y, kmers_ds, cv = True):
+    def train(self, datasets, kmers_ds, cv = True):
         print('train')
+        
+        df = datasets['train']
 
-        df = self._training_preprocess(X, y)
+        self._training_preprocess(df)
+
         if cv:
-            self._cross_validation(df, kmers_ds)
+            df_test = datasets['test']
+            self._cross_validation(df, df_test, kmers_ds)
         else:
             df = df.drop_columns(['id'])
             datasets = {'train' : ray.put(df)}
             self._fit_model(datasets)
 
-    def _cross_validation(self, df, kmers_ds):
+    def _cross_validation(self, df_train, df_test, kmers_ds):
         print('_cross_validation')
         
-        df_train, df_test = df.train_test_split(0.2, shuffle=True)
-        df_test = self._sim_4_cv(df_test, kmers_ds, '{}_test'.format(self.dataset))
-
         df_train = df_train.drop_columns(['id'])
         df_test = df_test.drop_columns(['id'])
 
@@ -154,6 +148,10 @@ class SklearnModel(ModelsUtils):
         for row in df_test.iter_rows():
             y_true.append(row[self.taxa])
 
+        y_true = np.array(y_true)
+        y_true[np.isnan(y_true)] = -1
+        y_true = list(y_true)
+        
         y_pred = self.predict(df_test.drop_columns([self.taxa]), cv = True)
 
         for file in glob(os.path.join( os.path.dirname(kmers_ds['profile']), '*sim*')):
@@ -215,6 +213,7 @@ class SklearnModel(ModelsUtils):
             estimator = self._clf,
             label_column = self.taxa,
             labels_list = self._encoded,
+            features_list = self.kmers,
             params = self._train_params,
             datasets = datasets,
             batch_size = self.batch_size,

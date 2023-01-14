@@ -5,11 +5,15 @@ import cloudpickle
 import numpy as np
 import pandas as pd
 
+from utils import zip_X_y
 from glob import glob
 from shutil import rmtree
 from utils import load_Xy_data
 from models.sklearn.ray_sklearn import SklearnModel
 from models.kerasTF.ray_keras_tf import KerasTFModel
+
+# Simulation class
+from models.reads_simulation import readsSimulation
 
 
 __author__ = 'Nicolas de Montigny'
@@ -73,12 +77,12 @@ class ClassificationMethods():
         # Empty initializations
         self.models = {}
         self._host = False
-        self._X_train = None
-        self._y_train = None
         self._host_data = None
         self._database_data = None
         self._classified_ids = []
         self._not_classified_ids = []
+        self._training_datasets = None
+        self._merged_training_datasets = None
         self._merged_database_host = None
         self.previous_taxa_unclassified = None
         if isinstance(database_k_mers, tuple):
@@ -87,7 +91,7 @@ class ClassificationMethods():
             self._host_data = database_k_mers[1]
         else:
             self._database_data = database_k_mers
-        # Remove 'id' form kmers if present
+        # Remove 'id' from kmers if present
         if 'id' in self._database_data['kmers']:
             self._database_data['kmers'].remove('id')
         if self._host and 'id' in self._host_data['kmers']:
@@ -155,7 +159,9 @@ class ClassificationMethods():
                 self._database_data['kmers'],
                 self._verbose
             )
-            self._load_training_data(taxa)
+            if self._training_datasets is None:
+                self._load_training_data()
+            self.models[taxa].train(self._training_datasets, self._database_data, self._cv)
         else:
             self._merge_database_host(self._database_data, self._host_data)
             if self._classifier_binary == 'linearsvm':
@@ -183,11 +189,9 @@ class ClassificationMethods():
                     self._merged_database_host['kmers'],
                     self._verbose
                 )
-            self._load_training_data(taxa, merged = True)
-        if self._merged_database_host is None:
-            self.models[taxa].train(self._X_train, self._y_train, self._database_data, self._cv)
-        else:
-            self.models[taxa].train(self._X_train, self._y_train, self._merged_database_host, self._cv)
+            self._load_training_data_merged(taxa)
+            self.models[taxa].train(self._merged_training_datasets, self._merged_database_host, self._cv)
+
         self._save_model(self._model_file, taxa)            
 
     def _multiclass_training(self, taxa):
@@ -218,8 +222,9 @@ class ClassificationMethods():
                 self._database_data['kmers'],
                 self._verbose
             )
-        self._load_training_data(taxa)
-        self.models[taxa].train(self._X_train, self._y_train, self._database_data, self._cv)
+        if self._training_datasets is None:
+            self._load_training_data()
+        self.models[taxa].train(self._training_datasets, self._database_data, self._cv)
         self._save_model(self._model_file, taxa)
         
     # Execute classification using trained model(s)
@@ -439,25 +444,76 @@ class ClassificationMethods():
         else:
             raise ValueError('Invalid classifier option for bacteria classification!\n\tModels implemented at this moment are :\n\tClassic algorithm : Stochastic Gradient Descent (sgd) and Multinomial Naïve Bayes (mnb)\n\tNeural networks : Deep hybrid between LSTM and Attention (lstm_attention), CNN (cnn) and Wide CNN (widecnn)')
 
-    def _load_training_data(self, taxa, merged = False):
-        if merged:
-            # Binary merged
-            self._X_train = ray.data.read_parquet(self._merged_database_host['profile'])
-            self._y_train = pd.DataFrame({
-                taxa: pd.DataFrame(
-                    self._merged_database_host['classes'],
-                    columns=self._merged_database_host['taxas']
-                ).loc[:, taxa].astype('string')
-            })
-        else:
-        # Binary not merged or multiclass
-            self._X_train = ray.data.read_parquet(self._database_data['profile'])
-            self._y_train = pd.DataFrame({
-                taxa: pd.DataFrame(
-                    self._database_data['classes'],
-                    columns=self._database_data['taxas']
-                ).loc[:, taxa].astype('string')
-            })
-            if taxa == 'domain':
-                self._y_train[self._y_train['domain'] == 'archaea'] = 'bacteria'
+    def _load_training_data_merged(self, taxa):
+        X_train = ray.data.read_parquet(self._merged_database_host['profile'])
+        y_train = pd.DataFrame({
+            taxa: pd.DataFrame(
+                self._merged_database_host['classes'],
+                columns=self._merged_database_host['taxas']
+            ).loc[:, taxa].str.lower()
+        })
 
+        y_train[y_train['domain'] == 'archaea'] = 'bacteria'
+
+        df = zip_X_y(X_train, y_train)
+        
+        if self._cv:
+            df_train, df_test = df.train_test_split(0.2, shuffle=True)
+            df_test = self._sim_4_cv(df_test, self._database_data, f'{self._database}_test')
+            self._merged_training_datasets = {'train': df_train, 'test': df_test}
+        else:
+            self._merged_training_datasets = {'train': df_train}
+
+    def _load_training_data(self):
+        X_train = ray.data.read_parquet(self._database_data['profile'])
+        y_train = pd.DataFrame(
+                self._database_data['classes'],
+                columns=self._database_data['taxas']
+            )
+
+        for col in y_train.columns:
+            y_train[col] = y_train[col].str.lower()
+
+        if 'domain' in y_train.columns:
+            y_train[y_train['domain'] == 'archaea'] = 'bacteria'
+        
+        df = zip_X_y(X_train, y_train)
+
+        if self._cv:
+            df_train, df_test = df.train_test_split(0.2, shuffle=True)
+            df_test = self._sim_4_cv(df_test, self._database_data, f'{self._database}_test')
+            self._training_datasets = {'train': df_train, 'test': df_test}
+        else:
+            self._training_datasets = {'train': df_train}
+
+    def _sim_4_cv(self, df, kmers_ds, name):
+        sim_cls_dct = {
+            'id':[],
+        }
+        taxa_cols = []
+        for row in df.iter_rows():
+            if len(taxa_cols) == 0:
+                taxa_cols = list(row.keys())
+                taxa_cols.remove('id')
+                taxa_cols.remove('__value__')
+                for taxa in taxa_cols:
+                    sim_cls_dct[taxa] = []
+            sim_cls_dct['id'].append(row['id'])
+            for taxa in taxa_cols:
+                sim_cls_dct[taxa].append(row[taxa])
+        cls = pd.DataFrame(sim_cls_dct)
+        sim_outdir = os.path.dirname(kmers_ds['profile'])
+        cv_sim = readsSimulation(kmers_ds['fasta'], cls, sim_cls_dct['id'], 'miseq', sim_outdir, name)
+        sim_data = cv_sim.simulation(self._k, self._database_data['kmers'])
+        sim_ids = sim_data['ids']
+        sim_ids = sim_data['ids']
+        sim_cls = pd.DataFrame({'sim_id':sim_ids}, dtype = object)
+        sim_cls['id'] = sim_cls['sim_id'].str.replace('_[0-9]+_[0-9]+_[0-9]+', '', regex=True)
+        sim_cls = sim_cls.set_index('id').join(cls.set_index('id'))
+        sim_cls = sim_cls.drop(['sim_id'], axis=1)
+        sim_cls = sim_cls.reset_index(drop = True)
+        df = ray.data.read_parquet(sim_data['profile'])
+        df = zip_X_y(df, sim_cls)
+        return df
+    
+    
