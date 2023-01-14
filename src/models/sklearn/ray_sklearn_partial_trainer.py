@@ -204,6 +204,9 @@ class SklearnPartialTrainer(SklearnTrainer):
                     batch_format = 'numpy'
                 )
             ):  
+                if isinstance(batch_X, dict):
+                    batch_X = batch_X['__value__']
+    
                 try:
                     batch_X = pd.DataFrame(batch_X, columns = self._features_list)
                 except ValueError:

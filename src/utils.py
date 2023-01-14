@@ -1,6 +1,8 @@
 import os
+import ray
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 
 from pathlib import Path
 from warnings import warn
@@ -29,7 +31,9 @@ __all__ = [
     'verify_preclassified',
     'verify_load_classified',
     'populate_save_data_domain',
-    'populate_save_data'
+    'populate_save_data',
+    'zip_X_y',
+    'ensure_length_ds'
 ]
 
 # Data handling
@@ -251,3 +255,21 @@ def populate_save_data(
     clf_file = os.path.join(outdir, f'{metagenome}_classified.npz')
     save_Xy_data(clf_dict, clf_file)
     return clf_dict
+
+def zip_X_y(X, y):
+    num_blocks = X.num_blocks()
+    len_x = X.count()
+    ensure_length_ds(len_x, len(y))
+    y = ray.data.from_arrow(pa.Table.from_pandas(y))
+    X = X.repartition(len_x)
+    y = y.repartition(len_x)
+    for ds in [X, y]:
+        if not ds.is_fully_executed():
+            ds.fully_executed()
+    df = X.zip(y).repartition(num_blocks)
+    return df
+
+def ensure_length_ds(len_x, len_y):
+    if len_x != len_y:
+        raise ValueError(
+            'X and y have different lengths: {} and {}'.format(len_x, len_y))

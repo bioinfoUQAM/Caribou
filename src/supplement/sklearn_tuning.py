@@ -77,18 +77,13 @@ def zip_X_y(X, y):
     num_blocks = X.num_blocks()
     len_x = X.count()
     ensure_length_ds(len_x,len(y))
-    # Convert y -> ray.data.Dataset with arrow schema
     y = ray.data.from_arrow(pa.Table.from_pandas(y))
-    # Repartition to 1 row/partition
     X = X.repartition(len_x)
     y = y.repartition(len_x)
-    # Ensure both ds fully executed
     for ds in [X,y]:
         if not ds.is_fully_executed():
             ds.fully_executed()
-    # Zip X and y
     df = X.zip(y).repartition(num_blocks)
-# TODO: If still no work : write/read on disk + clear memory
     return df
 
 def ensure_length_ds(len_x, len_y):
@@ -105,6 +100,7 @@ def preprocess(X, y, taxa, cols, classifier):
     return df, labels, scaler
 
 def preprocess_labels(df, taxa, labels, classifier):
+    df = ray.data.from_pandas(df)
     if classifier == 'onesvm':
         encoder = OneClassSVMLabelEncoder(taxa)
         df = encoder.fit_transform(df)

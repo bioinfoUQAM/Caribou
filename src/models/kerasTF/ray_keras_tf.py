@@ -6,9 +6,9 @@ import pandas as pd
 
 from glob import glob
 from shutil import rmtree
+from utils import zip_X_y
 
 # Preprocessing
-from models.ray_tensor_min_max import TensorMinMaxScaler
 from ray.data.preprocessors import BatchMapper, Concatenator, LabelEncoder, Chain, OneHotEncoder
 
 # Parent class / models
@@ -28,6 +28,9 @@ from ray.air.config import RunConfig
 # Predicting
 from ray.train.tensorflow import TensorflowPredictor
 from ray.train.batch_predictor import BatchPredictor
+
+# Simulation class
+from models.reads_simulation import readsSimulation
 
 __author__ = 'Nicolas de Montigny'
 
@@ -124,18 +127,13 @@ class KerasTFModel(ModelsUtils):
         elif self.classifier == 'widecnn':
             print('Training multiclass classifier based on Wide CNN Network')
 
-    def _training_preprocess(self, X, y):
-        print('_training_preprocess')
-        self._preprocessor = TensorMinMaxScaler(self.kmers)
-        self._preprocessor.fit(X)
-        self._label_encode(y)
-        df = self._zip_X_y(X, y)
-        return df
-
-    def _label_encode(self, y):
-        self._nb_classes = len(np.unique(y[self.taxa]))
-        y = ray.data.from_pandas(y)
-        self._label_encode_define(y)
+    def _label_encode(self, df):
+        print('_label_encode')
+        labels = []
+        for row in df.iter_rows():
+            labels.append(row[self.taxa])
+        self._nb_classes = len(np.unique(labels))
+        self._label_encode_define(df)
         encoded = []
         encoded.append(-1)
         labels = ['unknown']
@@ -151,7 +149,7 @@ class KerasTFModel(ModelsUtils):
             LabelEncoder(self.taxa),
             OneHotEncoder([self.taxa]),
             Concatenator(
-                output_column_name='labels',
+                output_column_name=self.taxa,
                 include=['{}_{}'.format(self.taxa, i) for i in range(self._nb_classes)]
             )
         )
@@ -165,28 +163,51 @@ class KerasTFModel(ModelsUtils):
 
         return decoded
 
-    def train(self, X, y, kmers_ds, cv = True):
+    def train(self, datasets, kmers_ds, cv = True):
         print('train')
-        df = self._training_preprocess(X, y)
+
+        df = datasets['train']
+        self._training_preprocess(df)
+        
         if cv:
-            self._cross_validation(df, kmers_ds)
+            df_test = datasets['test']
+            self._cross_validation(df, df_test, kmers_ds)
         else:
             df_train, df_val = df.train_test_split(0.2, shuffle = True)
-            df_val = self._sim_4_cv(df_val, kmers_ds, 'validation')
+            df_val = self._sim_4_val(df_val, kmers_ds, 'validation')
             df_train = df_train.drop_columns(['id'])
             df_val = df_val.drop_columns(['id'])
             datasets = {'train': df_train, 'validation': df_val}
             self._fit_model(datasets)
 
-    def _cross_validation(self, df, kmers_ds):
+    def _sim_4_val(self, df, kmers_ds, name):
+        sim_genomes = []
+        sim_taxas = []
+        for row in df.iter_rows():
+            sim_genomes.append(row['id'])
+            sim_taxas.append(row[self.taxa])
+        cls = pd.DataFrame({'id':sim_genomes,self.taxa:sim_taxas})
+        sim_outdir = os.path.dirname(kmers_ds['profile'])
+        cv_sim = readsSimulation(kmers_ds['fasta'], cls, sim_genomes, 'miseq', sim_outdir, name)
+        sim_data = cv_sim.simulation(self.k, self.kmers)
+        sim_ids = sim_data['ids']
+        sim_ids = sim_data['ids']
+        sim_cls = pd.DataFrame({'sim_id':sim_ids}, dtype = object)
+        sim_cls['id'] = sim_cls['sim_id'].str.replace('_[0-9]+_[0-9]+_[0-9]+', '', regex=True)
+        sim_cls = sim_cls.set_index('id').join(cls.set_index('id'))
+        sim_cls = sim_cls.drop(['sim_id'], axis=1)
+        sim_cls = sim_cls.reset_index(drop = True)
+        df = ray.data.read_parquet(sim_data['profile'])
+        df = zip_X_y(df, sim_cls)
+        return df
+
+    def _cross_validation(self, df_train, df_test, kmers_ds):
         print('_cross_validation')
 
-        df_train, df_test = df.train_test_split(0.2, shuffle = True)
         df_train, df_val = df_train.train_test_split(0.2, shuffle = True)
         
-        df_val = self._sim_4_cv(df_val, kmers_ds, '{}_val'.format(self.dataset))
-        df_test = self._sim_4_cv(df_test, kmers_ds, '{}_test'.format(self.dataset))
-
+        df_val = self._sim_4_val(df_val, kmers_ds, '{}_val'.format(self.dataset))
+        
         df_train = df_train.drop_columns(['id'])
         df_test = df_test.drop_columns(['id'])
         df_val = df_val.drop_columns(['id'])
@@ -198,6 +219,11 @@ class KerasTFModel(ModelsUtils):
         y_true = []
         for row in df_test.iter_rows():
             y_true.append(row[self.taxa])
+
+        y_true = np.array(y_true)
+        y_true[np.isnan(y_true)] = -1
+        y_true = list(y_true)
+        
         y_pred = self.predict(df_test.drop_columns([self.taxa]), cv = True)
 
         for file in glob(os.path.join(os.path.dirname(kmers_ds['profile']), '*sim*')):
@@ -222,6 +248,7 @@ class KerasTFModel(ModelsUtils):
             'size': self._nb_kmers,
             'nb_cls':self._nb_classes,
             'model': self.classifier,
+            'labels_col': self.taxa,
         }
 
         # Define trainer / tuner
@@ -271,7 +298,8 @@ class KerasTFModel(ModelsUtils):
             )
             # Make predictions
             predictions = self._predictor.predict(
-                df,
+                feature_columns = ['__value__'],
+                data = df,
                 batch_size = self.batch_size
             )
             predictions = self._prob_2_cls(predictions, threshold)
@@ -326,6 +354,7 @@ def train_func(config):
     size = config.get('size')
     nb_cls = config.get('nb_cls')
     model = config.get('model')
+    labels_col = config.get('labels_col')
 
     # Model setup 
     strategy = tf.distribute.MultiWorkerMirroredStrategy()
@@ -339,13 +368,13 @@ def train_func(config):
     def to_tf_dataset(data):
         ds = tf.data.Dataset.from_tensors((
         tf.convert_to_tensor(list(data['__value__'])),
-        tf.convert_to_tensor(list(data['labels']))
+        tf.convert_to_tensor(list(data[labels_col]))
         ))
         return ds
 
     # Fit the model on streaming data
     results = []
-    batch_val = pd.DataFrame(columns = ['__value__', 'labels'])
+    batch_val = pd.DataFrame(columns = ['__value__', labels_col])
     for epoch in val_data.iter_epochs(1):
         for batch in epoch.iter_batches():
             batch_val = pd.concat([batch_val,batch])
