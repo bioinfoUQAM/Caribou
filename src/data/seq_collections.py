@@ -2,11 +2,13 @@
 import copy
 import gzip
 import random
-from os.path import splitext, isfile
-from collections import UserList, defaultdict
 
 from Bio import SeqIO
+from glob import glob
 from Bio.SeqRecord import SeqRecord
+from collections import UserList, defaultdict
+from os.path import splitext, isfile, isdir, join
+from joblib import Parallel, delayed, parallel_backend
 
 import pandas as pd
 
@@ -143,13 +145,32 @@ class SeqCollection(UserList):
 
         return self.__class__(self.data[ind])
 
-    def read_bio_file(self, my_file):
-        path, ext = splitext(my_file)
+    def read_bio_file(self, file):
+        if isfile(file):
+            file = self._read_bio_file(file)
+        elif isdir(file):
+            file = self._read_bio_folder(file)
+        
+        return file
+
+    def _read_bio_folder(self, dir):
+        files_lst = []
+        for ext in ['.fa', '.fna', '.fasta','.gz']:
+            files_lst.extend(glob(join(dir, f'*{ext}')))
+        
+        with parallel_backend('threading'):
+            files_lst = Parallel(n_jobs=-1, prefer = 'threads', verbose = 1)(
+                delayed(self._read_bio_file)
+                (file) for file in files_lst)
+        return files_lst
+
+    def _read_bio_file(self, file):
+        path, ext = splitext(file)
         ext = ext.lstrip(".")
 
         if ext in ["fa","fna"]:
             ext = "fasta"
-            with open(my_file, "r") as handle_in:
+            with open(file, "r") as handle_in:
                 records = SeqIO.parse(handle_in, ext)
                 error = False
                 while not error:
@@ -163,7 +184,7 @@ class SeqCollection(UserList):
             ext = ext.lstrip(".")
             if ext in ["fa","fna"]:
                 ext = "fasta"
-            with gzip.open(my_file, "rt") as handle_in:
+            with gzip.open(file, "rt") as handle_in:
                 records = SeqIO.parse(handle_in, ext)
                 error = False
                 while not error:
@@ -173,12 +194,12 @@ class SeqCollection(UserList):
                     except StopIteration as e:
                         error = True
 
-        return my_file
+        return file
 
 
     @classmethod
-    def read_class_file(cls, my_file):
-        csv = pd.read_csv(my_file, header = 0)
+    def read_class_file(cls, file):
+        csv = pd.read_csv(file, header = 0)
         return csv.iloc[:,1:].to_numpy(), list(csv.iloc[:,1:].columns)
 
     @classmethod

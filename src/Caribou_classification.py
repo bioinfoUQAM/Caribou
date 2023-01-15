@@ -5,8 +5,8 @@ import json
 import argparse
 
 from utils import *
-from pathlib import Path
 from time import time
+from pathlib import Path
 from models.classification import ClassificationMethods
 
 __author__ = "Nicolas de Montigny"

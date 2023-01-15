@@ -2,12 +2,12 @@
 
 import ray
 import json
-import pathlib
 import os.path
 import argparse
 
 from utils import *
 from time import time
+from pathlib import Path
 from data.build_data import build_load_save_data
 
 __author__ = "Nicolas de Montigny"
@@ -23,11 +23,11 @@ This script extracts K-mers of the given dataset using the available ressources 
 def kmers_dataset(opt):
     kmers_list = None
 
-    # Verify there are files to analyse
+    # Verify if there are files to analyse
     verify_seqfiles(opt['seq_file'], opt['seq_file_host'])
 
     # Verification of existence of files
-    for file in [opt['seq_file'],opt['cls_file'],opt['seq_file_host'],opt['cls_file_host'],opt['kmers_list']]:
+    for file in [opt['cls_file'],opt['cls_file_host'],opt['kmers_list']]:
         verify_file(file)
 
     # Verification of k length
@@ -134,17 +134,19 @@ def kmers_dataset(opt):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='This script extracts K-mers of the given dataset using the available ressources on the computer before saving it to drive.')
-    parser.add_argument('-s','--seq_file', default=None, type=pathlib.Path, help='PATH to a fasta file containing bacterial genomes to build k-mers from')
-    parser.add_argument('-c','--cls_file', default=None, type=pathlib.Path, help='PATH to a csv file containing classes of the corresponding fasta')
+    parser.add_argument('-s','--seq_file', default=None, type=Path, help='PATH to a fasta file containing bacterial genomes to build k-mers from \
+        or a folder containing fasta files with one sequence per file')
+    parser.add_argument('-c','--cls_file', default=None, type=Path, help='PATH to a csv file containing classes of the corresponding fasta')
     parser.add_argument('-dt','--dataset_name', default='dataset', help='Name of the dataset used to name files')
 
-    parser.add_argument('-sh','--seq_file_host', default=None, type=pathlib.Path, help='PATH to a fasta file containing host genomes to build k-mers from')
-    parser.add_argument('-ch','--cls_file_host', default=None, type=pathlib.Path, help='PATH to a csv file containing classes of the corresponding host fasta')
+    parser.add_argument('-sh','--seq_file_host', default=None, type=Path, help='PATH to a fasta file containing host genomes to build k-mers from \
+        or a folder containing fasta files with one sequence per file')
+    parser.add_argument('-ch','--cls_file_host', default=None, type=Path, help='PATH to a csv file containing classes of the corresponding host fasta')
     parser.add_argument('-dh','--host_name', default='host', help='Name of the host used to name files')
 
     parser.add_argument('-k','--k_length', required=True, type=int, help='Length of k-mers to extract')
-    parser.add_argument('-l','--kmers_list', default=None, type=pathlib.Path, help='PATH to a file containing a list of k-mers to be extracted if the dataset is not a training database')
-    parser.add_argument('-o','--outdir', required=True, type=pathlib.Path, help='PATH to a directory on file where outputs will be saved')
+    parser.add_argument('-l','--kmers_list', default=None, type=Path, help='PATH to a file containing a list of k-mers to be extracted if the dataset is not a training database')
+    parser.add_argument('-o','--outdir', required=True, type=Path, help='PATH to a directory on file where outputs will be saved')
     parser.add_argument('-wd','--workdir', default='/tmp/spill', type=Path, help='Optional. Path to a working directory where tuning data will be spilled')
     args = parser.parse_args()
 
