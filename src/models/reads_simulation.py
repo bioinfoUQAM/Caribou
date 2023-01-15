@@ -6,9 +6,11 @@ import pandas as pd
 import os
 import gzip
 
+from glob import glob
 from Bio import SeqIO
 from warnings import warn
 from data.build_data import build_load_save_data
+from joblib import Parallel, delayed, parallel_backend
 
 __author__ = "Nicolas de Montigny"
 
@@ -99,11 +101,13 @@ class readsSimulation():
             
     def _make_tmp_fasta(self):
         for file in [self._fasta_in, self._fasta_host]:
-            if file is not None:
+            if file is not None and os.path.isfile(file):
                 if os.path.splitext(file)[1] == '.gz':
                     self._add_tmp_fasta_gz(file)
                 else:
                     self._add_tmp_fasta_fa(file)
+            elif file is not None and os.path.isdir(file):
+                self._add_tmp_fasta_dir(file)
 
     def _add_tmp_fasta_fa(self, file):
         with open(file, 'rt') as handle_in, open(self._fasta_tmp, 'at') as handle_out:
@@ -116,6 +120,38 @@ class readsSimulation():
             for record in SeqIO.parse(handle_in, 'fasta'):
                 if record.id in self._genomes:
                     SeqIO.write(record, handle_out, 'fasta')
+
+    def _add_tmp_fasta_dir(self, dir):
+        files_lst = []
+        for ext in ['.fa', '.fna', '.fasta','.gz']:
+            files_lst.extend(glob(os.path.join(dir, f'*{ext}')))
+
+        with parallel_backend('threading'):
+            fastas_to_write = Parallel(n_jobs = -1, prefer = 'threads', verbose = 1)(
+                delayed(self._parallel_fasta_to_write)
+                (file) for file in files_lst)
+        
+        with open(self._fasta_tmp, 'at') as handle:
+            for record in fastas_to_write:
+                SeqIO.write(record, handle, 'fasta')
+
+    def _parallel_fasta_to_write(self, fasta):
+        if os.path.splitext(fasta)[1] == '.gz':
+            return self._parallel_read_gz(fasta)
+        else:
+            return self._parallel_read_fa(fasta)
+            
+    def _parallel_read_gz(self, file):
+        with gzip.open(file, 'rt') as handle:
+            for record in SeqIO.parse(handle, 'fasta'):
+                if record.id in self._genomes:
+                    return record
+    
+    def _parallel_read_fa(self, file):
+        with open(file, 'rt') as handle:
+            for record in SeqIO.parse(handle, 'fasta'):
+                if record.id in self._genomes:
+                    return record
 
     def _fastq2fasta(self):
         with open(self._R1_fastq, "rt") as handle_R1, open(self._R2_fastq, "rt") as handle_R2, gzip.open(self._fasta_out, "at") as handle_out:

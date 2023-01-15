@@ -13,6 +13,7 @@ __all__ = [
     'load_Xy_data',
     'save_Xy_data',
     'verify_file',
+    'verify_fasta',
     'verify_data_path',
     'verify_saving_path',
     'verify_host',
@@ -55,6 +56,10 @@ def verify_file(file : Path):
     if file is not None and not os.path.exists(file):
         raise ValueError(f'Cannot find file {file} !')
 
+def verify_fasta(file : Path):
+    if not os.path.isfile(file) and not os.path.isdir(file):
+        raise ValueError('Fasta must be an interleaved fasta file or a directory containing fasta files.')
+
 def verify_data_path(dir : Path):
     if not os.path.exists(dir):
         raise ValueError(f"Cannot find data folder {dir} ! Exiting")
@@ -74,7 +79,8 @@ def verify_host_params(host : str, host_seq_file : Path, host_cls_file : Path):
     host = verify_host(host)
     if host is not None:
         if host_seq_file is None or host_cls_file is None:
-            raise ValueError('Please provide host sequence and classification files or remove the host name from config file!')
+            raise ValueError(f'Please provide host sequence and classification files or remove the host name from config file!\n\
+                actual values : host = {host}, host_seq_file = {host_seq_file}, host_cls_file = {host_cls_file}')
 
 def verify_boolean(val : bool, parameter : str):
     if val not in [True,False,None]:
@@ -112,7 +118,12 @@ def verify_multiclass_classifier(clf : str):
 
 def verify_seqfiles(seqfile : Path, seqfile_host : Path):
     if seqfile is None and seqfile_host is None:
-        raise ValueError("No file to extract K-mers from !")
+        raise ValueError("No fasta file to extract K-mers from !")
+    else:
+        if seqfile is not None:
+            verify_fasta(seqfile)
+        if seqfile_host is not None:
+            verify_fasta(seqfile_host)
 
 def verify_concordance_klength(klen1 : int, klen2 : int):
     if klen1 != klen2:

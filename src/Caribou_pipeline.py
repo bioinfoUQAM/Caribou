@@ -59,13 +59,14 @@ def caribou(opt):
 ################################################################################
 
     # io
-    for file in [database_seq_file, database_cls_file, metagenome_seq_file]:
-        verify_file(file)
+    verify_seqfiles(database_seq_file)
+    verify_file(database_cls_file)
+    verify_seqfiles(metagenome_seq_file)
 
     verify_host_params(host, host_seq_file, host_cls_file)
     if host is not None:
-        for file in [host_seq_file, host_cls_file]:
-            verify_file(file)
+        verify_seqfiles(host_seq_file)
+        verify_file(host_cls_file)
     else:
         # Adjust classifier based on host presence or not
         binary_classifier = 'onesvm'
