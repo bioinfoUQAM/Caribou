@@ -6,9 +6,6 @@ import pandas as pd
 # Class construction
 from abc import ABC, abstractmethod
 
-# Preprocessing
-from models.ray_tensor_min_max import TensorMinMaxScaler
-
 # CV metrics
 from sklearn.metrics import precision_recall_fscore_support
 
@@ -89,7 +86,7 @@ class ModelsUtils(ABC):
         self._clf = None
         self._model_ckpt = None
         self._preprocessor = None
-        self._encoder = None
+        #self._encoder = None
         self._trainer = None
         self._train_params = {}
         self._predictor = None
@@ -97,11 +94,13 @@ class ModelsUtils(ABC):
         # Files
         self._cv_csv = os.path.join(self.outdir_results,'{}_{}_K{}_cv_scores.csv'.format(self.classifier, self.taxa, self.k))
 
+    """
     def _training_preprocess(self, df):
         print('_training_preprocess')
         self._preprocessor = TensorMinMaxScaler(self.kmers)
         self._preprocessor.fit(df)
         self._label_encode(df)
+    """
 
     @abstractmethod
     def train(self):

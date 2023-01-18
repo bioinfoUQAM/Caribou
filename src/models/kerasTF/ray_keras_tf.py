@@ -9,6 +9,7 @@ from shutil import rmtree
 from utils import zip_X_y
 
 # Preprocessing
+from models.ray_tensor_min_max import TensorMinMaxScaler
 from ray.data.preprocessors import BatchMapper, Concatenator, LabelEncoder, Chain, OneHotEncoder
 
 # Parent class / models
@@ -107,13 +108,17 @@ class KerasTFModel(ModelsUtils):
             self._nb_CPU_per_worker = int((os.cpu_count()*0.8) / self._n_workers)
         else:
             self._use_gpu = False
-            if int(os.cpu_count()*0.8) % 5 == 0:
-                self._nb_CPU_per_worker = 5
+            if os.cpu_count() > 4:
+                if int(os.cpu_count()*0.8) % 5 == 0:
+                    self._nb_CPU_per_worker = 5
+                else:
+                    self._nb_CPU_per_worker = 3
+                self._n_workers = int((os.cpu_count()*0.8)/self._nb_CPU_per_worker)
             else:
-                self._nb_CPU_per_worker = 3
-            self._n_workers = int((os.cpu_count()*0.8)/self._nb_CPU_per_worker)
-            # self._nb_CPU_per_worker = int(os.cpu_count()*0.8) #for using with self._n_workers = 1
+                self._n_workers = 2
+                self._nb_CPU_per_worker = 1
 
+    
         if self.classifier == 'attention':
             print('Training bacterial / host classifier based on Attention Weighted Neural Network')
         elif self.classifier == 'lstm':
@@ -127,6 +132,23 @@ class KerasTFModel(ModelsUtils):
         elif self.classifier == 'widecnn':
             print('Training multiclass classifier based on Wide CNN Network')
 
+    def _training_preprocess(self, df):
+        print('_training_preprocess')
+        labels = []
+        for row in df.iter_rows():
+            labels.append(row[self.taxa])
+        self._nb_classes = len(np.unique(labels))
+        self._preprocessor = Chain(
+            TensorMinMaxScaler(self.kmers),
+            LabelEncoder(self.taxa),
+            OneHotEncoder([self.taxa]),
+            Concatenator(
+                output_column_name=self.taxa,
+                include=['{}_{}'.format(self.taxa, i)
+                         for i in range(self._nb_classes)]
+            )
+        )
+            
     def _label_encode(self, df):
         print('_label_encode')
         labels = []
@@ -134,14 +156,6 @@ class KerasTFModel(ModelsUtils):
             labels.append(row[self.taxa])
         self._nb_classes = len(np.unique(labels))
         self._label_encode_define(df)
-        encoded = []
-        encoded.append(-1)
-        labels = ['unknown']
-        for k, v in self._encoder.preprocessors[0].stats_['unique_values({})'.format(self.taxa)].items():
-            encoded.append(v)
-            labels.append(k)
-
-        self._labels_map = zip(labels, encoded)
         
     def _label_encode_define(self, df):
         print('_label_encode_define')
@@ -153,13 +167,19 @@ class KerasTFModel(ModelsUtils):
                 include=['{}_{}'.format(self.taxa, i) for i in range(self._nb_classes)]
             )
         )
-        self._encoder.fit(df)
-        
+    
     def _label_decode(self, predict):
         print('_label_decode')
+        if self._labels_map is None:
+            encoded = []
+            encoded.append(-1)
+            labels = ['unknown']
+            for k, v in self._preprocessor.preprocessors[1].stats_['unique_values({})'.format(self.taxa)].items():
+                encoded.append(v)
+                labels.append(k)
         decoded = pd.Series(np.empty(len(predict), dtype=object))
-        for label, encoded in self._labels_map:
-            decoded[predict == encoded] = label
+        for label, coded in zip(labels, encoded):
+            decoded[predict == coded] = label
 
         return decoded
 
@@ -236,11 +256,17 @@ class KerasTFModel(ModelsUtils):
 
     def _fit_model(self, datasets):
         print('_fit_model')
+        """
         for name, ds in datasets.items():
+            print(f'dataset preprocessing : {name}')
             ds = self._preprocessor.transform(ds)
+            print(f'label encoding : {name}')
             ds = self._encoder.transform(ds)
             datasets[name] = ds
-
+        sys.exit()
+        """
+        for name, ds in datasets.items():
+            print(ds.to_pandas())
         # Training parameters
         self._train_params = {
             'batch_size': self.batch_size,
@@ -263,14 +289,14 @@ class KerasTFModel(ModelsUtils):
             ),
             dataset_config = {
                 'train': DatasetConfig(
-                    fit = False,
-                    transform = False,
+                    fit = True,
+                    transform = True,
                     split = True,
                     use_stream_api = True
                 ),
                 'validation': DatasetConfig(
                     fit = False,
-                    transform = False,
+                    transform = True,
                     split = False,
                     use_stream_api = True
                 )
@@ -279,7 +305,8 @@ class KerasTFModel(ModelsUtils):
                 name = self.classifier,
                 local_dir = self._workdir,
             ),
-            datasets = datasets
+            datasets = datasets,
+            preprocessor = self._preprocessor,
         )
 
         # Train / tune execution

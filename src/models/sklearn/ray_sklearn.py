@@ -8,7 +8,8 @@ from glob import glob
 from shutil import rmtree
 
 # Preprocessing
-from ray.data.preprocessors import BatchMapper, LabelEncoder
+from models.ray_tensor_min_max import TensorMinMaxScaler
+from ray.data.preprocessors import Chain, BatchMapper, LabelEncoder
 from models.sklearn.ray_sklearn_onesvm_encoder import OneClassSVMLabelEncoder
 
 # Training
@@ -90,8 +91,26 @@ class SklearnModel(ModelsUtils):
         )
         # Parameters
         self._encoded = []
+        self._encoder = None
         # Computes
         self._build()
+
+    def _training_preprocess(self, df):
+        print('_training_preprocess')
+        if self.classifier == 'onesvm':
+            self._encoder = OneClassSVMLabelEncoder(self.taxa)
+        else:
+            labels = []
+            for row in df.iter_rows():
+                labels.append(row[self.taxa])
+            labels = np.unique(labels)
+            self._encoder = LabelEncoder(self.taxa)
+        self._preprocessor = Chain(
+            TensorMinMaxScaler(self.kmers),
+            self._encoder,
+        )
+        
+            
 
     def _label_encode(self, df):
         print('_label_encode')
@@ -104,19 +123,28 @@ class SklearnModel(ModelsUtils):
             labels = []
             for row in df.iter_rows():
                 labels.append(row[self.taxa])
-            labels = np.unique(row)
+            labels = np.unique(labels)
             self._encoder = LabelEncoder(self.taxa)
             self._encoder.fit(df)
-            self._encoded = [v for k,v in self._encoder.stats_['unique_values({})'.format(self.taxa)].items()]
-            encoded = np.append(self._encoded, -1)
+            encoded = [v for k,v in self._encoder.stats_['unique_values({})'.format(self.taxa)].items()]
+            encoded = np.append(encoded, -1)
             labels = np.append(labels, 'unknown')
         self._labels_map = zip(labels, encoded)
 
     def _label_decode(self, predict):
         print('_label_decode')
+        if self._labels_map is None:
+            if self.classifier == 'onesvm':
+                encoded = np.array([1,-1], dtype = np.int32)
+                labels = np.array(['bacteria', 'unknown'], dtype = object)
+            else:
+                encoded = [v for k,v in self._encoder.stats_['unique_values({})'.format(self.taxa)].items()]
+                encoded = np.append(encoded, -1)
+                labels = np.append(labels, 'unknown')
         decoded = pd.Series(np.empty(len(predict), dtype=object))
-        for label, encoded in self._labels_map:
-            decoded[predict == encoded] = label
+        for label, coded in zip(labels, encoded):
+            decoded[predict == coded] = label
+
         return decoded
 
     def train(self, datasets, kmers_ds, cv = True):
@@ -226,7 +254,8 @@ class SklearnModel(ModelsUtils):
             run_config = RunConfig(
                 name = self.classifier,
                 local_dir = self._workdir
-            )
+            ),
+            preprocessor = self._preprocessor,
         )
 
         # Training execution

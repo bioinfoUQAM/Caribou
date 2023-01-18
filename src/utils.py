@@ -270,6 +270,8 @@ def populate_save_data(
 def zip_X_y(X, y):
     num_blocks = X.num_blocks()
     len_x = X.count()
+    if len_x > 1000:
+        num_blocks = int(len_x / 50)
     ensure_length_ds(len_x, len(y))
     y = ray.data.from_arrow(pa.Table.from_pandas(y))
     X = X.repartition(len_x)

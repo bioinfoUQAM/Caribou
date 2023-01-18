@@ -153,7 +153,7 @@ class KmersCollection():
         cmd_split = f'{self._faSplit} byname {self.fasta} {self._tmp_dir}'
         os.system(cmd_split)
         # Get list of fasta files
-        self._fasta_list = glob(os.path.join(self.fasta, '*.fa'))
+        self._fasta_list = glob(os.path.join(self._tmp_dir, '*.fa'))
 
     def _parallel_extraction(self):
         if self.method == 'seen':
