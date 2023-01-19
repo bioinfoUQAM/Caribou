@@ -10,6 +10,7 @@ from utils import zip_X_y
 
 # Preprocessing
 from models.ray_tensor_min_max import TensorMinMaxScaler
+from models.kerasTF.ray_one_hot_tensor import OneHotTensor
 from ray.data.preprocessors import BatchMapper, Concatenator, LabelEncoder, Chain, OneHotEncoder
 
 # Parent class / models
@@ -141,13 +142,17 @@ class KerasTFModel(ModelsUtils):
         self._preprocessor = Chain(
             TensorMinMaxScaler(self.kmers),
             LabelEncoder(self.taxa),
-            OneHotEncoder([self.taxa]),
-            Concatenator(
-                output_column_name=self.taxa,
-                include=['{}_{}'.format(self.taxa, i)
-                         for i in range(self._nb_classes)]
-            )
+            OneHotTensor(self.taxa),
+            # OneHotEncoder([self.taxa]),
+            # Concatenator(
+            #     output_column_name=self.taxa,
+            #     include=['{}_{}'.format(self.taxa, i)
+            #              for i in range(self._nb_classes)]
+            # )
         )
+        df = self._preprocessor.fit_transform(df)
+        print(df.to_pandas())
+        sys.exit()
             
     def _label_encode(self, df):
         print('_label_encode')

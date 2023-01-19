@@ -2,11 +2,15 @@
 
 import ray
 import json
+import warnings
 import argparse
 
 from utils import *
 from pathlib import Path
+from logging import ERROR
 from models.classification import ClassificationMethods
+
+warnings.filterwarnings('ignore')
 
 __author__ = "Nicolas de Montigny"
 
@@ -34,6 +38,7 @@ def bacteria_classification_train_cv(opt):
 
     # Initialize cluster
     ray.init(
+        logging_level = ERROR,
         _system_config = {
             'object_spilling_config': json.dumps(
                 {'type': 'filesystem', 'params': {'directory_path': str(opt['workdir'])}})
