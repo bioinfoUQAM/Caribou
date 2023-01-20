@@ -299,7 +299,7 @@ class KerasTFModel(ModelsUtils):
             # Make predictions
             predictions = self._predictor.predict(
                 data=df,
-                batch_size=self.batch_size
+                # batch_size=self.batch_size
             )
             predictions = self._prob_2_cls(predictions, threshold)
 
@@ -392,7 +392,7 @@ def train_func(config):
                 callbacks=[Callback()],
                 verbose=0
             )
-            if history.history['val_accuracy'][0] > report['val_accuracy'] and history.history['val_loss'][0] < report['val_loss']:
+            if history.history['val_loss'][0] < report['val_loss']:
                 report['accuracy'] = history.history['accuracy'][0]
                 report['loss'] = history.history['loss'][0]
                 report['val_accuracy'] = history.history['val_accuracy'][0]
