@@ -284,6 +284,10 @@ class KerasTFModel(ModelsUtils):
     def predict(self, df, threshold = 0.8, cv = False):
         print('predict')
         if df.count() > 0:
+            if len(df.schema().names) > 1:
+                col_2_drop = [col for col in df.schema().names if col != '__value__']
+                df = df.drop_columns(col_2_drop)
+
             df = self._preprocessor.preprocessors[0].transform(df)
             # Define predictor
             self._predictor = BatchPredictor.from_checkpoint(
@@ -293,9 +297,8 @@ class KerasTFModel(ModelsUtils):
             )
             # Make predictions
             predictions = self._predictor.predict(
-                feature_columns = ['__value__'],
-                data = df,
-                batch_size = self.batch_size
+                data=df,
+                batch_size=self.batch_size
             )
             predictions = self._prob_2_cls(predictions, threshold)
 

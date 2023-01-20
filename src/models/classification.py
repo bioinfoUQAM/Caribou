@@ -149,6 +149,8 @@ class ClassificationMethods():
         print('_binary_training')
         self._verify_classifier_binary()
         if self._classifier_binary == 'onesvm':
+            if self._training_datasets is None:
+                self._load_training_data()
             self.models[taxa] = SklearnModel(
                 self._classifier_binary,
                 self._database,
@@ -160,8 +162,7 @@ class ClassificationMethods():
                 self._database_data['kmers'],
                 self._verbose
             )
-            if self._training_datasets is None:
-                self._load_training_data(taxa)
+            self.models[taxa].preprocess(self._preprocess_dataset)
             self.models[taxa].train(self._training_datasets, self._database_data, self._cv)
         else:
             self._merge_database_host(self._database_data, self._host_data)
@@ -200,7 +201,7 @@ class ClassificationMethods():
         print('_multiclass_training')
         self._verify_classifier_multiclass()
         if self._training_datasets is None:
-            self._load_training_data(taxa)
+            self._load_training_data()
         if self._classifier_multiclass in ['sgd','mnb']:
             self.models[taxa] = SklearnModel(
                 self._classifier_multiclass,
@@ -448,12 +449,13 @@ class ClassificationMethods():
             raise ValueError('Invalid classifier option for bacteria classification!\n\tModels implemented at this moment are :\n\tClassic algorithm : Stochastic Gradient Descent (sgd) and Multinomial Naïve Bayes (mnb)\n\tNeural networks : Deep hybrid between LSTM and Attention (lstm_attention), CNN (cnn) and Wide CNN (widecnn)')
 
     def _load_training_data_merged(self, taxa):
+        print('_load_training_data_merged')
         X_train = ray.data.read_parquet(self._merged_database_host['profile'])
         y_train = pd.DataFrame({
             taxa: pd.DataFrame(
                 self._merged_database_host['classes'],
                 columns=self._merged_database_host['taxas']
-            ).loc[:, taxa].str.lower()
+            ).loc[:,taxa].str.lower()
         })
 
         y_train[y_train['domain'] == 'archaea'] = 'bacteria'
@@ -461,15 +463,15 @@ class ClassificationMethods():
         df = zip_X_y(X_train, y_train)
         
         self._preprocess_dataset = df
-
         if self._cv:
             df_train, df_test = df.train_test_split(0.2, shuffle=True)
-            df_test = self._sim_4_cv(df_test, self._database_data, f'{self._database}_test')
+            df_test = self._sim_4_cv(df_test, self._merged_database_host, f'{self._database}_test')
             self._merged_training_datasets = {'train': df_train, 'test': df_test}
         else:
             self._merged_training_datasets = {'train': df_train}
 
-    def _load_training_data(self, taxa):
+    def _load_training_data(self):
+        print('_load_training_data')
         X_train = ray.data.read_parquet(self._database_data['profile'])
         y_train = pd.DataFrame(
                 self._database_data['classes'],
@@ -484,7 +486,6 @@ class ClassificationMethods():
         
         df = zip_X_y(X_train, y_train)
 
-
         self._preprocess_dataset = df
         if self._cv:
             df_train, df_test = df.train_test_split(0.2, shuffle=True)
@@ -494,6 +495,7 @@ class ClassificationMethods():
             self._training_datasets = {'train': df_train}
 
     def _sim_4_cv(self, df, kmers_ds, name):
+        print('_sim_4_cv')
         sim_cls_dct = {
             'id':[],
         }
