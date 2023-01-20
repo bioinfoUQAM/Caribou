@@ -75,7 +75,7 @@ class readsSimulation():
             self._fasta_host = None
         self._cls_in = cls
         self._genomes = genomes
-        self._nb_reads = len(genomes) * 5
+        self._nb_reads = len(genomes) * 2
         self._sequencing = sequencing
         self._path = outdir
         self._name = name

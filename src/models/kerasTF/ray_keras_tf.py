@@ -284,6 +284,7 @@ class KerasTFModel(ModelsUtils):
     def predict(self, df, threshold = 0.8, cv = False):
         print('predict')
         if df.count() > 0:
+            df = df.window(blocks_per_window = 1)
             if len(df.schema().names) > 1:
                 col_2_drop = [col for col in df.schema().names if col != '__value__']
                 df = df.drop_columns(col_2_drop)
@@ -374,6 +375,14 @@ def train_func(config):
             batch_val = pd.concat([batch_val,batch])
     batch_val = to_tf_dataset(batch_val)
 
+    report = {
+        'accuracy' : 0,
+        'loss' : 1000,
+        'val_accuracy' : 0,
+        'val_loss' : 1000
+    }
+    ckpt = None
+
     for epoch_train in train_data.iter_epochs(epochs):
         for batch_train in epoch_train.iter_batches():
             batch_train = to_tf_dataset(batch_train)
@@ -383,15 +392,18 @@ def train_func(config):
                 callbacks=[Callback()],
                 verbose=0
             )
-            results.append(history.history)
-            session.report({
-                'accuracy' : history.history['accuracy'][0],
-                'loss' : history.history['loss'][0],
-                'val_accuracy' : history.history['val_accuracy'][0],
-                'val_loss' : history.history['val_loss'][0]
-                },
-                checkpoint = TensorflowCheckpoint.from_model(model)
-            )
+            if history.history['val_accuracy'][0] > report['val_accuracy'] and history.history['val_loss'][0] < report['val_loss']:
+                report['accuracy'] = history.history['accuracy'][0]
+                report['loss'] = history.history['loss'][0]
+                report['val_accuracy'] = history.history['val_accuracy'][0]
+                report['val_loss'] = history.history['val_loss'][0]
+                ckpt = TensorflowCheckpoint.from_model(model)
+                results = [history.history]
+
+    session.report(
+        report,
+        checkpoint = ckpt
+    )
     
 def build_model(classifier, nb_cls, nb_kmers):
     if classifier == 'attention':
