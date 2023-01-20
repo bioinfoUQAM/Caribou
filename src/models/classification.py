@@ -81,6 +81,7 @@ class ClassificationMethods():
         self._database_data = None
         self._classified_ids = []
         self._not_classified_ids = []
+        self._preprocess_dataset = None
         self._training_datasets = None
         self._merged_training_datasets = None
         self._merged_database_host = None
@@ -160,10 +161,11 @@ class ClassificationMethods():
                 self._verbose
             )
             if self._training_datasets is None:
-                self._load_training_data()
+                self._load_training_data(taxa)
             self.models[taxa].train(self._training_datasets, self._database_data, self._cv)
         else:
             self._merge_database_host(self._database_data, self._host_data)
+            self._load_training_data_merged(taxa)
             if self._classifier_binary == 'linearsvm':
                 self.models[taxa] = SklearnModel(
                     self._classifier_binary,
@@ -189,7 +191,7 @@ class ClassificationMethods():
                     self._merged_database_host['kmers'],
                     self._verbose
                 )
-            self._load_training_data_merged(taxa)
+            self.models[taxa].preprocess(self._preprocess_dataset)
             self.models[taxa].train(self._merged_training_datasets, self._merged_database_host, self._cv)
 
         self._save_model(self._model_file, taxa)            
@@ -197,6 +199,8 @@ class ClassificationMethods():
     def _multiclass_training(self, taxa):
         print('_multiclass_training')
         self._verify_classifier_multiclass()
+        if self._training_datasets is None:
+            self._load_training_data(taxa)
         if self._classifier_multiclass in ['sgd','mnb']:
             self.models[taxa] = SklearnModel(
                 self._classifier_multiclass,
@@ -222,8 +226,7 @@ class ClassificationMethods():
                 self._database_data['kmers'],
                 self._verbose
             )
-        if self._training_datasets is None:
-            self._load_training_data()
+        self.models[taxa].preprocess(self._preprocess_dataset)
         self.models[taxa].train(self._training_datasets, self._database_data, self._cv)
         self._save_model(self._model_file, taxa)
         
@@ -457,6 +460,8 @@ class ClassificationMethods():
 
         df = zip_X_y(X_train, y_train)
         
+        self._preprocess_dataset = df
+
         if self._cv:
             df_train, df_test = df.train_test_split(0.2, shuffle=True)
             df_test = self._sim_4_cv(df_test, self._database_data, f'{self._database}_test')
@@ -464,7 +469,7 @@ class ClassificationMethods():
         else:
             self._merged_training_datasets = {'train': df_train}
 
-    def _load_training_data(self):
+    def _load_training_data(self, taxa):
         X_train = ray.data.read_parquet(self._database_data['profile'])
         y_train = pd.DataFrame(
                 self._database_data['classes'],
@@ -479,6 +484,8 @@ class ClassificationMethods():
         
         df = zip_X_y(X_train, y_train)
 
+
+        self._preprocess_dataset = df
         if self._cv:
             df_train, df_test = df.train_test_split(0.2, shuffle=True)
             df_test = self._sim_4_cv(df_test, self._database_data, f'{self._database}_test')

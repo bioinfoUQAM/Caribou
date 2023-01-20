@@ -60,6 +60,10 @@ class KerasTFModel(ModelsUtils):
     Methods
     ----------
 
+    preprocess : preprocess the data before training and splitting the original dataset in case of cross-validation
+
+    train : train a model using the given datasets
+
     predict : predict the classes of a dataset
         df : ray.data.Dataset
             Dataset containing K-mers profiles of sequences to be classified
@@ -133,8 +137,8 @@ class KerasTFModel(ModelsUtils):
         elif self.classifier == 'widecnn':
             print('Training multiclass classifier based on Wide CNN Network')
 
-    def _training_preprocess(self, df):
-        print('_training_preprocess')
+    def preprocess(self, df):
+        print('preprocess')
         labels = []
         for row in df.iter_rows():
             labels.append(row[self.taxa])
@@ -143,34 +147,9 @@ class KerasTFModel(ModelsUtils):
             TensorMinMaxScaler(self.kmers),
             LabelEncoder(self.taxa),
             OneHotTensorEncoder(self.taxa),
-            # OneHotEncoder([self.taxa]),
-            # Concatenator(
-            #     output_column_name=self.taxa,
-            #     include=['{}_{}'.format(self.taxa, i)
-            #              for i in range(self._nb_classes)]
-            # )
         )
         self._preprocessor.fit(df)
-        
-    def _label_encode(self, df):
-        print('_label_encode')
-        labels = []
-        for row in df.iter_rows():
-            labels.append(row[self.taxa])
-        self._nb_classes = len(np.unique(labels))
-        self._label_encode_define(df)
-        
-    def _label_encode_define(self, df):
-        print('_label_encode_define')
-        self._encoder = Chain(
-            LabelEncoder(self.taxa),
-            OneHotEncoder([self.taxa]),
-            Concatenator(
-                output_column_name=self.taxa,
-                include=['{}_{}'.format(self.taxa, i) for i in range(self._nb_classes)]
-            )
-        )
-    
+
     def _label_decode(self, predict):
         print('_label_decode')
         if self._labels_map is None:
@@ -190,7 +169,6 @@ class KerasTFModel(ModelsUtils):
         print('train')
 
         df = datasets['train']
-        self._training_preprocess(df)
         
         if cv:
             df_test = datasets['test']
@@ -238,15 +216,10 @@ class KerasTFModel(ModelsUtils):
         datasets = {'train' : df_train, 'validation' : df_val}
         self._fit_model(datasets)
 
-        df_test = self._preprocessor.preprocessors[0].transform(df_test)
         y_true = []
         for row in df_test.iter_rows():
             y_true.append(row[self.taxa])
 
-        y_true = np.array(y_true)
-        y_true[np.isnan(y_true)] = -1
-        y_true = list(y_true)
-        
         y_pred = self.predict(df_test.drop_columns([self.taxa]), cv = True)
 
         for file in glob(os.path.join(os.path.dirname(kmers_ds['profile']), '*sim*')):
@@ -259,12 +232,10 @@ class KerasTFModel(ModelsUtils):
 
     def _fit_model(self, datasets):
         print('_fit_model')
-        """
         for name, ds in datasets.items():
             print(f'dataset preprocessing : {name}')
             ds = self._preprocessor.transform(ds)
-            datasets[name] = ds
-        """
+            datasets[name] = ds        
 
         # Training parameters
         self._train_params = {
@@ -278,7 +249,7 @@ class KerasTFModel(ModelsUtils):
         # Define trainer / tuner
         self._trainer = TensorflowTrainer(
             train_loop_per_worker = train_func,
-            train_loop_config = self._train_params, #{},
+            train_loop_config = self._train_params,
             scaling_config = ScalingConfig(
                 trainer_resources={'CPU': 1},
                 num_workers = self._n_workers,
@@ -287,14 +258,14 @@ class KerasTFModel(ModelsUtils):
             ),
             dataset_config = {
                 'train': DatasetConfig(
-                    fit = True,
-                    transform = True,
+                    fit = False,
+                    transform = False,
                     split = True,
                     use_stream_api = True
                 ),
                 'validation': DatasetConfig(
                     fit = False,
-                    transform = True,
+                    transform = False,
                     split = True,
                     use_stream_api = True
                 )
@@ -304,7 +275,6 @@ class KerasTFModel(ModelsUtils):
                 local_dir = self._workdir,
             ),
             datasets = datasets,
-            preprocessor = self._preprocessor,
         )
 
         # Train / tune execution
@@ -314,7 +284,7 @@ class KerasTFModel(ModelsUtils):
     def predict(self, df, threshold = 0.8, cv = False):
         print('predict')
         if df.count() > 0:
-            df = self._preprocessor.transform(df)
+            df = self._preprocessor.preprocessors[0].transform(df)
             # Define predictor
             self._predictor = BatchPredictor.from_checkpoint(
                 self._model_ckpt,
@@ -329,10 +299,7 @@ class KerasTFModel(ModelsUtils):
             )
             predictions = self._prob_2_cls(predictions, threshold)
 
-            if cv:
-                return predictions
-            else:
-                return self._label_decode(predictions)
+            return self._label_decode(predictions)
         else:
             raise ValueError('No data to predict')
 

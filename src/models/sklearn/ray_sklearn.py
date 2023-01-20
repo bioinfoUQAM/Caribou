@@ -54,6 +54,8 @@ class SklearnModel(ModelsUtils):
     Methods
     ----------
 
+    preprocess : preprocess the data before training and splitting the original dataset in case of cross-validation
+
     train : train a model using the given datasets
 
     predict : predict the classes of a dataset
@@ -95,55 +97,32 @@ class SklearnModel(ModelsUtils):
         # Computes
         self._build()
 
-    def _training_preprocess(self, df):
-        print('_training_preprocess')
+    def preprocess(self, df):
+        print('preprocess')
         if self.classifier == 'onesvm':
             self._encoder = OneClassSVMLabelEncoder(self.taxa)
+            self._encoded = np.array([1,-1], dtype = np.int32)
+            labels = np.array(['bacteria', 'unknown'], dtype = object)
         else:
-            labels = []
-            for row in df.iter_rows():
-                labels.append(row[self.taxa])
-            labels = np.unique(labels)
             self._encoder = LabelEncoder(self.taxa)
+        
         self._preprocessor = Chain(
             TensorMinMaxScaler(self.kmers),
             self._encoder,
         )
-        
-            
-
-    def _label_encode(self, df):
-        print('_label_encode')
-        if self.classifier == 'onesvm':
-            self._encoder = OneClassSVMLabelEncoder(self.taxa)
-            self._encoder.fit(df)
-            encoded = np.array([1,-1], dtype = np.int32)
-            labels = np.array(['bacteria', 'unknown'], dtype = object)
-        else:
-            labels = []
-            for row in df.iter_rows():
-                labels.append(row[self.taxa])
-            labels = np.unique(labels)
-            self._encoder = LabelEncoder(self.taxa)
-            self._encoder.fit(df)
-            encoded = [v for k,v in self._encoder.stats_['unique_values({})'.format(self.taxa)].items()]
-            encoded = np.append(encoded, -1)
+        self._preprocessor.fit(df)
+        if self.classifier != 'onesvm':
+            labels = list(self._preprocessor.preprocessors[1].stats_[f'unique_values({self.taxa})'].keys())
+            self._encoded = np.arange(len(labels))
             labels = np.append(labels, 'unknown')
-        self._labels_map = zip(labels, encoded)
+            self._encoded = np.append(self._encoded, -1)
+        self._labels_map = zip(labels, self._encoded)
 
     def _label_decode(self, predict):
         print('_label_decode')
-        if self._labels_map is None:
-            if self.classifier == 'onesvm':
-                encoded = np.array([1,-1], dtype = np.int32)
-                labels = np.array(['bacteria', 'unknown'], dtype = object)
-            else:
-                encoded = [v for k,v in self._encoder.stats_['unique_values({})'.format(self.taxa)].items()]
-                encoded = np.append(encoded, -1)
-                labels = np.append(labels, 'unknown')
         decoded = pd.Series(np.empty(len(predict), dtype=object))
-        for label, coded in zip(labels, encoded):
-            decoded[predict == coded] = label
+        for label, encoded in self._labels_map:
+            decoded[predict == encoded] = label
 
         return decoded
 
@@ -152,14 +131,12 @@ class SklearnModel(ModelsUtils):
         
         df = datasets['train']
 
-        self._training_preprocess(df)
-
         if cv:
             df_test = datasets['test']
             self._cross_validation(df, df_test, kmers_ds)
         else:
             df = df.drop_columns(['id'])
-            datasets = {'train' : ray.put(df)}
+            datasets = {'train' : df}
             self._fit_model(datasets)
 
     def _cross_validation(self, df_train, df_test, kmers_ds):
@@ -168,16 +145,16 @@ class SklearnModel(ModelsUtils):
         df_train = df_train.drop_columns(['id'])
         df_test = df_test.drop_columns(['id'])
 
-        datasets = {'train' : ray.put(df_train)}
+        datasets = {'train' : df_train}
         self._fit_model(datasets)
 
-        df_test = self._encoder.transform(df_test)
+        df_test = self._preprocessor.preprocessors[0].transform(df_test)
+
         y_true = []
         for row in df_test.iter_rows():
             y_true.append(row[self.taxa])
 
         y_true = np.array(y_true)
-        y_true[np.isnan(y_true)] = -1
         y_true = list(y_true)
         
         y_pred = self.predict(df_test.drop_columns([self.taxa]), cv = True)
@@ -231,9 +208,7 @@ class SklearnModel(ModelsUtils):
     def _fit_model(self, datasets):
         print('_fit_model')
         for name, ds in datasets.items():
-            ds = ray.get(ds)
             ds = self._preprocessor.transform(ds)
-            ds = self._encoder.transform(ds)
             datasets[name] = ray.put(ds)
 
         # Define trainer
@@ -255,7 +230,6 @@ class SklearnModel(ModelsUtils):
                 name = self.classifier,
                 local_dir = self._workdir
             ),
-            preprocessor = self._preprocessor,
         )
 
         # Training execution
@@ -265,7 +239,7 @@ class SklearnModel(ModelsUtils):
     def predict(self, df, threshold = 0.8, cv = False):
         print('predict')
         if df.count() > 0:
-            df = self._preprocessor.transform(df)
+            df = self._preprocessor.preprocessors[0].transform(df)
             if self.classifier == 'onesvm':
                 self._predictor = BatchPredictor.from_checkpoint(self._model_ckpt, SklearnPredictor)
                 predictions = self._predictor.predict(df, batch_size = self.batch_size)
@@ -275,10 +249,7 @@ class SklearnModel(ModelsUtils):
                 predictions = self._predictor.predict(df, batch_size = self.batch_size)
                 predictions = self._prob_2_cls(predictions, len(self._encoded), threshold)
             
-            if cv:
-                return predictions
-            else:
-                return self._label_decode(predictions)    
+            return self._label_decode(predictions)    
         else:
             raise ValueError('No data to predict')
 

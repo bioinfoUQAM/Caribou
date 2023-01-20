@@ -94,13 +94,10 @@ class ModelsUtils(ABC):
         # Files
         self._cv_csv = os.path.join(self.outdir_results,'{}_{}_K{}_cv_scores.csv'.format(self.classifier, self.taxa, self.k))
 
-    """
-    def _training_preprocess(self, df):
-        print('_training_preprocess')
-        self._preprocessor = TensorMinMaxScaler(self.kmers)
-        self._preprocessor.fit(df)
-        self._label_encode(df)
-    """
+    @abstractmethod
+    def preprocess(self, df):
+        """
+        """
 
     @abstractmethod
     def train(self):
@@ -119,6 +116,11 @@ class ModelsUtils(ABC):
 
     def _cv_score(self, y_true, y_pred):
         print('_cv_score')
+
+        print('y_true')
+        print(y_true)
+        print('y_pred')
+        print(y_pred)
 
         support = precision_recall_fscore_support(y_true, y_pred, average = 'weighted')
 
@@ -140,11 +142,6 @@ class ModelsUtils(ABC):
 
     @abstractmethod
     def _prob_2_cls(self):
-        """
-        """
-
-    @abstractmethod
-    def _label_encode(self):
         """
         """
 

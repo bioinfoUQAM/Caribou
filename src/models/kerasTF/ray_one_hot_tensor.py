@@ -30,17 +30,17 @@ class OneHotTensorEncoder(Preprocessor):
         df = _validate_df(df, self.column)
 
         def tensor_col_encoding(label, nb_unique):
-            if label == -1:
-                return TensorArray(np.zeros(nb_unique, dtype = np.int32))
-            else:
-                tensor = np.zeros(nb_unique, dtype = np.int32)
+            tensor = np.zeros(nb_unique, dtype = np.int32)
+            
+            if label >= 0:
                 tensor[label] = 1
-                return TensorArray(tensor)
+            
+            return tensor
 
         values = self.stats_[f"unique_values({self.column})"]
-        unique = list(values.keys())
+        nb_unique = len(values.keys())
 
-        df = df.assign(labels=lambda x: [tensor_col_encoding(x.loc[ind,self.column], len(unique)) for ind in df.index])
+        df = df.assign(labels = lambda x: TensorArray([tensor_col_encoding(x.loc[ind,self.column], nb_unique) for ind in df.index]))
 
         return df
 
@@ -53,5 +53,5 @@ class OneHotTensorEncoder(Preprocessor):
 
 def _validate_df(df: pd.DataFrame, column: str) -> None:
     if df[column].isna().values.any():
-        df = df.fillna(-1)
+        df[column] = df[column].fillna(-1)
     return df
