@@ -10,7 +10,7 @@ from utils import zip_X_y
 
 # Preprocessing
 from models.ray_tensor_min_max import TensorMinMaxScaler
-from models.kerasTF.ray_one_hot_tensor import OneHotTensor
+from models.kerasTF.ray_one_hot_tensor import OneHotTensorEncoder
 from ray.data.preprocessors import BatchMapper, Concatenator, LabelEncoder, Chain, OneHotEncoder
 
 # Parent class / models
@@ -142,7 +142,7 @@ class KerasTFModel(ModelsUtils):
         self._preprocessor = Chain(
             TensorMinMaxScaler(self.kmers),
             LabelEncoder(self.taxa),
-            OneHotTensor(self.taxa),
+            OneHotTensorEncoder(self.taxa),
             # OneHotEncoder([self.taxa]),
             # Concatenator(
             #     output_column_name=self.taxa,
@@ -150,10 +150,8 @@ class KerasTFModel(ModelsUtils):
             #              for i in range(self._nb_classes)]
             # )
         )
-        df = self._preprocessor.fit_transform(df)
-        print(df.to_pandas())
-        sys.exit()
-            
+        self._preprocessor.fit(df)
+        
     def _label_encode(self, df):
         print('_label_encode')
         labels = []
@@ -240,7 +238,7 @@ class KerasTFModel(ModelsUtils):
         datasets = {'train' : df_train, 'validation' : df_val}
         self._fit_model(datasets)
 
-        df_test = self._encoder.preprocessors[0].transform(df_test)
+        df_test = self._preprocessor.preprocessors[0].transform(df_test)
         y_true = []
         for row in df_test.iter_rows():
             y_true.append(row[self.taxa])
@@ -265,21 +263,16 @@ class KerasTFModel(ModelsUtils):
         for name, ds in datasets.items():
             print(f'dataset preprocessing : {name}')
             ds = self._preprocessor.transform(ds)
-            print(f'label encoding : {name}')
-            ds = self._encoder.transform(ds)
             datasets[name] = ds
-        sys.exit()
         """
-        for name, ds in datasets.items():
-            print(ds.to_pandas())
+
         # Training parameters
         self._train_params = {
             'batch_size': self.batch_size,
             'epochs': self._training_epochs,
             'size': self._nb_kmers,
             'nb_cls':self._nb_classes,
-            'model': self.classifier,
-            'labels_col': self.taxa,
+            'model': self.classifier
         }
 
         # Define trainer / tuner
@@ -302,7 +295,7 @@ class KerasTFModel(ModelsUtils):
                 'validation': DatasetConfig(
                     fit = False,
                     transform = True,
-                    split = False,
+                    split = True,
                     use_stream_api = True
                 )
             },
@@ -386,7 +379,6 @@ def train_func(config):
     size = config.get('size')
     nb_cls = config.get('nb_cls')
     model = config.get('model')
-    labels_col = config.get('labels_col')
 
     # Model setup 
     strategy = tf.distribute.MultiWorkerMirroredStrategy()
@@ -400,13 +392,13 @@ def train_func(config):
     def to_tf_dataset(data):
         ds = tf.data.Dataset.from_tensors((
         tf.convert_to_tensor(list(data['__value__'])),
-        tf.convert_to_tensor(list(data[labels_col]))
+        tf.convert_to_tensor(list(data['labels']))
         ))
         return ds
 
     # Fit the model on streaming data
     results = []
-    batch_val = pd.DataFrame(columns = ['__value__', labels_col])
+    batch_val = pd.DataFrame(columns = ['__value__', 'labels'])
     for epoch in val_data.iter_epochs(1):
         for batch in epoch.iter_batches():
             batch_val = pd.concat([batch_val,batch])

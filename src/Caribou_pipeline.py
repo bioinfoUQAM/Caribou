@@ -37,8 +37,8 @@ def caribou(opt):
     host_seq_file = config.get('io', 'host_seq_file', fallback = None)
     host_cls_file = config.get('io', 'host_cls_file', fallback = None)
     metagenome_seq_file = config.get('io', 'metagenome_seq_file')
-    outdir = config.get('io', 'outdir')
-    workdir = config.get('io', 'workdir', fallback = '/tmp/spill')
+    outdir = Path(config.get('io', 'outdir'))
+    workdir = Path(config.get('io', 'workdir', fallback = '/tmp/spill'))
 
     # settings
     k_length = config.getint('settings', 'k', fallback = 35)

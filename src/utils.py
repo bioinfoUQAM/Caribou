@@ -136,10 +136,10 @@ def verify_concordance_klength(klen1 : int, klen2 : int):
 def define_create_outdirs(dir : Path):
     outdirs = {}
     verify_saving_path(dir)
-    outdirs['main_outdir'] = dir
-    outdirs['data_dir'] = os.path.join(dir, 'data')
-    outdirs['models_dir'] = os.path.join(dir, 'models')
-    outdirs['results_dir'] = os.path.join(dir, 'results')
+    outdirs['main_outdir'] = Path(dir)
+    outdirs['data_dir'] = Path(os.path.join(dir, 'data'))
+    outdirs['models_dir'] = Path(os.path.join(dir, 'models'))
+    outdirs['results_dir'] = Path(os.path.join(dir, 'results'))
     os.makedirs(dir, mode=0o700, exist_ok=True)
     os.makedirs(outdirs['data_dir'], mode=0o700, exist_ok=True)
     os.makedirs(outdirs['models_dir'], mode=0o700, exist_ok=True)

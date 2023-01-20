@@ -6,8 +6,9 @@ import pandas as pd
 import os
 import gzip
 
-from glob import glob
 from Bio import SeqIO
+from glob import glob
+from pathlib import Path
 from warnings import warn
 from data.build_data import build_load_save_data
 from joblib import Parallel, delayed, parallel_backend
@@ -101,13 +102,13 @@ class readsSimulation():
             
     def _make_tmp_fasta(self):
         for file in [self._fasta_in, self._fasta_host]:
-            if isinstance(file, str):
-                if file is not None and os.path.isfile(file):
+            if isinstance(file, Path):
+                if os.path.isfile(file):
                     if os.path.splitext(file)[1] == '.gz':
                         self._add_tmp_fasta_gz(file)
                     else:
                         self._add_tmp_fasta_fa(file)
-                elif file is not None and os.path.isdir(file):
+                elif os.path.isdir(file):
                     self._add_tmp_fasta_dir(file)
             elif isinstance(file, list):
                 for f in file:
