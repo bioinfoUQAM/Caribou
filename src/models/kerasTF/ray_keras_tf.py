@@ -246,40 +246,6 @@ class KerasTFModel(ModelsUtils):
         print(f'num_workers : {self._n_workers}')
         print(f'nb_CPU_per_worker : {self._nb_CPU_per_worker}')
 
-        # from ray.air.util.check_ingest import DummyTrainer
-
-        # self._trainer = DummyTrainer(
-        #     scaling_config=ScalingConfig(
-        #         trainer_resources={'CPU': 1},
-        #         num_workers=self._n_workers,
-        #         use_gpu=self._use_gpu,
-        #         resources_per_worker={'CPU': self._nb_CPU_per_worker}
-        #     ),
-        #     dataset_config={
-        #         'train': DatasetConfig(
-        #             fit=False,
-        #             transform=False,
-        #             split=True,
-        #             use_stream_api=True
-        #         ),
-        #         'validation': DatasetConfig(
-        #             fit=False,
-        #             transform=False,
-        #             split=False,
-        #             use_stream_api=True
-        #         )
-        #     },
-        #     run_config=RunConfig(
-        #         name=self.classifier,
-        #         local_dir=self._workdir,
-        #     ),
-        #     datasets=datasets
-        # )
-        # training_result = self._trainer.fit()
-        # self._model_ckpt = training_result.best_checkpoints[0][0]
-        # import sys
-        # sys.exit()
-
         # Define trainer / tuner
         self._trainer = TensorflowTrainer(
             train_loop_per_worker = train_func,
@@ -344,6 +310,13 @@ class KerasTFModel(ModelsUtils):
         else:
             raise ValueError('No data to predict')
 
+    """
+    On ray discuss:
+    Try using BatchPredictor -> DatasetPipelined method + batch_size
+    If still throws warning -> Give a sample dataset to try in discuss
+
+    """
+
     def _prob_2_cls(self, predictions, threshold):
         print('_prob_2_cls')
         def map_predicted_label_binary(df):
@@ -380,8 +353,8 @@ class KerasTFModel(ModelsUtils):
 
 # Data streaming in PipelineDataset for larger than memory data, should prevent OOM
 # https://docs.ray.io/en/latest/ray-air/check-ingest.html#enabling-streaming-ingest
-# Use reserved CPUs for training to ensure enough CPU for data handling + trainers
-# https://docs.ray.io/en/latest/ray-air/check-ingest.html#dataset-resources
+# Smaller nb of workers + bigger nb CPU_per_worker + smaller batch_size to avoid memory overload
+# https://discuss.ray.io/t/ray-sgd-distributed-tensorflow/261/8
 def train_func(config):
     # Parameters
     batch_size = config.get('batch_size', 128)
@@ -399,26 +372,20 @@ def train_func(config):
     train_data = session.get_dataset_shard('train')
     val_data = session.get_dataset_shard('validation')
 
-    def to_tf_dataset(data):
-        ds = tf.data.Dataset.from_tensors((
-        tf.convert_to_tensor(list(data['__value__'])),
-        tf.convert_to_tensor(list(data['labels']))
-        ))
-        return ds
+    def val_generator():
+        for epoch in val_data.iter_epochs(1):
+            for batch in epoch.iter_tf_batches():
+                yield (batch['__value__'], batch['labels'])
 
     # Fit the model on streaming data
     results = []
-    batch_val = pd.DataFrame(columns = ['__value__', 'labels'])
-    for epoch in val_data.iter_epochs(1):
-        for batch in epoch.iter_batches():
-            batch_val = pd.concat([batch_val,batch])
-    batch_val = to_tf_dataset(batch_val)
+    batch_val = val_generator()    
 
     for epoch_train in train_data.iter_epochs(epochs):
-        for batch_train in epoch_train.iter_batches():
-            batch_train = to_tf_dataset(batch_train)
+        for batch_train in epoch_train.iter_tf_batches():
             history = model.fit(
-                batch_train,
+                x = batch_train['__value__'],
+                y = batch_train['labels'],
                 validation_data = batch_val,
                 callbacks=[Callback()],
                 verbose=0
