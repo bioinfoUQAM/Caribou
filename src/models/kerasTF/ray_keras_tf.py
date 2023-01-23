@@ -5,8 +5,9 @@ import numpy as np
 import pandas as pd
 
 from glob import glob
-from shutil import rmtree
+from copy import deepcopy
 from utils import zip_X_y
+from shutil import rmtree
 
 # Preprocessing
 from models.ray_tensor_min_max import TensorMinMaxScaler
@@ -93,7 +94,7 @@ class KerasTFModel(ModelsUtils):
             dataset,
             outdir_model,
             outdir_results,
-            batch_size,
+            batch_size, # Must be small to reduce mem usage
             k,
             taxa,
             kmers_list,
@@ -113,17 +114,13 @@ class KerasTFModel(ModelsUtils):
             self._nb_CPU_per_worker = int((os.cpu_count()*0.8) / self._n_workers)
         else:
             self._use_gpu = False
-            if os.cpu_count() > 4:
-                if int(os.cpu_count()*0.8) % 5 == 0:
-                    self._nb_CPU_per_worker = 5
-                else:
-                    self._nb_CPU_per_worker = 3
-                self._n_workers = int((os.cpu_count()*0.8)/self._nb_CPU_per_worker)
+            if os.cpu_count() >= 10:
+                self._n_workers = int(os.cpu_count()/10)
+                self._nb_CPU_per_worker = int((os.cpu_count()*0.8) / self._n_workers)
             else:
-                self._n_workers = 2
-                self._nb_CPU_per_worker = 1
+                self._n_workers = 1
+                self._nb_CPU_per_worker = int((os.cpu_count()*0.8) - 1)
 
-    
         if self.classifier == 'attention':
             print('Training bacterial / host classifier based on Attention Weighted Neural Network')
         elif self.classifier == 'lstm':
@@ -235,16 +232,53 @@ class KerasTFModel(ModelsUtils):
         for name, ds in datasets.items():
             print(f'dataset preprocessing : {name}')
             ds = self._preprocessor.transform(ds)
-            datasets[name] = ds        
+            datasets[name] = ds.fully_executed()
 
         # Training parameters
         self._train_params = {
-            'batch_size': self.batch_size,
-            'epochs': self._training_epochs,
-            'size': self._nb_kmers,
-            'nb_cls':self._nb_classes,
-            'model': self.classifier
+            'batch_size': deepcopy(self.batch_size),
+            'epochs': deepcopy(self._training_epochs),
+            'size': deepcopy(self._nb_kmers),
+            'nb_cls':deepcopy(self._nb_classes),
+            'model': deepcopy(self.classifier)
         }
+
+        print(f'num_workers : {self._n_workers}')
+        print(f'nb_CPU_per_worker : {self._nb_CPU_per_worker}')
+
+        # from ray.air.util.check_ingest import DummyTrainer
+
+        # self._trainer = DummyTrainer(
+        #     scaling_config=ScalingConfig(
+        #         trainer_resources={'CPU': 1},
+        #         num_workers=self._n_workers,
+        #         use_gpu=self._use_gpu,
+        #         resources_per_worker={'CPU': self._nb_CPU_per_worker}
+        #     ),
+        #     dataset_config={
+        #         'train': DatasetConfig(
+        #             fit=False,
+        #             transform=False,
+        #             split=True,
+        #             use_stream_api=True
+        #         ),
+        #         'validation': DatasetConfig(
+        #             fit=False,
+        #             transform=False,
+        #             split=False,
+        #             use_stream_api=True
+        #         )
+        #     },
+        #     run_config=RunConfig(
+        #         name=self.classifier,
+        #         local_dir=self._workdir,
+        #     ),
+        #     datasets=datasets
+        # )
+        # training_result = self._trainer.fit()
+        # self._model_ckpt = training_result.best_checkpoints[0][0]
+        # import sys
+        # sys.exit()
 
         # Define trainer / tuner
         self._trainer = TensorflowTrainer(
@@ -266,7 +300,7 @@ class KerasTFModel(ModelsUtils):
                 'validation': DatasetConfig(
                     fit = False,
                     transform = False,
-                    split = True,
+                    split = False,
                     use_stream_api = True
                 )
             },
@@ -284,19 +318,22 @@ class KerasTFModel(ModelsUtils):
     def predict(self, df, threshold = 0.8, cv = False):
         print('predict')
         if df.count() > 0:
-            df = df.window(blocks_per_window = 1)
+            # df = df.window(blocks_per_window = 1)
+            print('col_2_drop')
             if len(df.schema().names) > 1:
                 col_2_drop = [col for col in df.schema().names if col != '__value__']
                 df = df.drop_columns(col_2_drop)
 
             df = self._preprocessor.preprocessors[0].transform(df)
             # Define predictor
+            print('BatchPredictor.from_checkpoint')
             self._predictor = BatchPredictor.from_checkpoint(
                 self._model_ckpt,
                 TensorflowPredictor,
                 model_definition = lambda : build_model(self.classifier, self._nb_classes, len(self.kmers))
             )
             # Make predictions
+            print('self._predictor.predict')
             predictions = self._predictor.predict(
                 data=df,
                 # batch_size=self.batch_size
@@ -343,6 +380,8 @@ class KerasTFModel(ModelsUtils):
 
 # Data streaming in PipelineDataset for larger than memory data, should prevent OOM
 # https://docs.ray.io/en/latest/ray-air/check-ingest.html#enabling-streaming-ingest
+# Use reserved CPUs for training to ensure enough CPU for data handling + trainers
+# https://docs.ray.io/en/latest/ray-air/check-ingest.html#dataset-resources
 def train_func(config):
     # Parameters
     batch_size = config.get('batch_size', 128)
@@ -375,14 +414,6 @@ def train_func(config):
             batch_val = pd.concat([batch_val,batch])
     batch_val = to_tf_dataset(batch_val)
 
-    report = {
-        'accuracy' : 0,
-        'loss' : 1000,
-        'val_accuracy' : 0,
-        'val_loss' : 1000
-    }
-    ckpt = None
-
     for epoch_train in train_data.iter_epochs(epochs):
         for batch_train in epoch_train.iter_batches():
             batch_train = to_tf_dataset(batch_train)
@@ -392,18 +423,15 @@ def train_func(config):
                 callbacks=[Callback()],
                 verbose=0
             )
-            if history.history['val_loss'][0] < report['val_loss']:
-                report['accuracy'] = history.history['accuracy'][0]
-                report['loss'] = history.history['loss'][0]
-                report['val_accuracy'] = history.history['val_accuracy'][0]
-                report['val_loss'] = history.history['val_loss'][0]
-                ckpt = TensorflowCheckpoint.from_model(model)
-                results = [history.history]
-
-    session.report(
-        report,
-        checkpoint = ckpt
-    )
+            results.append(history.history)
+            session.report({
+                'accuracy' : history.history['accuracy'][0],
+                'loss' : history.history['loss'][0],
+                'val_accuracy' : history.history['val_accuracy'][0],
+                'val_loss' : history.history['val_loss'][0],
+                },
+                checkpoint = TensorflowCheckpoint.from_model(model)
+            )
     
 def build_model(classifier, nb_cls, nb_kmers):
     if classifier == 'attention':
