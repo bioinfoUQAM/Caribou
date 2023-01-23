@@ -372,16 +372,15 @@ def train_func(config):
     train_data = session.get_dataset_shard('train')
     val_data = session.get_dataset_shard('validation')
 
-    def val_generator():
-        for epoch in val_data.iter_epochs(1):
-            for batch in epoch.iter_tf_batches():
-                yield (batch['__value__'], batch['labels'])
+    def val_generator(epoch):
+        for batch in epoch.iter_tf_batches():
+            yield (batch['__value__'], batch['labels'])
 
     # Fit the model on streaming data
     results = []
-    batch_val = val_generator()    
 
-    for epoch_train in train_data.iter_epochs(epochs):
+    for epoch_train, epoch_val in zip(train_data.iter_epochs(epochs), val_data.iter_epochs(epochs)):
+        batch_val = val_generator(epoch_val)
         for batch_train in epoch_train.iter_tf_batches():
             history = model.fit(
                 x = batch_train['__value__'],
