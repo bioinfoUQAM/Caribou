@@ -301,9 +301,10 @@ class KerasTFModel(ModelsUtils):
             # Make predictions
             print('self._predictor.predict')
             predictions = self._predictor.predict(
-                data=df,
-                # batch_size=self.batch_size
+                data = df,
+                batch_size = self.batch_size
             )
+
             predictions = self._prob_2_cls(predictions, threshold)
 
             return self._label_decode(predictions)
@@ -312,9 +313,8 @@ class KerasTFModel(ModelsUtils):
 
     """
     On ray discuss:
-    Try using BatchPredictor -> DatasetPipelined method + batch_size
+    Try using BatchPredictor -> predict_pipelined
     If still throws warning -> Give a sample dataset to try in discuss
-
     """
 
     def _prob_2_cls(self, predictions, threshold):
