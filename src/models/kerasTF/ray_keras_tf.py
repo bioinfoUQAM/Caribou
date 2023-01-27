@@ -309,25 +309,7 @@ class KerasTFModel(ModelsUtils):
 
     def _prob_2_cls(self, predictions, threshold):
         print('_prob_2_cls')
-        def map_predicted_label_binary(df):
-            lower_threshold = 0.5 - (threshold * 0.5)
-            upper_threshold = 0.5 + (threshold * 0.5)
-            predict = pd.DataFrame({
-                'proba': df['predictions'],
-                'predicted_label': np.full(len(df), -1)
-            })
-            predict.loc[predict['proba'] >= upper_threshold, 'predicted_label'] = 1
-            predict.loc[predict['proba'] <= lower_threshold, 'predicted_label'] = 0
-            return pd.DataFrame(predict['predicted_label'])
-
-        def map_predicted_label_multiclass(df):
-            predict = pd.DataFrame({
-                'best_proba': [df['predictions'][i][np.argmax(df['predictions'][i])] for i in range(len(df))],
-                'predicted_label': [np.argmax(df['predictions'][i]) for i in range(len(df))]
-            })
-            predict.loc[predict['best_proba'] < threshold, 'predicted_label'] = -1
-            return pd.DataFrame(predict['predicted_label'])
-       
+        
         print('map predicted labels')
         if self._nb_classes == 2:
             # mapper = BatchMapper(
@@ -335,14 +317,14 @@ class KerasTFModel(ModelsUtils):
             #     batch_size = self.batch_size,
             #     batch_format = 'pandas'
             # )
-            fun = map_predicted_label_binary
+            fun = lambda x : map_predicted_label_binary(x, threshold)
         else:
             # mapper = BatchMapper(
             #     map_predicted_label_multiclass,
             #     batch_size = self.batch_size,
             #     batch_format = 'pandas'
             # )
-            fun = map_predicted_label_multiclass
+            fun = lambda x : map_predicted_label_multiclass(x, threshold)
 
         # predict = mapper.transform(predictions)
         predict = predictions.map_batches(
@@ -492,3 +474,23 @@ def build_model(classifier, nb_cls, nb_kmers):
     elif classifier == 'widecnn':
         clf = build_wideCNN(nb_kmers, nb_cls)
     return clf
+
+def map_predicted_label_binary(df, threshold):
+    lower_threshold = 0.5 - (threshold * 0.5)
+    upper_threshold = 0.5 + (threshold * 0.5)
+    predict = pd.DataFrame({
+        'proba': df['predictions'],
+        'predicted_label': np.full(len(df), -1)
+    })
+    predict.loc[predict['proba'] >= upper_threshold, 'predicted_label'] = 1
+    predict.loc[predict['proba'] <= lower_threshold, 'predicted_label'] = 0
+    return pd.DataFrame(predict['predicted_label'])
+
+
+def map_predicted_label_multiclass(df, threshold):
+    predict = pd.DataFrame({
+        'best_proba': [df['predictions'][i][np.argmax(df['predictions'][i])] for i in range(len(df))],
+        'predicted_label': [np.argmax(df['predictions'][i]) for i in range(len(df))]
+    })
+    predict.loc[predict['best_proba'] < threshold, 'predicted_label'] = -1
+    return pd.DataFrame(predict['predicted_label'])
