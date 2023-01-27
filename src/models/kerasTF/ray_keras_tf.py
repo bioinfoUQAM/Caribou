@@ -334,33 +334,27 @@ class KerasTFModel(ModelsUtils):
             return pd.DataFrame(predict['predicted_label'])
        
         if self._nb_classes == 2:
-            # mapper = BatchMapper(
-            #     map_predicted_label_binary,
-            #     batch_size = 1,
-            #     batch_format = 'pandas'
-            # )
-            predict = predictions.map_batches(
+            mapper = BatchMapper(
                 map_predicted_label_binary,
-                batch_size=self.batch_size,
+                batch_size = self.batch_size,
                 batch_format = 'pandas'
             )
         else:
-            # mapper = BatchMapper(
-            #     map_predicted_label_multiclass,
-            #     batch_size = 1,
-            #     batch_format = 'pandas'
-            # )
-            predict = predictions.map_batches(
+            mapper = BatchMapper(
                 map_predicted_label_multiclass,
-                batch_size=self.batch_size,
+                batch_size = self.batch_size,
                 batch_format = 'pandas'
             )
-        # predict = mapper.transform(predictions)
-        arr = []
-        for ds in predict.iter_datasets():
-            arr.append(np.array(ds.to_pandas()))
 
+        predict = mapper.transform(predictions)
+        arr = []
+        print('predict.iter_batches')
+        for batch in predict.iter_batches(batch_size = self.batch_size):
+            arr.extend(np.array(batch))
+
+        print('np.ravel')
         predict = np.ravel(arr)
+        print(predict)
         return predict
 
 # Training/building function outside of the class as mentioned on the Ray discussion
