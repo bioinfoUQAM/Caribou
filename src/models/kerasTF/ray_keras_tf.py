@@ -300,11 +300,6 @@ class KerasTFModel(ModelsUtils):
                 bytes_per_window = 50000000,
                 batch_size = self.batch_size,
             )
-            # print('self._predictor.predict')
-            # predictions = self._predictor.predict(
-            #     data = df,
-            #     batch_size = self.batch_size
-            # )
 
             predictions = self._prob_2_cls(predictions, threshold)
 
@@ -333,20 +328,28 @@ class KerasTFModel(ModelsUtils):
             predict.loc[predict['best_proba'] < threshold, 'predicted_label'] = -1
             return pd.DataFrame(predict['predicted_label'])
        
+        print('map predicted labels')
         if self._nb_classes == 2:
-            mapper = BatchMapper(
-                map_predicted_label_binary,
-                batch_size = self.batch_size,
-                batch_format = 'pandas'
-            )
+            # mapper = BatchMapper(
+            #     map_predicted_label_binary,
+            #     batch_size = self.batch_size,
+            #     batch_format = 'pandas'
+            # )
+            fun = map_predicted_label_binary
         else:
-            mapper = BatchMapper(
-                map_predicted_label_multiclass,
-                batch_size = self.batch_size,
-                batch_format = 'pandas'
-            )
+            # mapper = BatchMapper(
+            #     map_predicted_label_multiclass,
+            #     batch_size = self.batch_size,
+            #     batch_format = 'pandas'
+            # )
+            fun = map_predicted_label_multiclass
 
-        predict = mapper.transform(predictions)
+        # predict = mapper.transform(predictions)
+        predict = predictions.map_batches(
+            fun,
+            batch_size = self.batch_size,
+            batch_format = 'pandas'
+        )
         arr = []
         print('predict.iter_batches')
         for batch in predict.iter_batches(batch_size = self.batch_size):
