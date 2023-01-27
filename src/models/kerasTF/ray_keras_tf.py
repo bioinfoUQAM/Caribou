@@ -105,7 +105,6 @@ class KerasTFModel(ModelsUtils):
         self._training_epochs = training_epochs
         # Initialize empty
         self._nb_classes = None
-        self._tuner = None
         self._nb_CPU_per_worker = 0
         # Computing variables
         if len(tf.config.list_physical_devices('GPU')) > 0:
@@ -116,12 +115,6 @@ class KerasTFModel(ModelsUtils):
             self._use_gpu = False
             self._n_workers = 1
             self._nb_CPU_per_worker = int((os.cpu_count()*0.8) - 1)
-            # if os.cpu_count() >= 10:
-            #     self._n_workers = int(os.cpu_count()/10)
-            #     self._nb_CPU_per_worker = int((os.cpu_count()*0.8) / self._n_workers)
-            # else:
-            #     self._n_workers = 1
-            #     self._nb_CPU_per_worker = int((os.cpu_count()*0.8) - 1)
 
         if self.classifier == 'attention':
             print('Training bacterial / host classifier based on Attention Weighted Neural Network')
@@ -268,7 +261,7 @@ class KerasTFModel(ModelsUtils):
                 'validation': DatasetConfig(
                     fit = False,
                     transform = False,
-                    split = False,
+                    split = True,
                     use_stream_api = False
                 )
             },
@@ -304,7 +297,7 @@ class KerasTFModel(ModelsUtils):
             print('predict_pipelined')
             predictions = self._predictor.predict_pipelined(
                 data = df,
-                blocks_per_window = 10,
+                bytes_per_window = 50000000,
                 batch_size = self.batch_size,
             )
             # print('self._predictor.predict')
@@ -341,11 +334,18 @@ class KerasTFModel(ModelsUtils):
             return pd.DataFrame(predict['predicted_label'])
        
         if self._nb_classes == 2:
-            mapper = BatchMapper(map_predicted_label_binary, batch_format = 'pandas')
+            mapper = BatchMapper(
+                map_predicted_label_binary,
+                batch_size = 1,
+                batch_format = 'pandas'
+            )
         else:
-            mapper = BatchMapper(map_predicted_label_multiclass, batch_format = 'pandas')
+            mapper = BatchMapper(
+                map_predicted_label_multiclass,
+                batch_size = 1,
+                batch_format = 'pandas'
+            )
         predict = mapper.transform(predictions)
-        # predict = np.ravel(np.array(predict.to_pandas()))
         arr = []
         for ds in predict.iter_datasets():
             arr.append(np.array(ds.to_pandas()))
