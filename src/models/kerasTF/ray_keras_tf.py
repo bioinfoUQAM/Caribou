@@ -342,14 +342,6 @@ class KerasTFModel(ModelsUtils):
         #     batch_format = 'pandas'
         # )
 
-        print('pickling test')
-        import sys
-        from ray import cloudpickle as pickle
-        pickled = pickle.dumps(mapper)
-        length_mib = len(pickled) / (1024 * 1024)
-        print(length_mib)
-        sys.exit()
-        """
         arr = []
         print('predict.iter_batches')
         for batch in predict.iter_batches(batch_size = self.batch_size):
@@ -359,7 +351,7 @@ class KerasTFModel(ModelsUtils):
         predict = np.ravel(arr)
         print(predict)
         return predict
-        """
+                
 # Training/building function outside of the class as mentioned on the Ray discussion
 # https://discuss.ray.io/t/statuscode-resource-exhausted/4379/16
 ################################################################################
