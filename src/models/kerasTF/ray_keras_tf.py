@@ -334,18 +334,28 @@ class KerasTFModel(ModelsUtils):
             return pd.DataFrame(predict['predicted_label'])
        
         if self._nb_classes == 2:
-            mapper = BatchMapper(
+            # mapper = BatchMapper(
+            #     map_predicted_label_binary,
+            #     batch_size = 1,
+            #     batch_format = 'pandas'
+            # )
+            predict = predictions.map_batches(
                 map_predicted_label_binary,
-                batch_size = 1,
+                batch_size=self.batch_size,
                 batch_format = 'pandas'
             )
         else:
-            mapper = BatchMapper(
+            # mapper = BatchMapper(
+            #     map_predicted_label_multiclass,
+            #     batch_size = 1,
+            #     batch_format = 'pandas'
+            # )
+            predict = predictions.map_batches(
                 map_predicted_label_multiclass,
-                batch_size = 1,
+                batch_size=self.batch_size,
                 batch_format = 'pandas'
             )
-        predict = mapper.transform(predictions)
+        # predict = mapper.transform(predictions)
         arr = []
         for ds in predict.iter_datasets():
             arr.append(np.array(ds.to_pandas()))
