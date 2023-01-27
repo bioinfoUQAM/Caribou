@@ -319,12 +319,6 @@ class KerasTFModel(ModelsUtils):
         else:
             raise ValueError('No data to predict')
 
-    """
-    On ray discuss:
-    Try using BatchPredictor -> predict_pipelined
-    If still throws warning -> Give a sample dataset to try in discuss
-    """
-
     def _prob_2_cls(self, predictions, threshold):
         print('_prob_2_cls')
         def map_predicted_label_binary(df):
@@ -352,13 +346,11 @@ class KerasTFModel(ModelsUtils):
             mapper = BatchMapper(map_predicted_label_multiclass, batch_format = 'pandas')
         predict = mapper.transform(predictions)
         # predict = np.ravel(np.array(predict.to_pandas()))
-        arr = np.array()
+        arr = []
         for ds in predict.iter_datasets():
-            arr = np.concatenate((arr, np.array(ds.to_pandas())))
+            arr.append(np.array(ds.to_pandas()))
 
         predict = np.ravel(arr)
-        print(predict)
-
         return predict
 
 # Training/building function outside of the class as mentioned on the Ray discussion
