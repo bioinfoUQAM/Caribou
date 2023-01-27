@@ -114,12 +114,14 @@ class KerasTFModel(ModelsUtils):
             self._nb_CPU_per_worker = int((os.cpu_count()*0.8) / self._n_workers)
         else:
             self._use_gpu = False
-            if os.cpu_count() >= 10:
-                self._n_workers = int(os.cpu_count()/10)
-                self._nb_CPU_per_worker = int((os.cpu_count()*0.8) / self._n_workers)
-            else:
-                self._n_workers = 1
-                self._nb_CPU_per_worker = int((os.cpu_count()*0.8) - 1)
+            self._n_workers = 1
+            self._nb_CPU_per_worker = int((os.cpu_count()*0.8) - 1)
+            # if os.cpu_count() >= 10:
+            #     self._n_workers = int(os.cpu_count()/10)
+            #     self._nb_CPU_per_worker = int((os.cpu_count()*0.8) / self._n_workers)
+            # else:
+            #     self._n_workers = 1
+            #     self._nb_CPU_per_worker = int((os.cpu_count()*0.8) - 1)
 
         if self.classifier == 'attention':
             print('Training bacterial / host classifier based on Attention Weighted Neural Network')
@@ -267,7 +269,7 @@ class KerasTFModel(ModelsUtils):
                     fit = False,
                     transform = False,
                     split = False,
-                    use_stream_api = True
+                    use_stream_api = False
                 )
             },
             run_config = RunConfig(
@@ -299,11 +301,17 @@ class KerasTFModel(ModelsUtils):
                 model_definition = lambda : build_model(self.classifier, self._nb_classes, len(self.kmers))
             )
             # Make predictions
-            print('self._predictor.predict')
-            predictions = self._predictor.predict(
+            print('predict_pipelined')
+            predictions = self._predictor.predict_pipelined(
                 data = df,
-                batch_size = self.batch_size
+                blocks_per_window = 10,
+                batch_size = self.batch_size,
             )
+            # print('self._predictor.predict')
+            # predictions = self._predictor.predict(
+            #     data = df,
+            #     batch_size = self.batch_size
+            # )
 
             predictions = self._prob_2_cls(predictions, threshold)
 
@@ -343,7 +351,13 @@ class KerasTFModel(ModelsUtils):
         else:
             mapper = BatchMapper(map_predicted_label_multiclass, batch_format = 'pandas')
         predict = mapper.transform(predictions)
-        predict = np.ravel(np.array(predict.to_pandas()))
+        # predict = np.ravel(np.array(predict.to_pandas()))
+        arr = np.array()
+        for ds in predict.iter_datasets():
+            arr = np.concatenate((arr, np.array(ds.to_pandas())))
+
+        predict = np.ravel(arr)
+        print(predict)
 
         return predict
 
@@ -372,16 +386,82 @@ def train_func(config):
     train_data = session.get_dataset_shard('train')
     val_data = session.get_dataset_shard('validation')
 
+    def to_tf_dataset(data, batch_size):
+        def to_tensor_iterator():
+            for batch in data.iter_tf_batches(
+                batch_size=batch_size
+            ):
+                yield batch['__value__'], batch['labels']
+
+        output_signature = (
+            tf.TensorSpec(shape=(None, size), dtype=tf.float32),
+            tf.TensorSpec(shape=(None, nb_cls), dtype=tf.int64),
+        )
+        tf_data = tf.data.Dataset.from_generator(
+            to_tensor_iterator, output_signature=output_signature
+        )
+        return prepare_dataset_shard(tf_data)
+
+    batch_val = to_tf_dataset(val_data, batch_size)
+
+    # Fit the model on streaming data
+    results = []
+
+    for epoch_train in train_data.iter_epochs(epochs):
+        for batch_train in epoch_train.iter_tf_batches():
+            history = model.fit(
+                x=batch_train['__value__'],
+                y=batch_train['labels'],
+                validation_data=batch_val,
+                callbacks=[Callback()],
+                verbose=0
+            )
+            results.append(history.history)
+            session.report({
+                'accuracy': history.history['accuracy'][0],
+                'loss': history.history['loss'][0],
+                'val_accuracy': history.history['val_accuracy'][0],
+                'val_loss': history.history['val_loss'][0],
+            },
+                checkpoint=TensorflowCheckpoint.from_model(model)
+            )
+"""
+def train_func(config):
+    # Parameters
+    batch_size = config.get('batch_size', 128)
+    epochs = config.get('epochs', 10)
+    size = config.get('size')
+    nb_cls = config.get('nb_cls')
+    model = config.get('model')
+
+    # Model setup 
+    strategy = tf.distribute.MultiWorkerMirroredStrategy()
+    with strategy.scope():
+        model = build_model(model, nb_cls, size)
+
+    # Load data directly to workers instead of serializing it?
+    train_data = session.get_dataset_shard('train')
+    val_data = session.get_dataset_shard('validation')
+
     def val_generator(epoch):
         for batch in epoch.iter_tf_batches():
             yield (batch['__value__'], batch['labels'])
+
+    def to_tf_dataset(data):
+        ds = tf.data.Dataset.from_tensors((
+            tf.convert_to_tensor(list(data['__value__'])),
+            tf.convert_to_tensor(list(data['labels']))
+        ))
+        return ds
 
     # Fit the model on streaming data
     results = []
 
     for epoch_train, epoch_val in zip(train_data.iter_epochs(epochs), val_data.iter_epochs(epochs)):
-        batch_val = val_generator(epoch_val)
-        for batch_train in epoch_train.iter_tf_batches():
+        # batch_val = val_generator(epoch_val)
+        # batch_val = to_tf_dataset(epoch_val)
+        for batch_train, batch_val in zip(epoch_train.iter_tf_batches(), epoch_val.iter_tf_batches()):
+            batch_val = to_tf_dataset(batch_val)
             history = model.fit(
                 x = batch_train['__value__'],
                 y = batch_train['labels'],
@@ -398,7 +478,7 @@ def train_func(config):
                 },
                 checkpoint = TensorflowCheckpoint.from_model(model)
             )
-    
+"""    
 def build_model(classifier, nb_cls, nb_kmers):
     if classifier == 'attention':
         clf = build_attention(nb_kmers)
