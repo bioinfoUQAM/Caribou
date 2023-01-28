@@ -309,33 +309,27 @@ class KerasTFModel(ModelsUtils):
 
     def _prob_2_cls(self, predictions, threshold):
         print('_prob_2_cls')
-        def map_predicted_label_binary(df):
-            lower_threshold = 0.5 - (threshold * 0.5)
-            upper_threshold = 0.5 + (threshold * 0.5)
-            df['proba'] = df['predictions']
-            df['predicted_label'] = np.full(len(df), -1)
-            df.loc[df['proba'] >= upper_threshold, 'predicted_label'] = 1
-            df.loc[df['proba'] <= lower_threshold, 'predicted_label'] = 0
-            return df
-
-        def map_predicted_label_multiclass(df):
-            df['best_proba'] = [df['predictions'][i][np.argmax(df['predictions'][i])] for i in range(len(df))]
-            df['predicted_label'] = [np.argmax(df['predictions'][i]) for i in range(len(df))]
-            df.loc[df['best_proba'] < threshold, 'predicted_label'] = -1
-            return df
             
         print('map predicted labels')
         if self._nb_classes == 2:
-            fn = map_predicted_label_binary
+            fn = lambda x : map_predicted_label_binary(x, threshold)
         else:
-            fn = map_predicted_label_multiclass
+            fn = lambda x : map_predicted_label_multiclass(x, threshold)
 
         mapper = BatchMapper(
             fn,
             batch_size = self.batch_size,
             batch_format = 'pandas'
         )
-        # predict = mapper.transform(predictions)
+        print('pickling test')
+        import sys
+        from ray import cloudpickle as pickle
+
+        pickled = pickle.dumps(mapper.transform(predictions))
+        length_mib = len(pickled) / (1024 * 1024)
+        print(f'Size of BatchMapper pickled : {length_mib} Mb')
+        sys.exit()
+        predict = mapper.transform(predictions)
         # predict = predictions.map_batches(
         #     fn,
         #     batch_size = self.batch_size,
@@ -484,3 +478,18 @@ def build_model(classifier, nb_cls, nb_kmers):
     elif classifier == 'widecnn':
         clf = build_wideCNN(nb_kmers, nb_cls)
     return clf
+
+def map_predicted_label_binary(df, threshold):
+    lower_threshold = 0.5 - (threshold * 0.5)
+    upper_threshold = 0.5 + (threshold * 0.5)
+    df['proba'] = df['predictions']
+    df['predicted_label'] = np.full(len(df), -1)
+    df.loc[df['proba'] >= upper_threshold, 'predicted_label'] = 1
+    df.loc[df['proba'] <= lower_threshold, 'predicted_label'] = 0
+    return df
+
+def map_predicted_label_multiclass(df, threshold):
+    df['best_proba'] = [df['predictions'][i][np.argmax(df['predictions'][i])] for i in range(len(df))]
+    df['predicted_label'] = [np.argmax(df['predictions'][i]) for i in range(len(df))]
+    df.loc[df['best_proba'] < threshold, 'predicted_label'] = -1
+    return df
