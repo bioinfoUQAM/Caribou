@@ -12,7 +12,7 @@ from shutil import rmtree
 # Preprocessing
 from models.ray_tensor_min_max import TensorMinMaxScaler
 from models.kerasTF.ray_one_hot_tensor import OneHotTensorEncoder
-from ray.data.preprocessors import BatchMapper, Concatenator, LabelEncoder, Chain, OneHotEncoder
+from ray.data.preprocessors import LabelEncoder, Chain
 
 # Parent class / models
 from models.ray_utils import ModelsUtils
@@ -20,9 +20,9 @@ from models.kerasTF.build_neural_networks import *
 
 # Training
 import tensorflow as tf
-from ray.air import session, Checkpoint
+from ray.air import session
 from ray.air.integrations.keras import Callback
-from ray.air.config import ScalingConfig, CheckpointConfig, DatasetConfig
+from ray.air.config import ScalingConfig, DatasetConfig
 from ray.train.tensorflow import TensorflowTrainer, TensorflowCheckpoint, prepare_dataset_shard
 
 # Tuning
@@ -31,6 +31,7 @@ from ray.air.config import RunConfig
 # Predicting
 from ray.train.tensorflow import TensorflowPredictor
 from ray.train.batch_predictor import BatchPredictor
+from joblib import Parallel, delayed, parallel_backend
 
 # Simulation class
 from models.reads_simulation import readsSimulation
@@ -307,14 +308,50 @@ class KerasTFModel(ModelsUtils):
         else:
             raise ValueError('No data to predict')
 
+    # Iterate over batches of predictions to transform probabilities to labels without mapping
+    def _prob_2_cls(self, predictions, threshold):
+        print('_prob_2_cls')
+
+        def map_predicted_label_binary(df, threshold):
+            lower_threshold = 0.5 - (threshold * 0.5)
+            upper_threshold = 0.5 + (threshold * 0.5)
+            predict = pd.DataFrame({
+                'proba': df['predictions'],
+                'predicted_label': np.full(len(df), -1)
+            })
+            predict.loc[predict['proba'] >= upper_threshold, 'predicted_label'] = 1
+            predict.loc[predict['proba'] <= lower_threshold, 'predicted_label'] = 0
+            return predict['predicted_label'].to_numpy(dtype = np.int32)
+
+        def map_predicted_label_multiclass(df, threshold):
+            predict = pd.DataFrame({
+                'best_proba': [df['predictions'][i][np.argmax(df['predictions'][i])] for i in range(len(df))],
+                'predicted_label': [np.argmax(df['predictions'][i]) for i in range(len(df))]
+            })
+            predict.loc[predict['best_proba'] < threshold, 'predicted_label'] = -1
+            return predict['predicted_label'].to_numpy(dtype = np.int32)
+
+        if self._nb_classes == 2:
+            fn = map_predicted_label_binary
+        else:
+            fn = map_predicted_label_multiclass
+
+        with parallel_backend('threading'):
+            predict = Parallel(n_jobs=-1, prefer='threads', verbose=1)(
+                delayed(fn)(batch, threshold) for batch in predictions.iter_batches(batch_size = self.batch_size))
+
+        return np.concatenate(predict)
+        
+
+    """
     def _prob_2_cls(self, predictions, threshold):
         print('_prob_2_cls')
             
         print('map predicted labels')
         if self._nb_classes == 2:
-            fn = lambda x : map_predicted_label_binary(x, threshold)
+            def fn(x): return map_predicted_label_binary(x, threshold)
         else:
-            fn = lambda x : map_predicted_label_multiclass(x, threshold)
+            def fn(x): return map_predicted_label_multiclass(x, threshold)
 
         mapper = BatchMapper(
             fn,
@@ -324,6 +361,9 @@ class KerasTFModel(ModelsUtils):
         print('pickling test')
         import sys
         from ray import cloudpickle as pickle
+
+        print('Predicted labels')
+        print(predictions.take_all)
 
         pickled = pickle.dumps(mapper.transform(predictions))
         length_mib = len(pickled) / (1024 * 1024)
@@ -342,10 +382,8 @@ class KerasTFModel(ModelsUtils):
             arr.extend(np.array(batch))
 
         print('np.ravel')
-        predict = np.ravel(arr)
-        print(predict)
-        return predict
-                
+        return np.ravel(arr)
+    """            
 # Training/building function outside of the class as mentioned on the Ray discussion
 # https://discuss.ray.io/t/statuscode-resource-exhausted/4379/16
 ################################################################################
@@ -479,6 +517,7 @@ def build_model(classifier, nb_cls, nb_kmers):
         clf = build_wideCNN(nb_kmers, nb_cls)
     return clf
 
+"""
 def map_predicted_label_binary(df, threshold):
     lower_threshold = 0.5 - (threshold * 0.5)
     upper_threshold = 0.5 + (threshold * 0.5)
@@ -493,3 +532,4 @@ def map_predicted_label_multiclass(df, threshold):
     df['predicted_label'] = [np.argmax(df['predictions'][i]) for i in range(len(df))]
     df.loc[df['best_proba'] < threshold, 'predicted_label'] = -1
     return df
+"""
