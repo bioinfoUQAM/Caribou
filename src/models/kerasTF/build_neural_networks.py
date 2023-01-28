@@ -27,7 +27,7 @@ def build_attention(nb_kmers):
     x = Dense(1, activation = "tanh")(x)
 
     model = Model(inputs = inputs, outputs = x)
-    # model.compile(loss = 'binary_crossentropy', optimizer = 'adam', metrics = ['accuracy'])
+    model.compile(loss = 'binary_crossentropy', optimizer = 'adam', metrics = ['accuracy'])
 
     return model
 
@@ -47,7 +47,7 @@ def build_LSTM(nb_kmers):
     x = Dense(1, activation = 'tanh')(x)
     
     model = Model(inputs = inputs, outputs = x)
-    # model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
 
     return model
 
@@ -78,7 +78,7 @@ def build_deepLSTM(nb_kmers):
 
     outputs = Dense(1, activation='tanh', name='score')(net)
     model = Model(inputs=inputs, outputs=outputs)
-    # model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
 
     return model
 
@@ -104,7 +104,7 @@ def build_LSTM_attention(nb_kmers, nb_classes):
     net = Dense(nb_classes)(net)
     outputs = Activation('softmax')(net)
     model = Model(inputs = inputs, outputs = outputs)
-    # model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
 
     return model
 
@@ -130,7 +130,7 @@ def build_CNN(nb_kmers, nb_classes):
     model.add(Dropout(0.5))
     model.add(Dense(nb_classes))
     model.add(Activation('softmax'))
-    # model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
 
     return model
 
@@ -168,6 +168,6 @@ def build_wideCNN(nb_kmers, nb_classes):
     net = Dense(nb_classes)(net)
     outputs = Activation('softmax')(net)
     model = Model(inputs = inputs, outputs = outputs)
-    # model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
 
     return model

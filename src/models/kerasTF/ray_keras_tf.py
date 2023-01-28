@@ -5,10 +5,8 @@ import numpy as np
 import pandas as pd
 
 from glob import glob
-from copy import deepcopy
 from utils import zip_X_y
 from shutil import rmtree
-from psutil import virtual_memory
 
 # Preprocessing
 from models.ray_tensor_min_max import TensorMinMaxScaler
@@ -21,7 +19,7 @@ from models.kerasTF.build_neural_networks import *
 
 # Training
 import tensorflow as tf
-from ray.air import session
+from ray.air import session, Checkpoint
 from ray.air.integrations.keras import Callback
 from ray.air.config import ScalingConfig, DatasetConfig
 from ray.train.tensorflow import TensorflowTrainer, TensorflowCheckpoint, prepare_dataset_shard
@@ -224,12 +222,14 @@ class KerasTFModel(ModelsUtils):
 
         self._cv_score(y_true, y_pred)
 
+    """
     # Model training with generators
     # Based on https://docs.ray.io/en/latest/ray-air/examples/torch_incremental_learning.html
     def _fit_model(self, datasets):
         print('_fit_model')
-               
-        train_stream = self._preprocessor.transform(datasets['train'].window(bytes_per_window = 1000000000))
+        
+        train_stream = datasets['train'].window(blocks_per_window = 10)
+        train_stream = self._preprocessor.transform(train_stream)
         val_dataset = self._preprocessor.transform(datasets['validation']).fully_executed()
 
         # Training parameters
@@ -297,8 +297,8 @@ class KerasTFModel(ModelsUtils):
         
         best_accuracy_pos = accuracy_for_all_tasks.index(np.argmax(accuracy_for_all_tasks))
         self._model_ckpt = all_checkpoints[best_accuracy_pos]
-
     """
+
     # Model training with DatasetPipeline
     def _fit_model(self, datasets):
         print('_fit_model')
@@ -309,11 +309,11 @@ class KerasTFModel(ModelsUtils):
 
         # Training parameters
         self._train_params = {
-            'batch_size': deepcopy(self.batch_size),
-            'epochs': deepcopy(self._training_epochs),
-            'size': deepcopy(self._nb_kmers),
-            'nb_cls':deepcopy(self._nb_classes),
-            'model': deepcopy(self.classifier)
+            'batch_size': self.batch_size,
+            'epochs': self._training_epochs,
+            'size': self._nb_kmers,
+            'nb_cls': self._nb_classes,
+            'model': self.classifier
         }
 
         print(f'num_workers : {self._n_workers}')
@@ -352,7 +352,7 @@ class KerasTFModel(ModelsUtils):
         # Train / tune execution
         training_result = self._trainer.fit()
         self._model_ckpt = training_result.best_checkpoints[0][0]
-    """
+    
 
     def predict(self, df, threshold=0.8, cv=False):
         print('predict')
@@ -461,7 +461,7 @@ class KerasTFModel(ModelsUtils):
 # https://docs.ray.io/en/latest/ray-air/check-ingest.html#enabling-streaming-ingest
 # Smaller nb of workers + bigger nb CPU_per_worker + smaller batch_size to avoid memory overload
 # https://discuss.ray.io/t/ray-sgd-distributed-tensorflow/261/8
-
+"""
 # train_func with Training data only
 def train_func(config):
     batch_size = config.get('batch_size', 128)
@@ -512,12 +512,10 @@ def train_func(config):
         'accuracy': history.history['accuracy'][0],
         'loss': history.history['loss'][0]
     },
-        checkpoint=TensorflowCheckpoint.from_model(model)
+        checkpoint=Checkpoint.from_dict(dict(model_weights=model.get_weights()))
     )
-
-
-
 """
+
 # train_func with DatasetPipeline for Training data only
 def train_func(config):
     # Parameters
@@ -531,8 +529,6 @@ def train_func(config):
     strategy = tf.distribute.MultiWorkerMirroredStrategy()
     with strategy.scope():
         model = build_model(model, nb_cls, size)
-
-    print(f"Loaded & distributed TF model to device. Current memory usage - {virtual_memory()}")
 
     # Load data directly to workers instead of serializing it?
     train_data = session.get_dataset_shard('train')
@@ -576,7 +572,7 @@ def train_func(config):
         },
             checkpoint=TensorflowCheckpoint.from_model(model)
         )
-""" 
+
 def build_model(classifier, nb_cls, nb_kmers):
     if classifier == 'attention':
         clf = build_attention(nb_kmers)
@@ -634,19 +630,3 @@ def batch_prediction(checkpoint, batch, clf, batch_size, nb_classes, nb_kmers):
         batch_size = batch_size
     )
     return predictions
-"""
-def map_predicted_label_binary(df, threshold):
-    lower_threshold = 0.5 - (threshold * 0.5)
-    upper_threshold = 0.5 + (threshold * 0.5)
-    df['proba'] = df['predictions']
-    df['predicted_label'] = np.full(len(df), -1)
-    df.loc[df['proba'] >= upper_threshold, 'predicted_label'] = 1
-    df.loc[df['proba'] <= lower_threshold, 'predicted_label'] = 0
-    return df
-
-def map_predicted_label_multiclass(df, threshold):
-    df['best_proba'] = [df['predictions'][i][np.argmax(df['predictions'][i])] for i in range(len(df))]
-    df['predicted_label'] = [np.argmax(df['predictions'][i]) for i in range(len(df))]
-    df.loc[df['best_proba'] < threshold, 'predicted_label'] = -1
-    return df
-"""
