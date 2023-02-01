@@ -460,3 +460,11 @@ def batch_prediction(checkpoint, batch, clf, batch_size, nb_classes, nb_kmers):
         batch_size = batch_size
     )
     return predictions
+
+# Jupyter simplified version
+# Memory profiling locally
+    # TensorboardX
+    # cProfile
+    # Ray + TensorboardX
+    # SnakeViz
+# Ray dump logs for profilling in container 
