@@ -222,83 +222,6 @@ class KerasTFModel(ModelsUtils):
 
         self._cv_score(y_true, y_pred)
 
-    """
-    # Model training with generators
-    # Based on https://docs.ray.io/en/latest/ray-air/examples/torch_incremental_learning.html
-    def _fit_model(self, datasets):
-        print('_fit_model')
-        
-        train_stream = datasets['train'].window(blocks_per_window = 10)
-        train_stream = self._preprocessor.transform(train_stream)
-        val_dataset = self._preprocessor.transform(datasets['validation']).fully_executed()
-
-        # Training parameters
-        self._train_params = {
-            'batch_size': self.batch_size,
-            'epochs': self._training_epochs,
-            'size': self._nb_kmers,
-            'nb_cls':self._nb_classes,
-            'classifier': self.classifier
-        }
-
-        print(f'num_workers : {self._n_workers}')
-        print(f'nb_CPU_per_worker : {self._nb_CPU_per_worker}')
-        
-        latest_checkpoint = None
-
-        accuracy_for_all_tasks = []
-        task_idx = 0
-        all_checkpoints = []
-
-        for train_dataset in train_stream.iter_datasets():
-            print(train_dataset)
-
-            # Define trainer / tuner
-            self._trainer = TensorflowTrainer(
-                train_loop_per_worker=train_func,
-                train_loop_config=self._train_params,
-                scaling_config=ScalingConfig(
-                    trainer_resources={'CPU': 1},
-                    num_workers=self._n_workers,
-                    use_gpu=self._use_gpu,
-                    resources_per_worker={'CPU': self._nb_CPU_per_worker}
-                ),
-                dataset_config={
-                    'train': DatasetConfig(
-                        fit=False,
-                        transform=False,
-                        split=False,
-                        use_stream_api=False
-                    )
-                },
-                run_config=RunConfig(
-                    name=self.classifier,
-                    local_dir=self._workdir,
-                ),
-                datasets={'train': train_dataset},
-                resume_from_checkpoint=latest_checkpoint
-            )
-            # Train / tune execution
-            training_result = self._trainer.fit()
-            latest_checkpoint = training_result.best_checkpoints[0][0]
-
-            correct_dataset = batch_predict_val(
-                latest_checkpoint,
-                val_dataset,
-                self.classifier,
-                self.batch_size,
-                self._nb_classes,
-                len(self.kmers)
-            )
-            
-            accuracy_this_task = correct_dataset.sum(on="correct") / correct_dataset.count()
-            accuracy_for_all_tasks.append(accuracy_this_task)
-            all_checkpoints.append(latest_checkpoint)
-        
-        best_accuracy_pos = accuracy_for_all_tasks.index(np.argmax(accuracy_for_all_tasks))
-        self._model_ckpt = all_checkpoints[best_accuracy_pos]
-    """
-
     # Model training with DatasetPipeline
     def _fit_model(self, datasets):
         print('_fit_model')
@@ -381,45 +304,6 @@ class KerasTFModel(ModelsUtils):
         else:
             raise ValueError('No data to predict')
 
-    """
-    def predict(self, df, threshold = 0.8, cv = False):
-        print('predict')
-        if df.count() > 0:
-            # df = df.window(blocks_per_window = 1)
-            print('col_2_drop')
-            if len(df.schema().names) > 1:
-                col_2_drop = [col for col in df.schema().names if col != '__value__']
-                df = df.drop_columns(col_2_drop)
-
-            df = self._preprocessor.preprocessors[0].transform(df)
-            # Define predictor
-            print('BatchPredictor.from_checkpoint')
-            self._predictor = BatchPredictor.from_checkpoint(
-                self._model_ckpt,
-                TensorflowPredictor,
-                model_definition = lambda : build_model(self.classifier, self._nb_classes, len(self.kmers))
-            )
-            # Make predictions
-            print('predict')
-            predictions = self._predictor.predict(
-                data = df,
-                batch_size = self.batch_size,
-            )
-
-            # Make predictions
-            # print('predict_pipelined')
-            # predictions = self._predictor.predict_pipelined(
-            #     data = df,
-            #     bytes_per_window = 50000000,
-            #     batch_size = self.batch_size,
-            # )
-
-            predictions = self._prob_2_cls(predictions, threshold)
-
-            return self._label_decode(predictions)
-        else:
-            raise ValueError('No data to predict')
-    """
     # Iterate over batches of predictions to transform probabilities to labels without mapping
     def _prob_2_cls(self, predictions, threshold):
         print('_prob_2_cls')
@@ -461,60 +345,6 @@ class KerasTFModel(ModelsUtils):
 # https://docs.ray.io/en/latest/ray-air/check-ingest.html#enabling-streaming-ingest
 # Smaller nb of workers + bigger nb CPU_per_worker + smaller batch_size to avoid memory overload
 # https://discuss.ray.io/t/ray-sgd-distributed-tensorflow/261/8
-"""
-# train_func with Training data only
-def train_func(config):
-    batch_size = config.get('batch_size', 128)
-    epochs = config.get('epochs', 10)
-    size = config.get('size')
-    nb_cls = config.get('nb_cls')
-    classifier = config.get('classifier')
-
-    def to_tf_dataset(data, batch_size):
-        def to_tensor_iterator():
-            for batch in data.iter_tf_batches(
-                batch_size=batch_size
-            ):
-                yield batch['__value__'], batch['labels']
-
-        output_signature = (
-            tf.TensorSpec(shape=(None, size), dtype=tf.float32),
-            tf.TensorSpec(shape=(None, nb_cls), dtype=tf.int64),
-        )
-        tf_data = tf.data.Dataset.from_generator(
-            to_tensor_iterator, output_signature=output_signature
-        )
-        return prepare_dataset_shard(tf_data)
-
-    # Model setup
-    strategy = tf.distribute.MultiWorkerMirroredStrategy()
-    with strategy.scope():
-        model = build_model(classifier, nb_cls, size)
-        checkpoint = session.get_checkpoint()
-        if checkpoint:
-            checkpoint_dict = checkpoint.to_dict()
-            model.set_weights(checkpoint_dict.get("model_weights"))
-        if classifier in ['attention','lstm','deeplstm']:
-            model.compile(loss = 'binary_crossentropy', optimizer = 'adam', metrics = ['accuracy'])
-        else:
-            model.compile(loss = 'categorical_crossentropy', optimizer = 'adam', metrics = ['accuracy'])
-    
-    train_data = session.get_dataset_shard('train')
-    train_data = to_tf_dataset(train_data, batch_size)
-
-    history = model.fit(
-            train_data,
-            epochs = epochs,
-            callbacks=[Callback()],
-            verbose=0
-    )
-    session.report({
-        'accuracy': history.history['accuracy'][0],
-        'loss': history.history['loss'][0]
-    },
-        checkpoint=Checkpoint.from_dict(dict(model_weights=model.get_weights()))
-    )
-"""
 
 # train_func with DatasetPipeline for Training data only
 def train_func(config):
