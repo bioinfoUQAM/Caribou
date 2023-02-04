@@ -1,4 +1,5 @@
 import os
+import gc
 import ray
 import warnings
 import numpy as np
@@ -272,7 +273,6 @@ class KerasTFModel(ModelsUtils):
             ),
             datasets = datasets,
         )
-        # Train / tune execution
         training_result = self._trainer.fit()
         self._model_ckpt = training_result.best_checkpoints[0][0]
     
@@ -388,10 +388,10 @@ def train_func(config):
     for epoch_train in train_data.iter_epochs(epochs):
         batch_train = to_tf_dataset(epoch_train, batch_size)
         history = model.fit(
-                x=batch_train,
-                validation_data=batch_val,
-                callbacks=[Callback()],
-                verbose=0
+            x=batch_train,
+            validation_data=batch_val,
+            callbacks=[Callback()],
+            verbose=0
         )
         results.append(history.history)
         session.report({
@@ -402,6 +402,8 @@ def train_func(config):
         },
             checkpoint=TensorflowCheckpoint.from_model(model)
         )
+        gc.collect()
+    tf.keras.backend.clear_session()
 
 def build_model(classifier, nb_cls, nb_kmers):
     if classifier == 'attention':
