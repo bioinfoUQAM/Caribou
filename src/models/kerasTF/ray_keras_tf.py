@@ -20,7 +20,7 @@ from models.kerasTF.build_neural_networks import *
 
 # Training
 import tensorflow as tf
-from ray.air import session, Checkpoint
+from ray.air import session
 from ray.air.integrations.keras import Callback
 from ray.air.config import ScalingConfig, DatasetConfig
 from ray.train.tensorflow import TensorflowTrainer, TensorflowCheckpoint, prepare_dataset_shard
@@ -104,18 +104,23 @@ class KerasTFModel(ModelsUtils):
         # Parameters
         # Initialize hidden
         self._training_epochs = training_epochs
+        self._nb_CPU_data = int(os.cpu_count() * 0.2)
+        self._nb_CPU_training = int(os.cpu_count() - self._nb_CPU_data)
+        self._nb_GPU = len(tf.config.list_physical_devices('GPU'))
         # Initialize empty
         self._nb_classes = None
         self._nb_CPU_per_worker = 0
+        self._nb_GPU_per_worker = 0
         # Computing variables
-        if len(tf.config.list_physical_devices('GPU')) > 0:
+        if self._nb_GPU > 0:
             self._use_gpu = True
-            self._n_workers = len(tf.config.list_physical_devices('GPU'))
-            self._nb_CPU_per_worker = int((os.cpu_count()*0.8) / self._n_workers)
+            self._n_workers = self._nb_GPU
+            self._nb_CPU_per_worker = int(self._nb_CPU_training / self._n_workers)
+            self._nb_GPU_per_worker = 1
         else:
             self._use_gpu = False
-            self._n_workers = 1
-            self._nb_CPU_per_worker = int((os.cpu_count()*0.8) - 1)
+            self._n_workers = int(self._nb_CPU_training * 0.2)
+            self._nb_CPU_per_worker = int(int(self._nb_CPU_training * 0.8) / self._n_workers)
 
         if self.classifier == 'attention':
             print('Training bacterial / host classifier based on Attention Weighted Neural Network')
@@ -241,17 +246,24 @@ class KerasTFModel(ModelsUtils):
         }
 
         print(f'num_workers : {self._n_workers}')
+        print(f'nb_CPU_data : {self._nb_CPU_data}')
+        print(f'nb_CPU_training : {self._nb_CPU_training}')
+        print(f'nb_GPU : {self._nb_GPU}')
         print(f'nb_CPU_per_worker : {self._nb_CPU_per_worker}')
+        print(f'nb_GPU_per_worker : {self._nb_GPU_per_worker}')
 
         # Define trainer / tuner
         self._trainer = TensorflowTrainer(
             train_loop_per_worker = train_func,
             train_loop_config = self._train_params,
             scaling_config = ScalingConfig(
-                trainer_resources={'CPU': 1},
+                trainer_resources={'CPU': self._nb_CPU_data},
                 num_workers = self._n_workers,
                 use_gpu = self._use_gpu,
-                resources_per_worker={'CPU': self._nb_CPU_per_worker}
+                resources_per_worker={
+                    'CPU': self._nb_CPU_per_worker,
+                    'GPU': self._nb_GPU_per_worker
+                }
             ),
             dataset_config = {
                 'train': DatasetConfig(
@@ -383,17 +395,14 @@ def train_func(config):
     batch_val = to_tf_dataset(val_data, batch_size)
 
     # Fit the model on streaming data
-    results = []
-
     for epoch_train in train_data.iter_epochs(epochs):
         batch_train = to_tf_dataset(epoch_train, batch_size)
         history = model.fit(
-            x=batch_train,
-            validation_data=batch_val,
-            callbacks=[Callback()],
-            verbose=0
+            x = batch_train,
+            validation_data = batch_val,
+            callbacks = [Callback()],
+            verbose = 0
         )
-        results.append(history.history)
         session.report({
             'accuracy': history.history['accuracy'][0],
             'loss': history.history['loss'][0],
@@ -403,6 +412,9 @@ def train_func(config):
             checkpoint=TensorflowCheckpoint.from_model(model)
         )
         gc.collect()
+        tf.keras.backend.clear_session()
+    del model
+    gc.collect()
     tf.keras.backend.clear_session()
 
 def build_model(classifier, nb_cls, nb_kmers):

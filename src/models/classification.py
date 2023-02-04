@@ -15,9 +15,6 @@ from models.kerasTF.ray_keras_tf import KerasTFModel
 # Simulation class
 from models.reads_simulation import readsSimulation
 
-# Profiling
-from memory_profiler import profile
-
 __author__ = 'Nicolas de Montigny'
 
 __all__ = ['ClassificationMethods']
