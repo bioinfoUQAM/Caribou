@@ -46,8 +46,7 @@ class OneHotTensorEncoder(Preprocessor):
 
     def __repr__(self):
         return (
-            f"{self.__class__.__name__}(columns={self.column!r}, "
-            f"max_categories={self.max_categories!r})"
+            f"{self.__class__.__name__}(columns={self.column!r}"
         )
 
 

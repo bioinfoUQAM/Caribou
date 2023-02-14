@@ -459,11 +459,12 @@ class ClassificationMethods():
 
         y_train[y_train['domain'] == 'archaea'] = 'bacteria'
 
-        df = zip_X_y(X_train, y_train)
+        df_train = zip_X_y(X_train, y_train)
         
-        self._preprocess_dataset = df
+        self._preprocess_dataset = df_train
         if self._cv:
-            df_train, df_test = df.train_test_split(0.2, shuffle=True)
+            # df_train, df_test = df_train.train_test_split(0.2, shuffle=True)
+            df_test = df_train.random_sample(0.3)
             df_test = self._sim_4_cv(df_test, self._merged_database_host, f'{self._database}_test')
             self._merged_training_datasets = {'train': df_train, 'test': df_test}
         else:
@@ -483,11 +484,12 @@ class ClassificationMethods():
         if 'domain' in y_train.columns:
             y_train[y_train['domain'] == 'archaea'] = 'bacteria'
         
-        df = zip_X_y(X_train, y_train)
+        df_train = zip_X_y(X_train, y_train)
 
-        self._preprocess_dataset = df
+        self._preprocess_dataset = df_train
         if self._cv:
-            df_train, df_test = df.train_test_split(0.2, shuffle=True)
+            # df_train, df_test = df_train.train_test_split(0.2, shuffle=True)
+            df_test = df_train.random_sample(0.3)
             df_test = self._sim_4_cv(df_test, self._database_data, f'{self._database}_test')
             self._training_datasets = {'train': df_train, 'test': df_test}
         else:

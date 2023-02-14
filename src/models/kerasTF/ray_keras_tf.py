@@ -166,13 +166,14 @@ class KerasTFModel(ModelsUtils):
     def train(self, datasets, kmers_ds, cv = True):
         print('train')
 
-        df = datasets['train']
+        df_train = datasets['train']
         
         if cv:
             df_test = datasets['test']
-            self._cross_validation(df, df_test, kmers_ds)
+            self._cross_validation(df_train, df_test, kmers_ds)
         else:
-            df_train, df_val = df.train_test_split(0.2, shuffle = True)
+            # df_train, df_val = df_train.train_test_split(0.2, shuffle = True)
+            df_val = df_train.random_sample(0.3)
             df_val = self._sim_4_val(df_val, kmers_ds, 'validation')
             df_train = df_train.drop_columns(['id'])
             df_val = df_val.drop_columns(['id'])
@@ -203,9 +204,10 @@ class KerasTFModel(ModelsUtils):
     def _cross_validation(self, df_train, df_test, kmers_ds):
         print('_cross_validation')
 
-        df_train, df_val = df_train.train_test_split(0.2, shuffle = True)
+        # df_train, df_val = df_train.train_test_split(0.2, shuffle = True)
+        df_val = df_train.random_sample(0.3)
         
-        df_val = self._sim_4_val(df_val, kmers_ds, '{}_val'.format(self.dataset))
+        df_val = self._sim_4_val(df_val, kmers_ds, f'{self.dataset}_val')
         
         df_train = df_train.drop_columns(['id'])
         df_test = df_test.drop_columns(['id'])
@@ -419,18 +421,18 @@ def train_func(config):
 
 def build_model(classifier, nb_cls, nb_kmers):
     if classifier == 'attention':
-        clf = build_attention(nb_kmers)
+        model = build_attention(nb_kmers)
     elif classifier == 'lstm':
-        clf = build_LSTM(nb_kmers)
+        model = build_LSTM(nb_kmers)
     elif classifier == 'deeplstm':
-        clf = build_deepLSTM(nb_kmers)
+        model = build_deepLSTM(nb_kmers)
     elif classifier == 'lstm_attention':
-        clf = build_LSTM_attention(nb_kmers, nb_cls)
+        model = build_LSTM_attention(nb_kmers, nb_cls)
     elif classifier == 'cnn':
-        clf = build_CNN(nb_kmers, nb_cls)
+        model = build_CNN(nb_kmers, nb_cls)
     elif classifier == 'widecnn':
-        clf = build_wideCNN(nb_kmers, nb_cls)
-    return clf
+        model = build_wideCNN(nb_kmers, nb_cls)
+    return model
 
 def batch_predict_val(checkpoint, batch, clf, batch_size, nb_classes, nb_kmers):
     def convert_logits_to_classes(df):

@@ -1,9 +1,9 @@
 import os
 import ray
 from time import time
-from warnings import warn
 from traceback import format_exc
 from collections import defaultdict
+from warnings import warn, simplefilter
 
 import numpy as np
 import pandas as pd
@@ -24,6 +24,8 @@ from ray.train.constants import MODEL_KEY, TRAIN_DATASET_KEY
 from ray.train.sklearn._sklearn_utils import _set_cpu_params
 
 from ray.train.sklearn import SklearnTrainer
+
+simplefilter(action='ignore', category=FutureWarning)
 
 class SklearnPartialTrainer(SklearnTrainer):
     """
