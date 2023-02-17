@@ -26,7 +26,7 @@ class OneHotTensorEncoder(Preprocessor):
 
         return self
 
-    def _transform_pandas(self, df: pd.DataFrame):
+    def _transform_pandas(self, df: pd.DataFrame) -> pd.DataFrame:
         df = _validate_df(df, self.column)
 
         def tensor_col_encoding(label, nb_unique):
@@ -50,7 +50,7 @@ class OneHotTensorEncoder(Preprocessor):
         )
 
 
-def _validate_df(df: pd.DataFrame, column: str) -> None:
+def _validate_df(df: pd.DataFrame, column: str) -> pd.DataFrame:
     if df[column].isna().values.any():
         df[column] = df[column].fillna(-1)
     return df

@@ -4,6 +4,7 @@ import ray
 import json
 import os.path
 import argparse
+import numpy as np
 
 from utils import *
 from time import time
@@ -57,7 +58,9 @@ def kmers_dataset(opt):
                 opt['dataset_name'],
                 opt['host_name'],
                 k = opt['k_length'],
-                kmers_list = None
+                kmers_list = None,
+                features_threshold = opt['features_threshold'],
+                nb_features_keep = opt['nb_features']
             )
 
             # Save kmers list to file for further extractions
@@ -79,7 +82,9 @@ def kmers_dataset(opt):
                 opt['dataset_name'],
                 opt['host_name'],
                 k = opt['k_length'],
-                kmers_list = None
+                kmers_list = None,
+                features_threshold = opt['features_threshold'],
+                nb_features_keep = opt['nb_features']
             )
 
             # Save kmers list to file for further extractions
@@ -146,6 +151,8 @@ if __name__ == "__main__":
 
     parser.add_argument('-k','--k_length', required=True, type=int, help='Length of k-mers to extract')
     parser.add_argument('-l','--kmers_list', default=None, type=Path, help='PATH to a file containing a list of k-mers to be extracted if the dataset is not a training database')
+    parser.add_argument('-t','--features_threshold', default=np.inf, type=float, help='Treshold of features varaicne to restric extraction to, will keep only features with higher variance')
+    parser.add_argument('-f','--nb_features', default=np.inf, type=int, help='Number of features to restric extraction to, will keep this number of features with higher variance')
     parser.add_argument('-o','--outdir', required=True, type=Path, help='PATH to a directory on file where outputs will be saved')
     parser.add_argument('-wd','--workdir', default='/tmp/spill', type=Path, help='Optional. Path to a working directory where tuning data will be spilled')
     args = parser.parse_args()
