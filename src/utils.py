@@ -279,7 +279,7 @@ def zip_X_y(X, y):
     for ds in [X, y]:
         if not ds.is_fully_executed():
             ds.fully_executed()
-    df = X.zip(y).repartition(num_blocks)
+        df = X.zip(y).repartition(num_blocks)
     return df
 
 def ensure_length_ds(len_x, len_y):

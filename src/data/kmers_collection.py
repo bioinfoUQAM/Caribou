@@ -100,6 +100,7 @@ class KmersCollection():
         self.kmers_list = None
         self._labels = None
         self._lst_arr = []
+        self._transformed = False
         # Get labels from seq_data
         if len(seq_data.labels) > 0:
             self._labels = pd.DataFrame(seq_data.labels, columns = seq_data.taxas, index = seq_data.ids)
@@ -260,7 +261,7 @@ class KmersCollection():
 
         self.df = ray.data.from_numpy_refs(self._lst_arr)
 
-        # Diminish nb of features to a maximum of 1000
+        # Diminish nb of features
         feature_selector = TensorLowVarSelection(
             '__value__',
             self.kmers_list,
@@ -268,7 +269,9 @@ class KmersCollection():
             nb_keep = self._nb_features_keep,
         )
         self.df = feature_selector.fit_transform(self.df)
-        self.kmers_list = [kmer for kmer in self.kmers_list if kmer not in feature_selector.removed_features]
+        self._transformed = False if feature_selector.transform_stats() is None else True
+        if self._transformed:
+            self.kmers_list = [kmer for kmer in self.kmers_list if kmer not in feature_selector.removed_features]
 
         self._zip_id_col()
         self.df.write_parquet(self.Xy_file)
@@ -287,7 +290,10 @@ class KmersCollection():
         })
         self._ensure_length_ds(len_df, len(ids))
         # Convert ids -> ray.data.Dataset with arrow schema
-        ids = ray.data.from_pandas(ids)
+        if self._transformed:
+            ids = ray.data.from_pandas(ids)
+        else:
+            ids = ray.data.from_arrow(pa.Table.from_pandas(ids))
         # Repartition to 1 row/partition
         self.df = self.df.repartition(len_df)
         ids = ids.repartition(len_df)

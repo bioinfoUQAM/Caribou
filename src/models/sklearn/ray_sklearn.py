@@ -211,11 +211,17 @@ class SklearnModel(ModelsUtils):
             ds = self._preprocessor.transform(ds)
             datasets[name] = ray.put(ds)
 
+        try:
+            training_labels = self._encoded.copy()
+            training_labels = np.delete(training_labels, np.where(training_labels == -1))
+        except:
+            pass
+        
         # Define trainer
         self._trainer = SklearnPartialTrainer(
             estimator = self._clf,
             label_column = self.taxa,
-            labels_list = self._encoded,
+            labels_list = training_labels,
             features_list = self.kmers,
             params = self._train_params,
             datasets = datasets,
@@ -260,7 +266,7 @@ class SklearnModel(ModelsUtils):
                 'best_proba': [max(df.iloc[i].values) for i in range(len(df))],
                 'predicted_label': [np.argmax(df.iloc[i].values) for i in range(len(df))]
             })
-            predict.loc[predict['best_proba'] < threshold, 'predicted_label'] = 0
+            predict.loc[predict['best_proba'] < threshold, 'predicted_label'] = -1
             return pd.DataFrame(predict['predicted_label'])
 
         if nb_cls == 1:

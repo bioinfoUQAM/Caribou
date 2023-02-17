@@ -301,6 +301,8 @@ class KerasTFModel(ModelsUtils):
             # Preprocess
             df = self._preprocessor.preprocessors[0].transform(df)
 
+            print('number of classes :', self._nb_classes)
+
             # Make predictions
             predictions = batch_prediction(
                 self._model_ckpt,
@@ -311,8 +313,12 @@ class KerasTFModel(ModelsUtils):
                 len(self.kmers)
             )
 
+            print('predictions after batch_prediction :', predictions.to_pandas())
+
             # Convert predictions to labels
             predictions = self._prob_2_cls(predictions, threshold)
+
+            print('predictions after probs_2_cls :', predictions)
 
             return self._label_decode(predictions)
         else:

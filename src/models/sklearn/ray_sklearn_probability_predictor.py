@@ -1,13 +1,11 @@
-from typing import TYPE_CHECKING, List, Optional, Union
+from typing import List, Optional, Union
 
 import pandas as pd
 from joblib import parallel_backend
 from sklearn.base import BaseEstimator
 
 from ray.air.constants import TENSOR_COLUMN_NAME
-from ray.air.data_batch_type import DataBatchType
 from ray.air.util.data_batch_conversion import _unwrap_ndarray_object_type_if_needed
-from ray.train.predictor import Predictor
 from ray.train.sklearn._sklearn_utils import _set_cpu_params
 from ray.util.joblib import register_ray
 

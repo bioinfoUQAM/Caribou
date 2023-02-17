@@ -117,6 +117,9 @@ class ModelsUtils(ABC):
     def _cv_score(self, y_true, y_pred):
         print('_cv_score')
 
+        print('y_true : ', y_true)
+        print('y_pred : ', y_pred)
+
         support = precision_recall_fscore_support(y_true, y_pred, average = 'weighted')
 
         scores = pd.DataFrame({
