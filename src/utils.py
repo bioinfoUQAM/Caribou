@@ -136,10 +136,10 @@ def verify_concordance_klength(klen1 : int, klen2 : int):
 def define_create_outdirs(dir : Path):
     outdirs = {}
     verify_saving_path(dir)
-    outdirs['main_outdir'] = dir
-    outdirs['data_dir'] = os.path.join(dir, 'data')
-    outdirs['models_dir'] = os.path.join(dir, 'models')
-    outdirs['results_dir'] = os.path.join(dir, 'results')
+    outdirs['main_outdir'] = Path(dir)
+    outdirs['data_dir'] = Path(os.path.join(dir, 'data'))
+    outdirs['models_dir'] = Path(os.path.join(dir, 'models'))
+    outdirs['results_dir'] = Path(os.path.join(dir, 'results'))
     os.makedirs(dir, mode=0o700, exist_ok=True)
     os.makedirs(outdirs['data_dir'], mode=0o700, exist_ok=True)
     os.makedirs(outdirs['models_dir'], mode=0o700, exist_ok=True)
@@ -270,6 +270,8 @@ def populate_save_data(
 def zip_X_y(X, y):
     num_blocks = X.num_blocks()
     len_x = X.count()
+    if len_x > 1000:
+        num_blocks = int(len_x / 50)
     ensure_length_ds(len_x, len(y))
     y = ray.data.from_arrow(pa.Table.from_pandas(y))
     X = X.repartition(len_x)
@@ -277,7 +279,7 @@ def zip_X_y(X, y):
     for ds in [X, y]:
         if not ds.is_fully_executed():
             ds.fully_executed()
-    df = X.zip(y).repartition(num_blocks)
+        df = X.zip(y).repartition(num_blocks)
     return df
 
 def ensure_length_ds(len_x, len_y):

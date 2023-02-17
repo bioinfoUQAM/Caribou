@@ -1,15 +1,18 @@
 import os
+import gc
 import ray
 import warnings
 import numpy as np
 import pandas as pd
 
 from glob import glob
-from shutil import rmtree
 from utils import zip_X_y
+from shutil import rmtree
 
 # Preprocessing
-from ray.data.preprocessors import BatchMapper, Concatenator, LabelEncoder, Chain, OneHotEncoder
+from models.ray_tensor_min_max import TensorMinMaxScaler
+from models.kerasTF.ray_one_hot_tensor import OneHotTensorEncoder
+from ray.data.preprocessors import LabelEncoder, Chain
 
 # Parent class / models
 from models.ray_utils import ModelsUtils
@@ -17,9 +20,9 @@ from models.kerasTF.build_neural_networks import *
 
 # Training
 import tensorflow as tf
-from ray.air import session, Checkpoint
+from ray.air import session
 from ray.air.integrations.keras import Callback
-from ray.air.config import ScalingConfig, CheckpointConfig, DatasetConfig
+from ray.air.config import ScalingConfig, DatasetConfig
 from ray.train.tensorflow import TensorflowTrainer, TensorflowCheckpoint, prepare_dataset_shard
 
 # Tuning
@@ -28,6 +31,7 @@ from ray.air.config import RunConfig
 # Predicting
 from ray.train.tensorflow import TensorflowPredictor
 from ray.train.batch_predictor import BatchPredictor
+from joblib import Parallel, delayed, parallel_backend
 
 # Simulation class
 from models.reads_simulation import readsSimulation
@@ -58,6 +62,10 @@ class KerasTFModel(ModelsUtils):
     Methods
     ----------
 
+    preprocess : preprocess the data before training and splitting the original dataset in case of cross-validation
+
+    train : train a model using the given datasets
+
     predict : predict the classes of a dataset
         df : ray.data.Dataset
             Dataset containing K-mers profiles of sequences to be classified
@@ -87,7 +95,7 @@ class KerasTFModel(ModelsUtils):
             dataset,
             outdir_model,
             outdir_results,
-            batch_size,
+            batch_size, # Must be small to reduce mem usage
             k,
             taxa,
             kmers_list,
@@ -96,23 +104,23 @@ class KerasTFModel(ModelsUtils):
         # Parameters
         # Initialize hidden
         self._training_epochs = training_epochs
+        self._nb_CPU_data = int(os.cpu_count() * 0.2)
+        self._nb_CPU_training = int(os.cpu_count() - self._nb_CPU_data)
+        self._nb_GPU = len(tf.config.list_physical_devices('GPU'))
         # Initialize empty
         self._nb_classes = None
-        self._tuner = None
         self._nb_CPU_per_worker = 0
+        self._nb_GPU_per_worker = 0
         # Computing variables
-        if len(tf.config.list_physical_devices('GPU')) > 0:
+        if self._nb_GPU > 0:
             self._use_gpu = True
-            self._n_workers = len(tf.config.list_physical_devices('GPU'))
-            self._nb_CPU_per_worker = int((os.cpu_count()*0.8) / self._n_workers)
+            self._n_workers = self._nb_GPU
+            self._nb_CPU_per_worker = int(self._nb_CPU_training / self._n_workers)
+            self._nb_GPU_per_worker = 1
         else:
             self._use_gpu = False
-            if int(os.cpu_count()*0.8) % 5 == 0:
-                self._nb_CPU_per_worker = 5
-            else:
-                self._nb_CPU_per_worker = 3
-            self._n_workers = int((os.cpu_count()*0.8)/self._nb_CPU_per_worker)
-            # self._nb_CPU_per_worker = int(os.cpu_count()*0.8) #for using with self._n_workers = 1
+            self._n_workers = int(self._nb_CPU_training * 0.2)
+            self._nb_CPU_per_worker = int(int(self._nb_CPU_training * 0.8) / self._n_workers)
 
         if self.classifier == 'attention':
             print('Training bacterial / host classifier based on Attention Weighted Neural Network')
@@ -127,53 +135,45 @@ class KerasTFModel(ModelsUtils):
         elif self.classifier == 'widecnn':
             print('Training multiclass classifier based on Wide CNN Network')
 
-    def _label_encode(self, df):
-        print('_label_encode')
+    def preprocess(self, df):
+        print('preprocess')
         labels = []
         for row in df.iter_rows():
             labels.append(row[self.taxa])
         self._nb_classes = len(np.unique(labels))
-        self._label_encode_define(df)
-        encoded = []
-        encoded.append(-1)
-        labels = ['unknown']
-        for k, v in self._encoder.preprocessors[0].stats_['unique_values({})'.format(self.taxa)].items():
-            encoded.append(v)
-            labels.append(k)
-
-        self._labels_map = zip(labels, encoded)
-        
-    def _label_encode_define(self, df):
-        print('_label_encode_define')
-        self._encoder = Chain(
+        self._preprocessor = Chain(
+            TensorMinMaxScaler(self.kmers),
             LabelEncoder(self.taxa),
-            OneHotEncoder([self.taxa]),
-            Concatenator(
-                output_column_name=self.taxa,
-                include=['{}_{}'.format(self.taxa, i) for i in range(self._nb_classes)]
-            )
+            OneHotTensorEncoder(self.taxa),
         )
-        self._encoder.fit(df)
-        
+        self._preprocessor.fit(df)
+
     def _label_decode(self, predict):
         print('_label_decode')
+        if self._labels_map is None:
+            encoded = []
+            encoded.append(-1)
+            labels = ['unknown']
+            for k, v in self._preprocessor.preprocessors[1].stats_['unique_values({})'.format(self.taxa)].items():
+                encoded.append(v)
+                labels.append(k)
         decoded = pd.Series(np.empty(len(predict), dtype=object))
-        for label, encoded in self._labels_map:
-            decoded[predict == encoded] = label
+        for label, coded in zip(labels, encoded):
+            decoded[predict == coded] = label
 
         return decoded
 
     def train(self, datasets, kmers_ds, cv = True):
         print('train')
 
-        df = datasets['train']
-        self._training_preprocess(df)
+        df_train = datasets['train']
         
         if cv:
             df_test = datasets['test']
-            self._cross_validation(df, df_test, kmers_ds)
+            self._cross_validation(df_train, df_test, kmers_ds)
         else:
-            df_train, df_val = df.train_test_split(0.2, shuffle = True)
+            # df_train, df_val = df_train.train_test_split(0.2, shuffle = True)
+            df_val = df_train.random_sample(0.3)
             df_val = self._sim_4_val(df_val, kmers_ds, 'validation')
             df_train = df_train.drop_columns(['id'])
             df_val = df_val.drop_columns(['id'])
@@ -204,9 +204,10 @@ class KerasTFModel(ModelsUtils):
     def _cross_validation(self, df_train, df_test, kmers_ds):
         print('_cross_validation')
 
-        df_train, df_val = df_train.train_test_split(0.2, shuffle = True)
+        # df_train, df_val = df_train.train_test_split(0.2, shuffle = True)
+        df_val = df_train.random_sample(0.3)
         
-        df_val = self._sim_4_val(df_val, kmers_ds, '{}_val'.format(self.dataset))
+        df_val = self._sim_4_val(df_val, kmers_ds, f'{self.dataset}_val')
         
         df_train = df_train.drop_columns(['id'])
         df_test = df_test.drop_columns(['id'])
@@ -215,15 +216,10 @@ class KerasTFModel(ModelsUtils):
         datasets = {'train' : df_train, 'validation' : df_val}
         self._fit_model(datasets)
 
-        df_test = self._encoder.preprocessors[0].transform(df_test)
         y_true = []
         for row in df_test.iter_rows():
             y_true.append(row[self.taxa])
 
-        y_true = np.array(y_true)
-        y_true[np.isnan(y_true)] = -1
-        y_true = list(y_true)
-        
         y_pred = self.predict(df_test.drop_columns([self.taxa]), cv = True)
 
         for file in glob(os.path.join(os.path.dirname(kmers_ds['profile']), '*sim*')):
@@ -234,32 +230,42 @@ class KerasTFModel(ModelsUtils):
 
         self._cv_score(y_true, y_pred)
 
+    # Model training with DatasetPipeline
     def _fit_model(self, datasets):
         print('_fit_model')
         for name, ds in datasets.items():
+            print(f'dataset preprocessing : {name}')
             ds = self._preprocessor.transform(ds)
-            ds = self._encoder.transform(ds)
-            datasets[name] = ds
+            datasets[name] = ds.fully_executed()
 
         # Training parameters
         self._train_params = {
             'batch_size': self.batch_size,
             'epochs': self._training_epochs,
             'size': self._nb_kmers,
-            'nb_cls':self._nb_classes,
-            'model': self.classifier,
-            'labels_col': self.taxa,
+            'nb_cls': self._nb_classes,
+            'model': self.classifier
         }
+
+        print(f'num_workers : {self._n_workers}')
+        print(f'nb_CPU_data : {self._nb_CPU_data}')
+        print(f'nb_CPU_training : {self._nb_CPU_training}')
+        print(f'nb_GPU : {self._nb_GPU}')
+        print(f'nb_CPU_per_worker : {self._nb_CPU_per_worker}')
+        print(f'nb_GPU_per_worker : {self._nb_GPU_per_worker}')
 
         # Define trainer / tuner
         self._trainer = TensorflowTrainer(
             train_loop_per_worker = train_func,
-            train_loop_config = self._train_params, #{},
+            train_loop_config = self._train_params,
             scaling_config = ScalingConfig(
-                trainer_resources={'CPU': 1},
+                trainer_resources={'CPU': self._nb_CPU_data},
                 num_workers = self._n_workers,
                 use_gpu = self._use_gpu,
-                resources_per_worker={'CPU': self._nb_CPU_per_worker}
+                resources_per_worker={
+                    'CPU': self._nb_CPU_per_worker,
+                    'GPU': self._nb_GPU_per_worker
+                }
             ),
             dataset_config = {
                 'train': DatasetConfig(
@@ -271,49 +277,57 @@ class KerasTFModel(ModelsUtils):
                 'validation': DatasetConfig(
                     fit = False,
                     transform = False,
-                    split = False,
-                    use_stream_api = True
+                    split = True,
+                    use_stream_api = False
                 )
             },
             run_config = RunConfig(
                 name = self.classifier,
                 local_dir = self._workdir,
             ),
-            datasets = datasets
+            datasets = datasets,
         )
-
-        # Train / tune execution
         training_result = self._trainer.fit()
         self._model_ckpt = training_result.best_checkpoints[0][0]
+    
 
-    def predict(self, df, threshold = 0.8, cv = False):
+    def predict(self, df, threshold=0.8, cv=False):
         print('predict')
         if df.count() > 0:
-            df = self._preprocessor.transform(df)
-            # Define predictor
-            self._predictor = BatchPredictor.from_checkpoint(
-                self._model_ckpt,
-                TensorflowPredictor,
-                model_definition = lambda : build_model(self.classifier, self._nb_classes, len(self.kmers))
-            )
+            if len(df.schema().names) > 1:
+                col_2_drop = [col for col in df.schema().names if col != '__value__']
+                df = df.drop_columns(col_2_drop)
+
+            # Preprocess
+            df = self._preprocessor.preprocessors[0].transform(df)
+
+            print('number of classes :', self._nb_classes)
+
             # Make predictions
-            predictions = self._predictor.predict(
-                feature_columns = ['__value__'],
-                data = df,
-                batch_size = self.batch_size
+            predictions = batch_prediction(
+                self._model_ckpt,
+                df,
+                self.classifier,
+                self.batch_size,
+                self._nb_classes,
+                len(self.kmers)
             )
+
+            print('predictions after batch_prediction :', predictions.to_pandas())
+
+            # Convert predictions to labels
             predictions = self._prob_2_cls(predictions, threshold)
 
-            if cv:
-                return predictions
-            else:
-                return self._label_decode(predictions)
+            print('predictions after probs_2_cls :', predictions)
+
+            return self._label_decode(predictions)
         else:
             raise ValueError('No data to predict')
 
+    # Iterate over batches of predictions to transform probabilities to labels without mapping
     def _prob_2_cls(self, predictions, threshold):
         print('_prob_2_cls')
-        def map_predicted_label_binary(df):
+        def map_predicted_label_binary(df, threshold):
             lower_threshold = 0.5 - (threshold * 0.5)
             upper_threshold = 0.5 + (threshold * 0.5)
             predict = pd.DataFrame({
@@ -322,31 +336,37 @@ class KerasTFModel(ModelsUtils):
             })
             predict.loc[predict['proba'] >= upper_threshold, 'predicted_label'] = 1
             predict.loc[predict['proba'] <= lower_threshold, 'predicted_label'] = 0
-            return pd.DataFrame(predict['predicted_label'])
+            return predict['predicted_label'].to_numpy(dtype = np.int32)
 
-        def map_predicted_label_multiclass(df):
+        def map_predicted_label_multiclass(df, threshold):
             predict = pd.DataFrame({
                 'best_proba': [df['predictions'][i][np.argmax(df['predictions'][i])] for i in range(len(df))],
-                'predicted_label': [np.argmax(df['predictions'][i]) for i in range(len(df))]
+                'predicted_label': df["predictions"].map(lambda x: np.array(x).argmax())
             })
             predict.loc[predict['best_proba'] < threshold, 'predicted_label'] = -1
-            return pd.DataFrame(predict['predicted_label'])
-       
+            return predict['predicted_label'].to_numpy(dtype = np.int32)
+
         if self._nb_classes == 2:
-            mapper = BatchMapper(map_predicted_label_binary, batch_format = 'pandas')
+            fn = map_predicted_label_binary
         else:
-            mapper = BatchMapper(map_predicted_label_multiclass, batch_format = 'pandas')
-        predict = mapper.transform(predictions)
-        predict = np.ravel(np.array(predict.to_pandas()))
+            fn = map_predicted_label_multiclass
 
-        return predict
+        with parallel_backend('threading'):
+            predict = Parallel(n_jobs=-1, prefer='threads', verbose=1)(
+                delayed(fn)(batch, threshold) for batch in predictions.iter_batches(batch_size = self.batch_size))
 
+        return np.concatenate(predict)
+                
 # Training/building function outside of the class as mentioned on the Ray discussion
 # https://discuss.ray.io/t/statuscode-resource-exhausted/4379/16
 ################################################################################
 
 # Data streaming in PipelineDataset for larger than memory data, should prevent OOM
 # https://docs.ray.io/en/latest/ray-air/check-ingest.html#enabling-streaming-ingest
+# Smaller nb of workers + bigger nb CPU_per_worker + smaller batch_size to avoid memory overload
+# https://discuss.ray.io/t/ray-sgd-distributed-tensorflow/261/8
+
+# train_func with DatasetPipeline for Training data only
 def train_func(config):
     # Parameters
     batch_size = config.get('batch_size', 128)
@@ -354,7 +374,6 @@ def train_func(config):
     size = config.get('size')
     nb_cls = config.get('nb_cls')
     model = config.get('model')
-    labels_col = config.get('labels_col')
 
     # Model setup 
     strategy = tf.distribute.MultiWorkerMirroredStrategy()
@@ -365,51 +384,101 @@ def train_func(config):
     train_data = session.get_dataset_shard('train')
     val_data = session.get_dataset_shard('validation')
 
-    def to_tf_dataset(data):
-        ds = tf.data.Dataset.from_tensors((
-        tf.convert_to_tensor(list(data['__value__'])),
-        tf.convert_to_tensor(list(data[labels_col]))
-        ))
-        return ds
+    def to_tf_dataset(data, batch_size):
+        def to_tensor_iterator():
+            for batch in data.iter_tf_batches(
+                batch_size=batch_size
+            ):
+                yield batch['__value__'], batch['labels']
+
+        output_signature = (
+            tf.TensorSpec(shape=(None, size), dtype=tf.float32),
+            tf.TensorSpec(shape=(None, nb_cls), dtype=tf.int64),
+        )
+        tf_data = tf.data.Dataset.from_generator(
+            to_tensor_iterator, output_signature=output_signature
+        )
+        return prepare_dataset_shard(tf_data)
+
+    batch_val = to_tf_dataset(val_data, batch_size)
 
     # Fit the model on streaming data
-    results = []
-    batch_val = pd.DataFrame(columns = ['__value__', labels_col])
-    for epoch in val_data.iter_epochs(1):
-        for batch in epoch.iter_batches():
-            batch_val = pd.concat([batch_val,batch])
-    batch_val = to_tf_dataset(batch_val)
-
     for epoch_train in train_data.iter_epochs(epochs):
-        for batch_train in epoch_train.iter_batches():
-            batch_train = to_tf_dataset(batch_train)
-            history = model.fit(
-                batch_train,
-                validation_data = batch_val,
-                callbacks=[Callback()],
-                verbose=0
-            )
-            results.append(history.history)
-            session.report({
-                'accuracy' : history.history['accuracy'][0],
-                'loss' : history.history['loss'][0],
-                'val_accuracy' : history.history['val_accuracy'][0],
-                'val_loss' : history.history['val_loss'][0]
-                },
-                checkpoint = TensorflowCheckpoint.from_model(model)
-            )
-    
+        batch_train = to_tf_dataset(epoch_train, batch_size)
+        history = model.fit(
+            x = batch_train,
+            validation_data = batch_val,
+            callbacks = [Callback()],
+            verbose = 0
+        )
+        session.report({
+            'accuracy': history.history['accuracy'][0],
+            'loss': history.history['loss'][0],
+            'val_accuracy': history.history['val_accuracy'][0],
+            'val_loss': history.history['val_loss'][0],
+        },
+            checkpoint=TensorflowCheckpoint.from_model(model)
+        )
+        gc.collect()
+        tf.keras.backend.clear_session()
+    del model
+    gc.collect()
+    tf.keras.backend.clear_session()
+
 def build_model(classifier, nb_cls, nb_kmers):
     if classifier == 'attention':
-        clf = build_attention(nb_kmers)
+        model = build_attention(nb_kmers)
     elif classifier == 'lstm':
-        clf = build_LSTM(nb_kmers)
+        model = build_LSTM(nb_kmers)
     elif classifier == 'deeplstm':
-        clf = build_deepLSTM(nb_kmers)
+        model = build_deepLSTM(nb_kmers)
     elif classifier == 'lstm_attention':
-        clf = build_LSTM_attention(nb_kmers, nb_cls)
+        model = build_LSTM_attention(nb_kmers, nb_cls)
     elif classifier == 'cnn':
-        clf = build_CNN(nb_kmers, nb_cls)
+        model = build_CNN(nb_kmers, nb_cls)
     elif classifier == 'widecnn':
-        clf = build_wideCNN(nb_kmers, nb_cls)
-    return clf
+        model = build_wideCNN(nb_kmers, nb_cls)
+    return model
+
+def batch_predict_val(checkpoint, batch, clf, batch_size, nb_classes, nb_kmers):
+    def convert_logits_to_classes(df):
+        best_class = df["predictions"].map(lambda x: np.array(x).argmax())
+        df["predictions"] = best_class
+        return df
+
+    def calculate_prediction_scores(df):
+            return pd.DataFrame({"correct": df["predictions"] == df["labels"]})
+
+    predictor = BatchPredictor.from_checkpoint(
+        checkpoint,
+        TensorflowPredictor,
+        model_definition = lambda: build_model(clf, nb_classes, nb_kmers)
+    )
+    predictions = predictor.predict(
+        data = batch,
+        batch_size = batch_size,
+        feature_columns = ['__value__'],
+        keep_columns = ['labels']
+    )
+    pred_results = predictions.map_batches(
+        convert_logits_to_classes,
+        batch_format="pandas"
+    )
+    correct_dataset = pred_results.map_batches(
+        calculate_prediction_scores,
+        batch_format="pandas",
+    )
+    
+    return correct_dataset
+
+def batch_prediction(checkpoint, batch, clf, batch_size, nb_classes, nb_kmers):
+    predictor = BatchPredictor.from_checkpoint(
+        checkpoint,
+        TensorflowPredictor,
+        model_definition = lambda: build_model(clf, nb_classes, nb_kmers)
+    )
+    predictions = predictor.predict(
+        data = batch,
+        batch_size = batch_size
+    )
+    return predictions

@@ -6,8 +6,9 @@ import pandas as pd
 import os
 import gzip
 
-from glob import glob
 from Bio import SeqIO
+from glob import glob
+from pathlib import Path
 from warnings import warn
 from data.build_data import build_load_save_data
 from joblib import Parallel, delayed, parallel_backend
@@ -74,7 +75,7 @@ class readsSimulation():
             self._fasta_host = None
         self._cls_in = cls
         self._genomes = genomes
-        self._nb_reads = len(genomes) * 5
+        self._nb_reads = len(genomes) * 2
         self._sequencing = sequencing
         self._path = outdir
         self._name = name
@@ -101,13 +102,20 @@ class readsSimulation():
             
     def _make_tmp_fasta(self):
         for file in [self._fasta_in, self._fasta_host]:
-            if file is not None and os.path.isfile(file):
-                if os.path.splitext(file)[1] == '.gz':
-                    self._add_tmp_fasta_gz(file)
-                else:
-                    self._add_tmp_fasta_fa(file)
-            elif file is not None and os.path.isdir(file):
-                self._add_tmp_fasta_dir(file)
+            if isinstance(file, Path):
+                if os.path.isfile(file):
+                    if os.path.splitext(file)[1] == '.gz':
+                        self._add_tmp_fasta_gz(file)
+                    else:
+                        self._add_tmp_fasta_fa(file)
+                elif os.path.isdir(file):
+                    self._add_tmp_fasta_dir(file)
+            elif isinstance(file, list):
+                for f in file:
+                    if os.path.splitext(f)[1] == '.gz':
+                        self._add_tmp_fasta_gz(f)
+                    else:
+                        self._add_tmp_fasta_fa(f)
 
     def _add_tmp_fasta_fa(self, file):
         with open(file, 'rt') as handle_in, open(self._fasta_tmp, 'at') as handle_out:

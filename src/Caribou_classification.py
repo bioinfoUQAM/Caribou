@@ -33,7 +33,7 @@ def bacteria_classification(opt):
     outdirs = define_create_outdirs(opt['outdir'])
 
     # Validate and extract list of taxas
-    list_taxas = verify_taxas(opt['taxa'], data_bacteria['taxas'])
+    lst_taxas = verify_taxas(opt['taxa'], data_bacteria['taxas'])
 
     # Initialize cluster
     ray.init(
@@ -51,7 +51,7 @@ def bacteria_classification(opt):
         outdirs = outdirs,
         database = opt['database_name'],
         classifier_multiclass = opt['model_type'],
-        taxa = list_taxas,
+        taxa = lst_taxas,
         batch_size = opt['batch_size'],
         training_epochs = opt['training_epochs'],
         verbose = opt['verbose'],

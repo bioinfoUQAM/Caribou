@@ -12,6 +12,8 @@ from shutil import rmtree
 from subprocess import run
 from joblib import Parallel, delayed, parallel_backend
 
+from data.ray_tensor_lowvar_selection import TensorLowVarSelection
+
 __author__ = ['Amine Remita', 'Nicolas de Montigny']
 
 __all__ = ['KmersCollection']
@@ -77,7 +79,9 @@ class KmersCollection():
         Xy_file,
         k,
         dataset,
-        kmers_list = None
+        kmers_list = None,
+        features_threshold = np.inf,
+        nb_features_keep = np.inf
     ):
         ## Public attributes
         # Parameters
@@ -85,6 +89,8 @@ class KmersCollection():
         self.dataset = dataset
         self.Xy_file = Xy_file
         self.fasta = seq_data.data
+        self._features_threshold = features_threshold
+        self._nb_features_keep = nb_features_keep
         # Initialize empty
         self.df = None
         self.ids = []
@@ -94,6 +100,7 @@ class KmersCollection():
         self.kmers_list = None
         self._labels = None
         self._lst_arr = []
+        self._transformed = False
         # Get labels from seq_data
         if len(seq_data.labels) > 0:
             self._labels = pd.DataFrame(seq_data.labels, columns = seq_data.taxas, index = seq_data.ids)
@@ -153,7 +160,7 @@ class KmersCollection():
         cmd_split = f'{self._faSplit} byname {self.fasta} {self._tmp_dir}'
         os.system(cmd_split)
         # Get list of fasta files
-        self._fasta_list = glob(os.path.join(self.fasta, '*.fa'))
+        self._fasta_list = glob(os.path.join(self._tmp_dir, '*.fa'))
 
     def _parallel_extraction(self):
         if self.method == 'seen':
@@ -182,7 +189,7 @@ class KmersCollection():
         id = os.path.splitext(os.path.basename(file))[0]
         os.mkdir(tmp_folder)
         # Count k-mers with KMC
-        cmd_count = os.path.join(self._kmc_path,f"kmc -k{self.k} -fm -ci8 -cs1000000000 -hp {file} {os.path.join(tmp_folder, str(ind))} {tmp_folder}")
+        cmd_count = os.path.join(self._kmc_path,f"kmc -k{self.k} -fm -ci10 -cs1000000000 -hp {file} {os.path.join(tmp_folder, str(ind))} {tmp_folder}")
         run(cmd_count, shell = True, capture_output=True)
         # Transform k-mers db with KMC
         cmd_transform = os.path.join(self._kmc_path,f"kmc_tools transform {os.path.join(tmp_folder, str(ind))} dump {os.path.join(self._tmp_dir, f'{ind}.txt')}")
@@ -253,6 +260,19 @@ class KmersCollection():
             self._lst_arr.append(ray.put(arr))
 
         self.df = ray.data.from_numpy_refs(self._lst_arr)
+
+        # Diminish nb of features
+        feature_selector = TensorLowVarSelection(
+            '__value__',
+            self.kmers_list,
+            threshold = self._features_threshold,
+            nb_keep = self._nb_features_keep,
+        )
+        self.df = feature_selector.fit_transform(self.df)
+        self._transformed = False if feature_selector.transform_stats() is None else True
+        if self._transformed:
+            self.kmers_list = [kmer for kmer in self.kmers_list if kmer not in feature_selector.removed_features]
+
         self._zip_id_col()
         self.df.write_parquet(self.Xy_file)
 
@@ -270,7 +290,10 @@ class KmersCollection():
         })
         self._ensure_length_ds(len_df, len(ids))
         # Convert ids -> ray.data.Dataset with arrow schema
-        ids = ray.data.from_arrow(pa.Table.from_pandas(ids))
+        if self._transformed:
+            ids = ray.data.from_pandas(ids)
+        else:
+            ids = ray.data.from_arrow(pa.Table.from_pandas(ids))
         # Repartition to 1 row/partition
         self.df = self.df.repartition(len_df)
         ids = ids.repartition(len_df)

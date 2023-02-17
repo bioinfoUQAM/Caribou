@@ -1,16 +1,18 @@
-from utils import load_Xy_data, save_Xy_data
-from data.seq_collections import SeqCollection
-from data.kmers_collection import KmersCollection
 
 import os
 import pickle
+import numpy as np
+
+from utils import load_Xy_data, save_Xy_data
+from data.seq_collections import SeqCollection
+from data.kmers_collection import KmersCollection
 
 __author__ = 'Nicolas de Montigny'
 
 __all__ = ['build_load_save_data', 'build_Xy_data', 'build_X_data']
 
 
-def build_load_save_data(file, hostfile, prefix, dataset, host, kmers_list=None, k=20):
+def build_load_save_data(file, hostfile, prefix, dataset, host, kmers_list=None, k=20, features_threshold = np.inf, nb_features_keep = np.inf):
     # Declare data variables as none
     data = None
     data_host = None
@@ -42,7 +44,13 @@ def build_load_save_data(file, hostfile, prefix, dataset, host, kmers_list=None,
 
             # Build Xy_data to drive
             print('Database Xy_data, k = {}'.format(k))
-            data = build_Xy_data(seq_data, k, Xy_file,dataset, kmers_list=None)
+            data = build_Xy_data(
+                seq_data,
+                k,
+                Xy_file,dataset,
+                kmers_list=None,
+                features_threshold = features_threshold,
+                nb_features_keep = nb_features_keep)
             save_Xy_data(data, data_file)
 
         # Assign kmers_list to variable ater extracting database data
@@ -62,7 +70,12 @@ def build_load_save_data(file, hostfile, prefix, dataset, host, kmers_list=None,
 
             # Build Xy_data to drive
             print('Host/simulated Xy_data, k = {}'.format(k))
-            data_host = build_Xy_data(seq_data_host, k, Xy_file_host, dataset, kmers_list)
+            data_host = build_Xy_data(
+                seq_data_host,
+                k,
+                Xy_file_host,
+                dataset,
+                kmers_list)
             save_Xy_data(data_host, data_file_host)
 
         # Build X_data of dataset to analyse
@@ -81,10 +94,17 @@ def build_load_save_data(file, hostfile, prefix, dataset, host, kmers_list=None,
         return data, data_host
 
 # Build kmers collections with known classes and taxas
-def build_Xy_data(seq_data, k, Xy_file, dataset, kmers_list=None):
+def build_Xy_data(seq_data, k, Xy_file, dataset, kmers_list=None, features_threshold = np.inf, nb_features_keep = np.inf):
     data = {}
 
-    collection = KmersCollection(seq_data, Xy_file, k, dataset, kmers_list)
+    collection = KmersCollection(
+        seq_data,
+        Xy_file,
+        k,
+        dataset,
+        kmers_list,
+        features_threshold,
+        nb_features_keep)
 
     # Data in a dictionnary
     data['profile'] = collection.Xy_file  # Kmers profile
@@ -100,7 +120,12 @@ def build_Xy_data(seq_data, k, Xy_file, dataset, kmers_list=None):
 def build_X_data(seq_data, k, X_file, dataset, kmers_list):
     data = {}
 
-    collection = KmersCollection(seq_data, X_file, k, dataset, kmers_list)
+    collection = KmersCollection(
+        seq_data,
+        X_file,
+        k,
+        dataset,
+        kmers_list)
 
     # Data in a dictionnary
     data['profile'] = collection.Xy_file

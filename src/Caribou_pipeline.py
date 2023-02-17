@@ -3,6 +3,7 @@
 import ray
 import json
 import argparse
+import numpy as np
 import configparser
 
 from utils import *
@@ -37,8 +38,8 @@ def caribou(opt):
     host_seq_file = config.get('io', 'host_seq_file', fallback = None)
     host_cls_file = config.get('io', 'host_cls_file', fallback = None)
     metagenome_seq_file = config.get('io', 'metagenome_seq_file')
-    outdir = config.get('io', 'outdir')
-    workdir = config.get('io', 'workdir', fallback = '/tmp/spill')
+    outdir = Path(config.get('io', 'outdir'))
+    workdir = Path(config.get('io', 'workdir', fallback = '/tmp/spill'))
 
     # settings
     k_length = config.getint('settings', 'k', fallback = 35)
@@ -49,6 +50,8 @@ def caribou(opt):
     training_epochs = config.getint('settings','neural_network_training_iterations', fallback = 100)
     classif_threshold = config.getfloat('settings', 'classification_threshold', fallback = 0.8)
     verbose = config.getboolean('settings', 'verbose', fallback = True)
+    features_threshold = config.getfloat('settings', 'features_threshold', fallback = np.inf)
+    nb_features = config.getint('settings', 'nb_features', fallback = np.inf)
 
     # outputs
     mpa_style = config.getboolean('outputs', 'mpa-style', fallback = True)
@@ -95,6 +98,7 @@ def caribou(opt):
     
     # Initialize cluster
     ray.init(
+        
         _system_config = {
             'object_spilling_config': json.dumps(
                 {'type': 'filesystem', 'params': {'directory_path': str(opt['workdir'])}})
@@ -113,6 +117,8 @@ def caribou(opt):
             database,
             host,
             k = k_length,
+            features_threshold = features_threshold,
+            nb_features_keep = nb_features
         )
     else:
         # Reference Database Only
@@ -123,6 +129,8 @@ def caribou(opt):
             database,
             host,
             k = k_length,
+            features_threshold = features_threshold,
+            nb_features_keep = nb_features
         )
 
     # Metagenome to analyse
