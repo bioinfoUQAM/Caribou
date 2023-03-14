@@ -191,7 +191,6 @@ class KerasTFModel(ModelsUtils):
         cv_sim = readsSimulation(kmers_ds['fasta'], cls, sim_genomes, 'miseq', sim_outdir, name)
         sim_data = cv_sim.simulation(self.k, self.kmers)
         sim_ids = sim_data['ids']
-        sim_ids = sim_data['ids']
         sim_cls = pd.DataFrame({'sim_id':sim_ids}, dtype = object)
         sim_cls['id'] = sim_cls['sim_id'].str.replace('_[0-9]+_[0-9]+_[0-9]+', '', regex=True)
         sim_cls = sim_cls.set_index('id').join(cls.set_index('id'))
@@ -246,13 +245,6 @@ class KerasTFModel(ModelsUtils):
             'nb_cls': self._nb_classes,
             'model': self.classifier
         }
-
-        print(f'num_workers : {self._n_workers}')
-        print(f'nb_CPU_data : {self._nb_CPU_data}')
-        print(f'nb_CPU_training : {self._nb_CPU_training}')
-        print(f'nb_GPU : {self._nb_GPU}')
-        print(f'nb_CPU_per_worker : {self._nb_CPU_per_worker}')
-        print(f'nb_GPU_per_worker : {self._nb_GPU_per_worker}')
 
         # Define trainer / tuner
         self._trainer = TensorflowTrainer(
@@ -313,12 +305,8 @@ class KerasTFModel(ModelsUtils):
                 len(self.kmers)
             )
 
-            print('predictions after batch_prediction :', predictions.to_pandas())
-
             # Convert predictions to labels
             predictions = self._prob_2_cls(predictions, threshold)
-
-            print('predictions after probs_2_cls :', predictions)
 
             return self._label_decode(predictions)
         else:
@@ -440,6 +428,7 @@ def build_model(classifier, nb_cls, nb_kmers):
         model = build_wideCNN(nb_kmers, nb_cls)
     return model
 
+"""
 def batch_predict_val(checkpoint, batch, clf, batch_size, nb_classes, nb_kmers):
     def convert_logits_to_classes(df):
         best_class = df["predictions"].map(lambda x: np.array(x).argmax())
@@ -470,6 +459,7 @@ def batch_predict_val(checkpoint, batch, clf, batch_size, nb_classes, nb_kmers):
     )
     
     return correct_dataset
+"""
 
 def batch_prediction(checkpoint, batch, clf, batch_size, nb_classes, nb_kmers):
     predictor = BatchPredictor.from_checkpoint(
