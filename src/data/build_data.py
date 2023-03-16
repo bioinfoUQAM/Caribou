@@ -53,7 +53,7 @@ def build_load_save_data(file, hostfile, prefix, dataset, host, kmers_list=None,
                 nb_features_keep = nb_features_keep)
             save_Xy_data(data, data_file)
 
-        # Assign kmers_list to variable ater extracting database data
+        # Assign kmers_list to variable after extracting database data
         if kmers_list is None:
             kmers_list = data['kmers']
 

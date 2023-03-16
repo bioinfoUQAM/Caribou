@@ -137,12 +137,11 @@ class ClassificationMethods():
             self._binary_training(taxa)
         else:
             self._multiclass_training(taxa)
-        if isinstance(self.models[taxa], KerasTFModel):
-            for file in glob(os.path.join(self._outdirs['data_dir'], '*sim*')):
-                if os.path.isdir(file):
-                    rmtree(file)
-                else:
-                    os.remove(file)
+        for file in glob(os.path.join(self._outdirs['data_dir'], '*sim*')):
+            if os.path.isdir(file):
+                rmtree(file)
+            else:
+                os.remove(file)
 
     def _binary_training(self, taxa):
         print('_binary_training')
@@ -515,7 +514,6 @@ class ClassificationMethods():
         sim_outdir = os.path.dirname(kmers_ds['profile'])
         cv_sim = readsSimulation(kmers_ds['fasta'], cls, sim_cls_dct['id'], 'miseq', sim_outdir, name)
         sim_data = cv_sim.simulation(self._k, self._database_data['kmers'])
-        sim_ids = sim_data['ids']
         sim_ids = sim_data['ids']
         sim_cls = pd.DataFrame({'sim_id':sim_ids}, dtype = object)
         sim_cls['id'] = sim_cls['sim_id'].str.replace('_[0-9]+_[0-9]+_[0-9]+', '', regex=True)
