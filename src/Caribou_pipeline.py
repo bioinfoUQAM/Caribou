@@ -90,8 +90,8 @@ def caribou(opt):
     verify_boolean(report, 'output in abundance report form')
     
     # Check batch_size
-    if multi_classifier in ['cnn','widecnn'] and training_batch_size < 20:
-        training_batch_size = 20
+    # if multi_classifier in ['cnn','widecnn'] and training_batch_size < 20:
+    #     training_batch_size = 20
 
     # Folders creation for output
     outdirs = define_create_outdirs(outdir)
@@ -101,7 +101,7 @@ def caribou(opt):
         
         _system_config = {
             'object_spilling_config': json.dumps(
-                {'type': 'filesystem', 'params': {'directory_path': str(opt['workdir'])}})
+                {'type': 'filesystem', 'params': {'directory_path': str(workdir)}})
         }
     )
 
@@ -203,7 +203,6 @@ def caribou(opt):
         outdirs['results_dir'],
         metagenome
     )
-
 
 # Part 4 - Outputs for biological analysis of bacterial population
 ################################################################################

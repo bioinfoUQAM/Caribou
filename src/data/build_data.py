@@ -28,7 +28,7 @@ def build_load_save_data(file, hostfile, prefix, dataset, host, kmers_list=None,
     if os.path.isfile(data_file) and os.path.isfile(data_file_host) and isinstance(hostfile, tuple):
         data = load_Xy_data(data_file)
         data_host = load_Xy_data(data_file_host)
-    elif os.path.isfile(data_file):
+    elif os.path.isfile(data_file) :
         data = load_Xy_data(data_file)
     else:
         # Build Xy_data of database
@@ -53,7 +53,7 @@ def build_load_save_data(file, hostfile, prefix, dataset, host, kmers_list=None,
                 nb_features_keep = nb_features_keep)
             save_Xy_data(data, data_file)
 
-        # Assign kmers_list to variable ater extracting database data
+        # Assign kmers_list to variable after extracting database data
         if kmers_list is None:
             kmers_list = data['kmers']
 

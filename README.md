@@ -1,6 +1,13 @@
 # Caribou
 Alignment-free bacterial identification and classification in metagenomics sequencing data using machine learning.
 
+## Proof of Concept
+The jupyter notebook `workflow_example.ipynb` shows the workflow and it's output using example data. In this notebook, the steps are identified for better understanding.
+
+Data used in the `workflow_example.ipynb` is located in the `example_data/` folder.
+
+This data was also used to test and debug the Caribou analysis pipeline.
+
 ## Installation
 The Caribou analysis pipeline was developped in python3 and can be easily installed through the python wheel. The repo must be cloned first and then the package can be installed using the following commands lines in the desired folder :
 ```
