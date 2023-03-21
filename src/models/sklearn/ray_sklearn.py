@@ -17,13 +17,12 @@ from sklearn.naive_bayes import MultinomialNB
 from sklearn.linear_model import SGDOneClassSVM, SGDClassifier
 
 # Tuning
-from ray import tune
-from ray.tune import Tuner, TuneConfig
 from ray.air.config import RunConfig, ScalingConfig
 
 # Predicting
 from ray.train.sklearn import SklearnPredictor
 from ray.train.batch_predictor import BatchPredictor
+from joblib import Parallel, delayed, parallel_backend
 
 # Parent class
 from models.ray_utils import ModelsUtils
@@ -129,24 +128,24 @@ class SklearnModel(ModelsUtils):
     def train(self, datasets, kmers_ds, cv = True):
         print('train')
         
-        df = datasets['train']
-
         if cv:
-            df_test = datasets['test']
-            self._cross_validation(df, df_test, kmers_ds)
+            self._cross_validation(datasets, kmers_ds)
         else:
-            df = df.drop_columns(['id'])
-            datasets = {'train' : df}
-            self._fit_model(datasets)
+            if self.classifier in ['onesvm','linearsvm']:
+                self._fit_model_binary(datasets)
+            else:
+                self._fit_model_multiclass(datasets)
 
-    def _cross_validation(self, df_train, df_test, kmers_ds):
+    def _cross_validation(self, datasets, kmers_ds):
         print('_cross_validation')
         
-        df_train = df_train.drop_columns(['id'])
-        df_test = df_test.drop_columns(['id'])
+        df_test = datasets.pop('test')
 
-        datasets = {'train' : df_train}
-        self._fit_model(datasets)
+        if self.classifier in ['onesvm', 'linearsvm']:
+            self._fit_model_binary(datasets)
+        else:
+            self._fit_model_multiclass(datasets)
+
 
         df_test = self._preprocessor.preprocessors[0].transform(df_test)
 
@@ -205,9 +204,52 @@ class SklearnModel(ModelsUtils):
                 'fit_prior' : True
             }
 
-    def _fit_model(self, datasets):
-        print('_fit_model')
+    def _fit_model_binary(self, datasets):
+        print('_fit_model_binary')
         for name, ds in datasets.items():
+            print(f'dataset preprocessing : {name}')
+            ds = ds.drop_columns(['id'])
+            ds = self._preprocessor.transform(ds)
+            datasets[name] = ray.put(ds)
+
+        try:
+            training_labels = self._encoded.copy()
+            training_labels = np.delete(
+                training_labels, np.where(training_labels == -1))
+        except:
+            pass
+
+        # Define trainer
+        self._trainer = SklearnPartialTrainer(
+            estimator=self._clf,
+            label_column=self.taxa,
+            labels_list=training_labels,
+            features_list=self.kmers,
+            params=self._train_params,
+            datasets=datasets,
+            batch_size=self.batch_size,
+            set_estimator_cpus=True,
+            scaling_config=ScalingConfig(
+                trainer_resources={
+                    'CPU': int(os.cpu_count()*0.8)
+                }
+            ),
+            run_config=RunConfig(
+                name=self.classifier,
+                local_dir=self._workdir
+            ),
+        )
+
+        # Training execution
+        result = self._trainer.fit()
+        self._models_collection['domain'] = result.checkpoint
+
+    def _fit_model_multiclass(self, datasets):
+        print('_fit_model_multiclass')
+        training_collection = datasets.pop('train')
+        for name, ds in datasets.items():
+            print(f'dataset preprocessing : {name}')
+            ds = ds.drop_columns(['id'])
             ds = self._preprocessor.transform(ds)
             datasets[name] = ray.put(ds)
 
@@ -217,49 +259,60 @@ class SklearnModel(ModelsUtils):
         except:
             pass
         
-        # Define trainer
-        self._trainer = SklearnPartialTrainer(
-            estimator = self._clf,
-            label_column = self.taxa,
-            labels_list = training_labels,
-            features_list = self.kmers,
-            params = self._train_params,
-            datasets = datasets,
-            batch_size = self.batch_size,
-            set_estimator_cpus = True,
-            scaling_config = ScalingConfig(
-                trainer_resources = {
-                    'CPU' : int(os.cpu_count()*0.8)
-                }
-            ),
-            run_config = RunConfig(
-                name = self.classifier,
-                local_dir = self._workdir
-            ),
-        )
+        for tax, ds in training_collection.items():
+            ds = ds.drop_columns(['id'])
+            ds = self._preprocessor.transform(ds)
+            training_ds = {**{'train' : ray.put(ds)}, **datasets}
 
-        # Training execution
-        result = self._trainer.fit()
-        self._model_ckpt = result.checkpoint
+            # Define trainer
+            self._trainer = SklearnPartialTrainer(
+                estimator = self._clf,
+                label_column = self.taxa,
+                labels_list = training_labels,
+                features_list = self.kmers,
+                params = self._train_params,
+                datasets = training_ds,
+                batch_size = self.batch_size,
+                set_estimator_cpus = True,
+                scaling_config = ScalingConfig(
+                    trainer_resources = {
+                        'CPU' : int(os.cpu_count()*0.8)
+                    }
+                ),
+                run_config = RunConfig(
+                    name = self.classifier,
+                    local_dir = self._workdir
+                ),
+            )
+
+            # Training execution
+            training_result = self._trainer.fit()
+            self._models_collection[tax] = training_result.checkpoint
 
     def predict(self, df, threshold = 0.8, cv = False):
         print('predict')
         if df.count() > 0:
             df = self._preprocessor.preprocessors[0].transform(df)
             if self.classifier == 'onesvm':
-                self._predictor = BatchPredictor.from_checkpoint(self._model_ckpt, SklearnPredictor)
+                self._predictor = BatchPredictor.from_checkpoint(self._models_collection['domain'], SklearnPredictor)
                 predictions = self._predictor.predict(df, batch_size = self.batch_size)
                 predictions = np.array(predictions.to_pandas()).reshape(-1)
-            else:
-                self._predictor = BatchPredictor.from_checkpoint(self._model_ckpt, SklearnProbaPredictor)
+            elif self.classifier == 'linearsvm':
+                self._predictor = BatchPredictor.from_checkpoint(self._models_collection['domain'], SklearnProbaPredictor)
                 predictions = self._predictor.predict(df, batch_size = self.batch_size)
-                predictions = self._prob_2_cls(predictions, len(self._encoded), threshold)
-            
+                predictions = self._prob_2_cls_binary(predictions, threshold)
+            else:
+                pred_dct = {}
+                for tax, ckpt in self._models_collection.items():
+                    self._predictor = BatchPredictor.from_checkpoint(ckpt, SklearnProbaPredictor)
+                    pred_dct[tax] = self._predictor.predict(df, batch_size = self.batch_size)
+                predictions = self._prob_2_cls_multiclass(pred_dct, df.count(), threshold)
+
             return self._label_decode(predictions)    
         else:
             raise ValueError('No data to predict')
 
-    def _prob_2_cls(self, predict, nb_cls, threshold):
+    def _prob_2_cls_binary(self, predict, threshold):
         print('_prob_2_cls')
         def map_predicted_label(df : pd.DataFrame):
             predict = pd.DataFrame({
@@ -269,12 +322,32 @@ class SklearnModel(ModelsUtils):
             predict.loc[predict['best_proba'] < threshold, 'predicted_label'] = -1
             return pd.DataFrame(predict['predicted_label'])
 
-        if nb_cls == 1:
-            predict = np.round(abs(np.concatenate(predict.to_pandas()['predictions'])))
-        else:
-            mapper = BatchMapper(map_predicted_label, batch_format = 'pandas')
-            predict = mapper.transform(predict)
-            predict = np.ravel(np.array(predict.to_pandas()))
-        
+        mapper = BatchMapper(map_predicted_label, batch_format = 'pandas')
+        predict = mapper.transform(predict)
+        predict = np.ravel(np.array(predict.to_pandas()))
+    
         return predict
         
+    def _prob_2_cls_multiclass(self, pred_dct, nb_records, threshold):
+        print('_prob_2_cls')
+        def map_predicted_label(df):
+            predict = pd.DataFrame({
+                'best_proba': [max(df.iloc[i].values) for i in range(len(df))],
+                'predicted_label': [np.argmax(df.iloc[i].values) for i in range(len(df))]
+            })
+            return predict
+
+        global_predict = pd.DataFrame({
+            'predict_proba': np.zeros(nb_records, dtype=np.float32),
+            'predict_cls': np.zeros(nb_records, dtype=np.int32),
+        })
+        for tax, local_predict in pred_dct.items():
+            with parallel_backend('threading'):
+                local_predict = Parallel(n_jobs=-1, prefer='threads', verbose=1)(
+                    delayed(map_predicted_label)(batch) for batch in local_predict.iter_batches(batch_size=self.batch_size))
+            local_predict = pd.concat(local_predict, ignore_index = True)
+            global_predict.loc[global_predict['predict_proba'] < local_predict['best_proba'],'predict_cls'] = np.array(local_predict.loc[local_predict['best_proba'] > global_predict['predict_proba'], 'predicted_label'])
+            global_predict.loc[global_predict['predict_proba'] < local_predict['best_proba'],'predict_proba'] = np.array(local_predict.loc[local_predict['best_proba'] > global_predict['predict_proba'], 'best_proba'])
+        global_predict.loc[global_predict['predict_proba'] < threshold, 'predict_cls'] = -1
+    
+        return np.array(global_predict['predict_cls'])

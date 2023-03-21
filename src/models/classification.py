@@ -72,19 +72,24 @@ class ClassificationMethods():
         self._batch_size = batch_size
         self._training_epochs = training_epochs
         # Initialize with values
-        self.classified_data = {'sequence': []}
+        self.classified_data = {
+            'sequence': [],
+            'classification' : None,
+            'classified_ids' : [],
+            'unknown_ids' : []
+        }
         # Empty initializations
         self.models = {}
         self._host = False
+        self._taxas_order = []
         self._host_data = None
         self._database_data = None
-        self._classified_ids = []
-        self._not_classified_ids = []
         self._preprocess_dataset = None
         self._training_datasets = None
         self._merged_training_datasets = None
         self._merged_database_host = None
         self.previous_taxa_unclassified = None
+        # Extract database data 
         if isinstance(database_k_mers, tuple):
             self._host = True
             self._database_data = database_k_mers[0]
@@ -96,39 +101,59 @@ class ClassificationMethods():
             self._database_data['kmers'].remove('id')
         if self._host and 'id' in self._host_data['kmers']:
             self._host_data['kmers'].remove('id')
+        # Assign taxas order for top-down strategy
+        self._taxas_order = self._database_data['taxas'].copy()
+        self._taxas_order.reverse()
         # Automatic executions
         self._verify_assign_taxas(taxa)
         
     # Main functions
     #########################################################################################################
 
+    # Wrapper function for training and predicting over each known taxa
+    def execute_training_prediction(self, data2classify):
+        print('execute_training_prediction')
+        file2classify = data2classify['profile']
+        df2classify = ray.data.read_parquet(file2classify)
+        ids2classify = data2classify['ids']
+        for i, taxa in enumerate(self._taxas_order):
+            if taxa in self._taxas:
+                # Training
+                if taxa in ['domain','bacteria','host']:
+                    clf = self._classifier_binary
+                else:
+                    clf = self._classifier_multiclass
+                self._data_file = os.path.join(self._outdirs['data_dir'], f'Xy_{taxa}_database_K{self._k}_{clf}_{self._database}_data.npz')
+                self._model_file = os.path.join(self._outdirs['models_dir'], f'{clf}_{taxa}.pkl')
+                train = self._verify_load_data_model(self._data_file, self._model_file, taxa)
+                if train:
+                    self._train_model(taxa)
+                # Predicting
+                try:
+                    if i == 0:
+                        df2classify = self._classify_first(df2classify, taxa, ids2classify, file2classify)
+                    else:
+                        df2classify = self._classify_subsequent(df2classify, taxa, ids2classify, file2classify)
+                except ValueError:
+                    print('Stopping classification prematurelly because there are no more sequences to classify')
+                    return taxa
+        return None
+
+
     # Execute training of model(s)
     def execute_training(self):
         print('execute_training')
-        for taxa in self._taxas:
-            if taxa in ['domain','bacteria','host']:
-                clf = self._classifier_binary
-            else:
-                clf = self._classifier_multiclass
-            self._data_file = os.path.join(
-                self._outdirs['data_dir'],
-                'Xy_{}_database_K{}_{}_{}_data.npz'.format(
-                    taxa,
-                    self._k,
-                    clf,
-                    self._database
-                )
-            )
-            self._model_file = os.path.join(
-                self._outdirs['models_dir'],
-                '{}_{}.pkl'.format(
-                    clf,
-                    taxa
-                )
-            )
-            train = self._verify_load_data_model(self._data_file, self._model_file, taxa)
-            if train:
-                self._train_model(taxa)
+        for taxa in self._taxas_order:
+            if taxa in self._taxas:
+                if taxa in ['domain','bacteria','host']:
+                    clf = self._classifier_binary
+                else:
+                    clf = self._classifier_multiclass
+                self._data_file = os.path.join(self._outdirs['data_dir'], f'Xy_{taxa}_database_K{self._k}_{clf}_{self._database}_data.npz')
+                self._model_file = os.path.join(self._outdirs['models_dir'], f'{clf}_{taxa}.pkl')
+                train = self._verify_load_data_model(self._data_file, self._model_file, taxa)
+                if train:
+                    self._train_model(taxa)
 
     # Train model according to passed taxa
     def _train_model(self, taxa):
@@ -147,8 +172,7 @@ class ClassificationMethods():
         print('_binary_training')
         self._verify_classifier_binary()
         if self._classifier_binary == 'onesvm':
-            if self._training_datasets is None:
-                self._load_training_data()
+            self._load_training_data()
             self.models[taxa] = SklearnModel(
                 self._classifier_binary,
                 self._database,
@@ -198,8 +222,8 @@ class ClassificationMethods():
     def _multiclass_training(self, taxa):
         print('_multiclass_training')
         self._verify_classifier_multiclass()
-        if self._training_datasets is None:
-            self._load_training_data()
+        self._load_training_data()
+        self._get_taxa_ds_collection(taxa)
         if self._classifier_multiclass in ['sgd','mnb']:
             self.models[taxa] = SklearnModel(
                 self._classifier_multiclass,
@@ -229,7 +253,7 @@ class ClassificationMethods():
         self.models[taxa].train(self._training_datasets, self._database_data, self._cv)
         self._save_model(self._model_file, taxa)
         
-    # Execute classification using trained model(s)
+    # Execute classification using trained model(s) over a given taxa
     def execute_classification(self, data2classify):
         print('execute_classification')
         df_file = data2classify['profile']
@@ -247,7 +271,6 @@ class ClassificationMethods():
                 print('Stopping classification prematurelly because there are no more sequences to classify')
                 return taxa
         return None
-                
 
     # Classify sequences for first iteration
     def _classify_first(self, df, taxa, ids, df_file):
@@ -257,32 +280,30 @@ class ClassificationMethods():
             not_pred_df = pred_df[pred_df[taxa] == 'unknown']
             pred_df = pred_df[pred_df[taxa] != 'unknown']
 
-            self._classified_ids = list(pred_df['id'].values)
-            self._not_classified_ids = list(not_pred_df['id'].values)
+            self.classified_data['classified_ids'] = list(pred_df['id'].values)
+            self.classified_data['unknown_ids'] = list(not_pred_df['id'].values)
+
+            self.classified_data['classification'] = pred_df
 
             if taxa == 'domain':
                 if self._host == True:
                     pred_df_host = pred_df[pred_df['domain'] == 'host']
                     pred_df = pred_df[pred_df['domain'] != 'host']
-                    self.classified_data['host'] = {
-                        'classification' : pred_df_host,
-                        'classified_ids': list(pred_df_host['id'].values)
+                    classified_host, classified_host_file = self._extract_subset(df, df_file, list(pred_df_host['id'].values), taxa, 'bacteria')
+                    self.classified_data[taxa]['host'] = {
+                        'classification' : classified_host_file
                     }
-                
-                classified, classified_file = self._extract_subset(df, df_file, self._classified_ids, taxa, 'bacteria')
+                classified, classified_file = self._extract_subset(df, df_file, self.classified_data['classified_ids'], taxa, 'bacteria')
                 self.classified_data[taxa]['bacteria'] = classified_file
-                self.classified_data[taxa]['bacteria_ids'] = self._classified_ids.copy()
-                not_classified, not_classified_file = self._extract_subset(df, df_file, self._not_classified_ids, taxa, 'unknown')
+                not_classified, not_classified_file = self._extract_subset(df, df_file, self.classified_data['unknown_ids'], taxa, 'unknown')
                 self.classified_data[taxa]['unknown'] = not_classified_file
-                self.classified_data[taxa]['unknown_ids'] = self._not_classified_ids.copy()
                 return classified
             else:
-                self.classified_data[taxa]['classification'] = pred_df
-                self.classified_data[taxa]['classified_ids'] = list(pred_df['id'].values)
-                not_classified, not_classified_file = self._extract_subset(df, df_file, self._not_classified_ids, taxa, 'unknown')
+                classified, classified_file = self._extract_subset(df, df_file, self.classified_data['classified_ids'], taxa, 'bacteria')
+                self.classified_data[taxa]['classified'] = classified_file
+                not_classified, not_classified_file = self._extract_subset(df, df_file, self.classified_data['unknown_ids'], taxa, 'unknown')
                 self.classified_data[taxa]['unknown'] = not_classified_file
-                self.classified_data[taxa]['unknown_ids'] = self._not_classified_ids.copy()
-                return not_classified
+                return classified
         except:
             raise ValueError('No sequences to classify for {}.'.format(taxa))
 
@@ -294,16 +315,14 @@ class ClassificationMethods():
             not_pred_df = pred_df[pred_df[taxa] == 'unknown']
             pred_df = pred_df[pred_df[taxa] != 'unknown']
 
-            self._classified_ids = self._classified_ids.extend(list(pred_df['id'].values))
-            self._not_classified_ids = list(not_pred_df['id'].values)
+            self.classified_data['classification'] = self.classified_data['classification'].join(pred_df, how = 'outer', on = 'id')
 
-            self.classified_data[taxa]['classification'] = pred_df
-            self.classified_data[taxa]['classified_ids'] = list(pred_df['id'].values)
-            not_classified, not_classified_file = self._extract_subset(df, df_file, self._not_classified_ids, taxa, 'unknown')
+            classified, classified_file = self._extract_subset(df, df_file, list(pred_df['id'].values), taxa, 'classified')
+            self.classified_data[taxa]['classified'] = classified_file
+            not_classified, not_classified_file = self._extract_subset(df, df_file, list(not_pred_df['id'].values), taxa, 'unknown')
             self.classified_data[taxa]['unknown'] = not_classified_file
-            self.classified_data[taxa]['unknown_ids'] = self._not_classified_ids.copy()
-
-            return not_classified
+            
+            return classified
         except:
             raise ValueError('No sequences to classify for {}.'.format(taxa))
 
@@ -380,7 +399,7 @@ class ClassificationMethods():
     def _verify_assign_taxas(self, taxa):
         print('_verify_assign_taxas')
         if taxa is None:
-            self._taxas = self._database_data['taxas'].copy()
+            self._taxas = self._database_data['taxas'].copy()            
         elif isinstance(taxa, list):
             self._taxas = taxa
         elif isinstance(taxa, str):
@@ -448,51 +467,57 @@ class ClassificationMethods():
 
     def _load_training_data_merged(self, taxa):
         print('_load_training_data_merged')
-        X_train = ray.data.read_parquet(self._merged_database_host['profile'])
-        y_train = pd.DataFrame({
+        self._X_train = ray.data.read_parquet(self._merged_database_host['profile'])
+        self._y_train = pd.DataFrame({
             taxa: pd.DataFrame(
                 self._merged_database_host['classes'],
                 columns=self._merged_database_host['taxas']
             ).loc[:,taxa].str.lower()
         })
 
-        y_train[y_train['domain'] == 'archaea'] = 'bacteria'
+        self._y_train[self._y_train['domain'] == 'archaea'] = 'bacteria'
 
-        df_train = zip_X_y(X_train, y_train)
+        df_train = zip_X_y(self._X_train, self._y_train)
         
+        df_val = df_train.random_sample(0.3)
+        df_val = self._sim_4_cv(df_val, self._merged_database_host, f'{self._database}_val')
+
         self._preprocess_dataset = df_train
         if self._cv:
             # df_train, df_test = df_train.train_test_split(0.2, shuffle=True)
             df_test = df_train.random_sample(0.3)
             df_test = self._sim_4_cv(df_test, self._merged_database_host, f'{self._database}_test')
-            self._merged_training_datasets = {'train': df_train, 'test': df_test}
+            self._merged_training_datasets = {'train': df_train, 'validation': df_val, 'test': df_test}
         else:
-            self._merged_training_datasets = {'train': df_train}
+            self._merged_training_datasets = {'train': df_train, 'validation': df_val}
 
     def _load_training_data(self):
         print('_load_training_data')
-        X_train = ray.data.read_parquet(self._database_data['profile'])
-        y_train = pd.DataFrame(
+        self._X_train = ray.data.read_parquet(self._database_data['profile'])
+        self._y_train = pd.DataFrame(
                 self._database_data['classes'],
                 columns=self._database_data['taxas']
             )
 
-        for col in y_train.columns:
-            y_train[col] = y_train[col].str.lower()
+        for col in self._y_train.columns:
+            self._y_train[col] = self._y_train[col].str.lower()
 
-        if 'domain' in y_train.columns:
-            y_train[y_train['domain'] == 'archaea'] = 'bacteria'
+        if 'domain' in self._y_train.columns:
+            self._y_train[self._y_train['domain'] == 'archaea'] = 'bacteria'
         
-        df_train = zip_X_y(X_train, y_train)
+        df_train = zip_X_y(self._X_train, self._y_train)
+
+        df_val = df_train.random_sample(0.3)
+        df_val = self._sim_4_cv(df_val, self._database_data, f'{self._database}_val')
 
         self._preprocess_dataset = df_train
         if self._cv:
             # df_train, df_test = df_train.train_test_split(0.2, shuffle=True)
             df_test = df_train.random_sample(0.3)
             df_test = self._sim_4_cv(df_test, self._database_data, f'{self._database}_test')
-            self._training_datasets = {'train': df_train, 'test': df_test}
+            self._training_datasets = {'train': df_train, 'validation': df_val, 'test': df_test}
         else:
-            self._training_datasets = {'train': df_train}
+            self._training_datasets = {'train': df_train, 'validation': df_val}
 
     def _sim_4_cv(self, df, kmers_ds, name):
         print('_sim_4_cv')
@@ -524,4 +549,20 @@ class ClassificationMethods():
         df = zip_X_y(df, sim_cls)
         return df
     
-    
+    def _get_taxa_ds_collection(self, current_taxa):
+        print('_get_taxa_ds_collection')
+        ds_collection = {}
+        df = self._training_datasets['train']
+
+        previous_taxa = self._taxas_order[self._taxas_order.index(current_taxa) - 1]
+        previous_cls_lst = np.unique(self._y_train[previous_taxa])
+        for cls in previous_cls_lst:
+            ds_collection[cls] = ray.data.from_pandas(pd.DataFrame(columns = df.schema().names))
+        for batch in df.iter_batches(
+            batch_size=10,
+            batch_format='pandas'
+        ):
+            for cls in np.unique(batch[previous_taxa]):
+                ds_collection[cls] = ds_collection[cls].union(ray.data.from_pandas(batch[batch[previous_taxa] == cls]))
+        
+        self._training_datasets['train'] = ds_collection

@@ -20,6 +20,7 @@ from ray.air._internal.checkpointing import (
 )
 from ray.util.joblib import register_ray
 from ray.air.config import RunConfig, ScalingConfig
+from sklearn.calibration import CalibratedClassifierCV
 from ray.train.constants import MODEL_KEY, TRAIN_DATASET_KEY
 from ray.train.sklearn._sklearn_utils import _set_cpu_params
 
@@ -172,12 +173,12 @@ class SklearnPartialTrainer(SklearnTrainer):
         register_ray()
 
         self.preprocess_datasets()
-
         self.estimator.set_params(**self.params)
 
         datasets = self._get_datasets()
 
         X_train, y_train = datasets.pop(TRAIN_DATASET_KEY)
+        X_calib, y_calib = datasets.pop('validation')
 
         scaling_config = self._validate_scaling_config(self.scaling_config)
 
@@ -224,6 +225,25 @@ class SklearnPartialTrainer(SklearnTrainer):
                 except TypeError:
                     self.estimator.partial_fit(batch_X, batch_y, **self.fit_params)
             fit_time = time() - start_time
+            
+            X_calib_df = np.empty((X_calib.count(), len(self._features_list)))
+            for ind, batch in enumerate(X_calib.iter_batches(
+                batch_size = 1,
+                batch_format = 'numpy'
+            )):
+                X_calib_df[ind] = batch['__value__']
+
+            X_calib = pd.DataFrame(X_calib_df, columns = self._features_list)
+            y_calib = y_calib.to_pandas()
+            self.estimator = CalibratedClassifierCV(
+                estimator = self.estimator,
+                method = 'sigmoid',
+                cv = 'prefit',
+            )
+            self.estimator.fit(
+                X_calib,
+                y_calib,
+            )
 
             with tune.checkpoint_dir(step=1) as checkpoint_dir:
                 with open(os.path.join(checkpoint_dir, MODEL_KEY), "wb") as f:

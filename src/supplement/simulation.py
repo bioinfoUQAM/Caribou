@@ -5,12 +5,14 @@ import pandas as pd
 import os
 import ray
 import gzip
+import json
 import argparse
 
 from utils import *
 from Bio import SeqIO
 from glob import glob
 from pathlib import Path
+from logging import ERROR
 from models.reads_simulation import readsSimulation
 
 __author__ = "Nicolas de Montigny"
@@ -24,15 +26,19 @@ def simulation(opt):
     verify_file(opt['classes'])
     if opt['kmers_length'] is not None and opt['kmers_list'] is not None:
         opt['kmers_length'], opt['kmers_list'] = verify_kmers_list_length(opt['kmers_length'], opt['kmers_list'])
-    
-    print(opt['kmers_length'])
-    print(len(opt['kmers_list']))
-    
+        
     # Prepare for simulation
     genomes = extract_genomes(opt['fasta'])
     cls_df = pd.read_csv(opt['classes'])
 
-    ray.init()
+    # Initialize cluster
+    ray.init(
+        logging_level = ERROR,
+        _system_config = {
+            'object_spilling_config': json.dumps(
+                {'type': 'filesystem', 'params': {'directory_path': str(opt['workdir'])}})
+        }
+    )
     # Execute simulation with k-mers extraction
     if opt['kmers_length'] is not None and opt['kmers_list'] is not None:
         outdirs = define_create_outdirs(opt['outputs'])
@@ -87,6 +93,7 @@ if __name__ == "__main__":
     parser.add_argument('-l','--kmers_list', type=Path, default=None, help='Optional. PATH to a file containing a list of k-mers to be extracted after the simulation. Should be the same as the reference database')
     parser.add_argument('-t','--type', default='miseq', choices=['miseq','hiseq','novaseq'], help='Type of Illumina sequencing to be simulated among : MiSeq, HiSeq and NovaSeq')
     parser.add_argument('-o','--outputs', required=True, help='PATH to and filename prefix of outputed files')
+    parser.add_argument('-wd', '--workdir', default='/tmp/spill', type=Path, help='Optional. Path to a working directory where Ray Tune will output and spill tuning data')
     args = parser.parse_args()
 
     opt = vars(args)

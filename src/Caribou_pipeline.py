@@ -196,7 +196,7 @@ def caribou(opt):
     t_classif = t_end - t_start
 
     # Build / Save classification results dictionnary
-    classified_data = populate_save_data(
+    classified_data = merge_save_data(
         recursive_classifier.classified_data,
         k_profile_database,
         end_taxa,

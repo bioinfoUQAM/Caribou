@@ -73,21 +73,16 @@ def bacteria_extraction(opt):
             verbose = opt['verbose'],
             cv = False
         )
-    t_start = time()
-    clf.execute_training()
-    t_end = time()
-    t_train = t_end - t_start
-
 # Execution of bacteria extraction / host removal on metagenome + save results
 ################################################################################
     
     t_start = time()
-    end_taxa = clf.execute_classification(data_metagenome)
+    end_taxa = clf.execute_training_prediction(data_metagenome)
     t_end = time()
     t_classify = t_end - t_start
 
     if end_taxa is None:
-        clf_data = populate_save_data(
+        clf_data = merge_save_data(
             clf.classified_data,
             data_bacteria,
             end_taxa,
@@ -95,10 +90,10 @@ def bacteria_extraction(opt):
             opt['metagenome_name'],
         )
         print(f"Caribou finished training the {opt['model_type']} model and extracting bacteria with it. \
-            \nThe training step took {t_train} seconds and the classification step took {t_classify} seconds.")
+            \nThe training and classification steps took {t_classify} seconds.")
     else:
         print(f"Caribou finished training the {opt['model_type']} model but there was no data to classify. \
-            \nThe training step took {t_train} seconds and the classification step took {t_classify} seconds.")
+            \nThe training and classification steps took {t_classify} seconds.")
 
 # Argument parsing from CLI
 ################################################################################

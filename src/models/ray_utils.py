@@ -3,11 +3,16 @@ import ray
 import warnings
 import pandas as pd
 
+from utils import zip_X_y
+
 # Class construction
 from abc import ABC, abstractmethod
 
 # CV metrics
 from sklearn.metrics import precision_recall_fscore_support
+
+# Simulation class
+from models.reads_simulation import readsSimulation
 
 __author__ = 'Nicolas de Montigny'
 
@@ -84,9 +89,8 @@ class ModelsUtils(ABC):
         self._predict_ids = []
         # Initialize Ray variables
         self._clf = None
-        self._model_ckpt = None
         self._preprocessor = None
-        #self._encoder = None
+        self._models_collection = {}
         self._trainer = None
         self._train_params = {}
         self._predictor = None
@@ -105,7 +109,12 @@ class ModelsUtils(ABC):
         """
 
     @abstractmethod
-    def _fit_model(self):
+    def _fit_model_binary(self):
+        """
+        """
+
+    @abstractmethod
+    def _fit_model_multiclass(self):
         """
         """
 
@@ -139,7 +148,12 @@ class ModelsUtils(ABC):
         """
 
     @abstractmethod
-    def _prob_2_cls(self):
+    def _prob_2_cls_binary(self):
+        """
+        """
+
+    @abstractmethod
+    def _prob_2_cls_multiclass(self):
         """
         """
 
