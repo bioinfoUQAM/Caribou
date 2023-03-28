@@ -179,6 +179,7 @@ class ClassificationMethods():
                 self._outdirs['models_dir'],
                 self._outdirs['results_dir'],
                 self._batch_size,
+                self._training_epochs,
                 self._k,
                 taxa,
                 self._database_data['kmers'],
@@ -196,6 +197,7 @@ class ClassificationMethods():
                     self._outdirs['models_dir'],
                     self._outdirs['results_dir'],
                     self._batch_size,
+                    self._training_epochs,
                     self._k,
                     taxa,
                     self._merged_database_host['kmers'],
@@ -223,7 +225,7 @@ class ClassificationMethods():
         print('_multiclass_training')
         self._verify_classifier_multiclass()
         self._load_training_data()
-        self._get_taxa_ds_collection(taxa)
+        # self._get_taxa_ds_collection(taxa)
         if self._classifier_multiclass in ['sgd','mnb']:
             self.models[taxa] = SklearnModel(
                 self._classifier_multiclass,
@@ -231,6 +233,7 @@ class ClassificationMethods():
                 self._outdirs['models_dir'],
                 self._outdirs['results_dir'],
                 self._batch_size,
+                self._training_epochs,
                 self._k,
                 taxa,
                 self._database_data['kmers'],
@@ -549,6 +552,8 @@ class ClassificationMethods():
         df = zip_X_y(df, sim_cls)
         return df
     
+    """
+    # This is a function for using with parent class training data decomposition that may be implemented later on
     def _get_taxa_ds_collection(self, current_taxa):
         print('_get_taxa_ds_collection')
         ds_collection = {}
@@ -566,3 +571,4 @@ class ClassificationMethods():
                 ds_collection[cls] = ds_collection[cls].union(ray.data.from_pandas(batch[batch[previous_taxa] == cls]))
         
         self._training_datasets['train'] = ds_collection
+    """

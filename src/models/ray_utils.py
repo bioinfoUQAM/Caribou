@@ -68,6 +68,7 @@ class ModelsUtils(ABC):
         outdir_model,
         outdir_results,
         batch_size,
+        training_epochs,
         k,
         taxa,
         kmers_list,
@@ -84,13 +85,14 @@ class ModelsUtils(ABC):
         self.verbose = verbose
         # Initialize hidden
         self._nb_kmers = len(kmers_list)
+        self._training_epochs = training_epochs
         # Initialize empty
         self._labels_map = None
         self._predict_ids = []
         # Initialize Ray variables
         self._clf = None
         self._preprocessor = None
-        self._models_collection = {}
+        self._model_ckpt = None
         self._trainer = None
         self._train_params = {}
         self._predictor = None
@@ -109,12 +111,7 @@ class ModelsUtils(ABC):
         """
 
     @abstractmethod
-    def _fit_model_binary(self):
-        """
-        """
-
-    @abstractmethod
-    def _fit_model_multiclass(self):
+    def _fit_model(self):
         """
         """
 
@@ -148,12 +145,7 @@ class ModelsUtils(ABC):
         """
 
     @abstractmethod
-    def _prob_2_cls_binary(self):
-        """
-        """
-
-    @abstractmethod
-    def _prob_2_cls_multiclass(self):
+    def _prob_2_cls(self):
         """
         """
 

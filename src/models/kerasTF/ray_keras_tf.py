@@ -91,7 +91,8 @@ class KerasTFModel(ModelsUtils):
             dataset,
             outdir_model,
             outdir_results,
-            batch_size, # Must be small to reduce mem usage
+            batch_size,
+            training_epochs,
             k,
             taxa,
             kmers_list,
@@ -99,7 +100,6 @@ class KerasTFModel(ModelsUtils):
         )
         # Parameters
         # Initialize hidden
-        self._training_epochs = training_epochs
         self._nb_CPU_data = int(os.cpu_count() * 0.2)
         self._nb_CPU_training = int(os.cpu_count() - self._nb_CPU_data)
         self._nb_GPU = len(tf.config.list_physical_devices('GPU'))
@@ -165,26 +165,20 @@ class KerasTFModel(ModelsUtils):
         if cv:
             self._cross_validation(datasets, kmers_ds)
         else:
-            if self.classifier in ['attention', 'lstm', 'deeplstm']:
-                self._fit_model_binary(datasets)
-            else:
-                self._fit_model_multiclass(datasets)
+            self._fit_model(datasets)
 
     def _cross_validation(self, datasets, kmers_ds):
         print('_cross_validation')
 
         df_test = datasets.pop('test')
 
-        if self.classifier in ['attention', 'lstm', 'deeplstm']:
-            self._fit_model_binary(datasets)
-        else:
-            self._fit_model_multiclass(datasets)
+        self._fit_model(datasets)
 
         y_true = []
         for row in df_test.iter_rows():
             y_true.append(row[self.taxa])
 
-        y_pred = self.predict(df_test.drop_columns([self.taxa]), cv = True)
+        y_pred = self.predict(df_test.drop_columns([self.taxa]), threshold = 0)
 
         for file in glob(os.path.join(os.path.dirname(kmers_ds['profile']), '*sim*')):
             if os.path.isdir(file):
@@ -194,7 +188,7 @@ class KerasTFModel(ModelsUtils):
 
         self._cv_score(y_true, y_pred)
 
-    def _fit_model_binary(self, datasets):
+    def _fit_model(self, datasets):
         print('_fit_model')
         # Preprocessing loop
         for name, ds in datasets.items():
@@ -246,8 +240,10 @@ class KerasTFModel(ModelsUtils):
             datasets=datasets,
         )
         training_result = self._trainer.fit()
-        self._models_collection['domain'] = training_result.best_checkpoints[0][0]
+        self._model_ckpt = training_result.best_checkpoints[0][0]
 
+    """
+    # This is a function for using with parent class training data decomposition that may be implemented later on
     def _fit_model_multiclass(self, datasets):
         print('_fit_model')
         training_collection = datasets.pop('train')
@@ -306,11 +302,10 @@ class KerasTFModel(ModelsUtils):
             )
             training_result = self._trainer.fit()
             self._models_collection[tax] = training_result.best_checkpoints[0][0]
+    """
     
-
-    def predict(self, df, threshold=0.8, cv=False):
+    def predict(self, df, threshold=0.8):
         print('predict')
-        pred_dct = {}
         if df.count() > 0:
             if len(df.schema().names) > 1:
                 col_2_drop = [col for col in df.schema().names if col != '__value__']
@@ -322,46 +317,60 @@ class KerasTFModel(ModelsUtils):
             print('number of classes :', self._nb_classes)
 
             # Make predictions
-            for tax, ckpt in self._models_collection.items():
-                pred_dct[tax] = batch_prediction(
-                    ckpt,
-                    df,
-                    self.classifier,
-                    self.batch_size,
-                    self._nb_classes,
-                    len(self.kmers)
-                )
+            predictions = batch_prediction(
+                self._model_ckpt,
+                df,
+                self.classifier,
+                self.batch_size,
+                self._nb_classes,
+                len(self.kmers)
+            )
 
             # Convert predictions to labels
-            if self._nb_classes == 2:
-                predictions = self._prob_2_cls_binary(pred_dct['domain'], threshold)
-            else:
-                predictions = self._prob_2_cls_multiclass(pred_dct, df.count(), threshold)
+            predictions = self._prob_2_cls(predictions, threshold)
                 
             return self._label_decode(predictions)
         else:
             raise ValueError('No data to predict')
 
     # Iterate over batches of predictions to transform probabilities to labels without mapping
-    def _prob_2_cls_binary(self, predictions, threshold):
-        print('_prob_2_cls_binary')
-        def map_predicted_label(df, threshold):
+    def _prob_2_cls(self, predictions, threshold):
+        print('_prob_2_cls')
+        def map_predicted_label_binary(df, threshold):
             lower_threshold = 0.5 - (threshold * 0.5)
             upper_threshold = 0.5 + (threshold * 0.5)
             predict = pd.DataFrame({
                 'proba': df['predictions'],
                 'predicted_label': np.full(len(df), -1)
             })
+            predict['predicted_label'] = np.round(predict['proba'])
             predict.loc[predict['proba'] >= upper_threshold, 'predicted_label'] = 1
             predict.loc[predict['proba'] <= lower_threshold, 'predicted_label'] = 0
             return predict['predicted_label'].to_numpy(dtype = np.int32)
+        
+        def map_predicted_label_multiclass(df, threshold):
+            predict = pd.DataFrame({
+                'best_proba': [df['predictions'][i][np.argmax(df['predictions'][i])] for i in range(len(df))],
+                'predicted_label': df["predictions"].map(lambda x: np.array(x).argmax())
+            })
+            predict.loc[predict['best_proba'] < threshold, 'predicted_label'] = -1
+            return predict['predicted_label'].to_numpy(dtype = np.int32)
+        
+        if self._nb_classes == 2:
+            fn = map_predicted_label_binary
+        else:
+            fn = map_predicted_label_multiclass
 
         with parallel_backend('threading'):
             predict = Parallel(n_jobs=-1, prefer='threads', verbose=1)(
-                delayed(map_predicted_label)(batch, threshold) for batch in predictions.iter_batches(batch_size = self.batch_size))
+                delayed(fn)(batch, threshold) for batch in predictions.iter_batches(batch_size = self.batch_size))
 
         return np.concatenate(predict)
 
+
+
+    """
+    # This is a function for using with parent class training data decomposition that may be implemented later on
     def _prob_2_cls_multiclass(self, pred_dct, nb_records, threshold):
         print('_prob_2_cls_multiclass')
         def map_predicted_label(df):
@@ -383,10 +392,10 @@ class KerasTFModel(ModelsUtils):
             local_predict = pd.concat(local_predict, ignore_index=True)
             global_predict.loc[global_predict['predict_proba'] < local_predict['best_proba'],'predict_cls'] = np.array(local_predict.loc[local_predict['best_proba'] > global_predict['predict_proba'], 'predicted_label'])
             global_predict.loc[global_predict['predict_proba'] < local_predict['best_proba'],'predict_proba'] = np.array(local_predict.loc[local_predict['best_proba'] > global_predict['predict_proba'], 'best_proba'])
-        global_predict.loc[global_predict['predict_proba'] < threshold, 'predict_cls'] = -1
+        # global_predict.loc[global_predict['predict_proba'] < threshold, 'predict_cls'] = -1
     
         return np.array(global_predict['predict_cls'])
-                
+    """            
 # Training/building function outside of the class as mentioned on the Ray discussion
 # https://discuss.ray.io/t/statuscode-resource-exhausted/4379/16
 ################################################################################
