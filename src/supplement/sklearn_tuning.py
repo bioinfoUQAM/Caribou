@@ -76,7 +76,7 @@ def merge_database_host(database_data, host_data):
 def zip_X_y(X, y):
     num_blocks = X.num_blocks()
     len_x = X.count()
-    ensure_length_ds(len_x,len(y))
+    ensure_length_ds(len_x,y.count())
     y = ray.data.from_arrow(pa.Table.from_pandas(y))
     X = X.repartition(len_x)
     y = y.repartition(len_x)

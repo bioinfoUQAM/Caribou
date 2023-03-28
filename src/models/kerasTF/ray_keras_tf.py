@@ -157,7 +157,7 @@ class KerasTFModel(ModelsUtils):
         for label, coded in zip(labels, encoded):
             decoded[predict == coded] = label
 
-        return decoded
+        return np.array(decoded)
 
     def train(self, datasets, kmers_ds, cv = True):
         print('train')

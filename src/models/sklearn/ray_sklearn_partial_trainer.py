@@ -229,26 +229,27 @@ class SklearnPartialTrainer(SklearnTrainer):
                         self.estimator.partial_fit(batch_X, batch_y, classes = self._labels, **self.fit_params)
                     except TypeError:
                         self.estimator.partial_fit(batch_X, batch_y, **self.fit_params)
-            
-        X_calib_df = np.empty((X_calib.count(), len(self._features_list)))
-        for ind, batch in enumerate(X_calib.iter_batches(
-            batch_size = 1,
-            batch_format = 'numpy'
-        )):
-            X_calib_df[ind] = batch['__value__']
+                fit_time = time() - start_time
+        if len(self._labels) > 1:
+            with parallel_backend("ray", n_jobs=num_cpus):
+                X_calib_df = np.empty((X_calib.count(), len(self._features_list)))
+                for ind, batch in enumerate(X_calib.iter_batches(
+                    batch_size = 1,
+                    batch_format = 'numpy'
+                )):
+                    X_calib_df[ind] = batch['__value__']
 
-        X_calib = pd.DataFrame(X_calib_df, columns = self._features_list)
-        y_calib = y_calib.to_pandas()
-        self.estimator = CalibratedClassifierCV(
-            estimator = self.estimator,
-            method = 'sigmoid',
-            cv = 'prefit',
-        )
-        self.estimator.fit(
-            X_calib,
-            y_calib,
-        )
-        fit_time = time() - start_time
+                X_calib = pd.DataFrame(X_calib_df, columns = self._features_list)
+                y_calib = y_calib.to_pandas()
+                self.estimator = CalibratedClassifierCV(
+                    estimator = self.estimator,
+                    method = 'sigmoid',
+                    cv = 'prefit',
+                )
+                self.estimator.fit(
+                    X_calib,
+                    y_calib,
+                )
 
         with tune.checkpoint_dir(step=1) as checkpoint_dir:
             with open(os.path.join(checkpoint_dir, MODEL_KEY), "wb") as f:

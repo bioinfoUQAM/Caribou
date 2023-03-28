@@ -327,7 +327,7 @@ class SklearnModel(ModelsUtils):
         else:
             raise ValueError('No data to predict')
 
-    def prob_2_cls(self, predict, nb_cls, threshold):
+    def _prob_2_cls(self, predict, nb_cls, threshold):
         print('_prob_2_cls')
         def map_predicted_label(df : pd.DataFrame):
             predict = pd.DataFrame({
