@@ -174,7 +174,7 @@ class SklearnPartialTrainer(SklearnTrainer):
     def training_loop(self):
         register_ray()
 
-        self.preprocess_datasets()
+        # self.preprocess_datasets()
         self.estimator.set_params(**self.params)
 
         datasets = self._get_datasets()
@@ -230,7 +230,7 @@ class SklearnPartialTrainer(SklearnTrainer):
                     except TypeError:
                         self.estimator.partial_fit(batch_X, batch_y, **self.fit_params)
                 fit_time = time() - start_time
-        if len(self._labels) > 1:
+        if len(self._labels) > 2:
             with parallel_backend("ray", n_jobs=num_cpus):
                 X_calib_df = np.empty((X_calib.count(), len(self._features_list)))
                 for ind, batch in enumerate(X_calib.iter_batches(
@@ -303,10 +303,24 @@ class SklearnPartialTrainer(SklearnTrainer):
                     batch_format = 'numpy'
                 ), y_test.iter_batches(
                     batch_size=self._batch_size,
-                    batch_format = 'pandas'
+                    batch_format = 'numpy'
                 )
             ):
-                batch = pd.DataFrame(batch, columns = self._features_list)
+                if isinstance(batch, dict):
+                    batch = batch['__value__']
+
+                try:
+                    batch = pd.DataFrame(batch, columns = self._features_list)
+                except ValueError:
+                    for i in range(len(batch)):
+                        if len(batch[i]) != len(self._features_list):
+                            warn("The features list length for some reads are not the same as for other reads.\
+                                Removing the last {} additionnal values, this may influence training.\
+                                    If this persists over multiple samples, please rerun the K-mers extraction".format(len(batch[i]) - len(self._features_list)))
+                            batch[i] = batch[i][:len(self._features_list)]
+                labels = np.ravel(labels)
+
+                # batch = pd.DataFrame(batch, columns = self._features_list)
                 try:
                     test_scores.append(_score(estimator, batch, labels, scorers))
                 except Exception:

@@ -2,13 +2,13 @@
 
 import os
 import ray
+import sys
 import json
 import logging
 import warnings
 import argparse
 import numpy as np
 import pandas as pd
-import pyarrow as pa
 
 from glob import glob
 from pathlib import Path
@@ -22,7 +22,7 @@ from models.sklearn.ray_sklearn_partial_trainer import SklearnPartialTrainer
 from models.sklearn.ray_sklearn_onesvm_encoder import OneClassSVMLabelEncoder
 
 # Preprocessing
-from ray.data.preprocessors import LabelEncoder
+from ray.data.preprocessors import Chain, LabelEncoder
 
 # Training
 from sklearn.naive_bayes import MultinomialNB
@@ -39,8 +39,76 @@ warnings.simplefilter(action='ignore')
 # Functions
 ################################################################################
 
+def load_data(opt):
+    print('load_data')
+    if opt['data_host']:
+        data_db = load_Xy_data(opt['data'])
+        data_host = load_Xy_data(opt['data_host'])
+        data = merge_database_host(data_db, data_host)
+        datasets, preprocessor, labels_map = load_ds(
+            data,
+            f'merged_{opt["database_name"]}_{opt["host_name"]}',
+            opt['taxa'],
+            data['kmers'],
+            opt['kmers_length'],
+            opt['classifier']
+        )
+    else:
+        data = load_Xy_data(opt['data'])
+        datasets, preprocessor, labels_map = load_ds(
+            data,
+            opt['database_name'],
+            opt['taxa'],
+            data['kmers'],
+            opt['kmers_length'],
+            opt['classifier']
+        )
+
+    return data, datasets, preprocessor, labels_map
+
+# Function from class function models.classification.ClassificationMethods._load_training_data
+
+
+def load_ds(db_data, db_name, taxa, cols, klen, classifier):
+    print('load_ds')
+    X_train = ray.data.read_parquet(db_data['profile'])
+    y_train = pd.DataFrame(
+        db_data['classes'],
+        columns = db_data['taxas']
+    )
+    
+    for col in y_train.columns:
+        y_train[col] = y_train[col].str.lower()
+    
+    if 'domain' in y_train.columns:
+        y_train[y_train['domain'] == 'archaea'] = 'bacteria'
+
+    df_train = zip_X_y(X_train, y_train)
+    df_val, df_test = generate_val_test_ds(df_train, db_data, db_name, taxa, cols, klen)
+    
+    preprocessor, labels_map = preprocess(df_train, taxa, cols, classifier)
+
+    datasets = {
+        'train': ray.put(df_train),
+        'validation': ray.put(df_val),
+        'test': ray.put(df_test)
+    }
+
+    return datasets, preprocessor, labels_map
+
+
+def generate_val_test_ds(df_train, db_data, db_name, taxa, cols, klen):
+    print('generate_val_test_ds')
+    df_val = df_train.random_sample(0.3)
+    df_val = sim_4_cv(df_val, db_data, f'{db_name}_val', taxa, cols, klen)
+    df_test = df_train.random_sample(0.3)
+    df_test = sim_4_cv(df_test, db_data, f'{db_name}_test', taxa, cols, klen)
+    
+    return df_val, df_test
+
 # Function from class function models.classification.ClassificationMethods._merge_database_host
 def merge_database_host(database_data, host_data):
+    print('merge_database_host')
     merged_database_host = {}
 
     merged_database_host['profile'] = '{}_host_merged'.format(os.path.splitext(database_data['profile'])[0]) # Kmers profile
@@ -73,65 +141,121 @@ def merge_database_host(database_data, host_data):
     df_merged.write_parquet(merged_database_host['profile'])
     return merged_database_host
 
-def zip_X_y(X, y):
-    num_blocks = X.num_blocks()
-    len_x = X.count()
-    ensure_length_ds(len_x,y.count())
-    y = ray.data.from_arrow(pa.Table.from_pandas(y))
-    X = X.repartition(len_x)
-    y = y.repartition(len_x)
-    for ds in [X,y]:
-        if not ds.is_fully_executed():
-            ds.fully_executed()
-    df = X.zip(y).repartition(num_blocks)
-    return df
-
-def ensure_length_ds(len_x, len_y):
-    if len_x != len_y:
-        raise ValueError('X and y have different lengths: {} and {}'.format(len_x, len_y))
-
 # Function from class function models.ray_sklearn.SklearnModel._training_preprocess
-def preprocess(X, y, taxa, cols, classifier):
-    scaler = TensorMinMaxScaler(cols)
-    X = scaler.fit_transform(X)
-    labels = np.unique(y[taxa])
-    y, labels = preprocess_labels(y, taxa, labels, classifier)
-    df = zip_X_y(X, y)
-    return df, labels, scaler
-
-def preprocess_labels(df, taxa, labels, classifier):
-    df = ray.data.from_pandas(df)
+def preprocess(df, taxa, cols, classifier):
+    print('preprocess')
     if classifier == 'onesvm':
         encoder = OneClassSVMLabelEncoder(taxa)
-        df = encoder.fit_transform(df)
-        labels = np.array([-1, 1], dtype=np.int32)
+        encoded = np.array([1,-1], dtype = np.int32)
+        labels = np.array(['bacteria', 'unknown'], dtype = object)
     else:
         encoder = LabelEncoder(taxa)
-        df = encoder.fit_transform(df)
-        labels = np.arange(len(labels))
-    return df, labels
 
-# Function from class models.ray_utils.ModelsUtils
-def sim_4_cv(df, kmers_ds, name, taxa, cols, k, scaler):
-    sim_genomes = []
-    sim_taxas = []
+    preprocessor = Chain(
+        TensorMinMaxScaler(cols),
+        encoder
+    )
+    preprocessor.fit(df)
+    if classifier != 'onesvm':
+        labels = list(preprocessor.preprocessors[1].stats_[f'unique_values({taxa})'].keys())
+        encoded = np.arange(len(labels))
+        labels = np.append(labels, 'unknown')
+        encoded = np.append(encoded, -1)
+    labels_map = zip(labels, encoded)
+
+    return preprocessor, labels_map
+
+# Function from class function models.classification.ClassificationMethods._sim_4_cv
+def sim_4_cv(df, kmers_ds, name, taxa, cols, klen):
+    print('_sim_4_cv')
+    sim_cls_dct = {
+        'id':[],
+    }
+    taxa_cols = []
     for row in df.iter_rows():
-        sim_genomes.append(row['id'])
-        sim_taxas.append(row[taxa])
-    cls = pd.DataFrame({'id':sim_genomes,taxa:sim_taxas})
+        if len(taxa_cols) == 0:
+            taxa_cols = list(row.keys())
+            taxa_cols.remove('id')
+            taxa_cols.remove('__value__')
+            for taxa in taxa_cols:
+                sim_cls_dct[taxa] = []
+        sim_cls_dct['id'].append(row['id'])
+        for taxa in taxa_cols:
+            sim_cls_dct[taxa].append(row[taxa])
+    cls = pd.DataFrame(sim_cls_dct)
     sim_outdir = os.path.dirname(kmers_ds['profile'])
-    cv_sim = readsSimulation(kmers_ds['fasta'], cls, sim_genomes, 'miseq', sim_outdir, name)
-    sim_data = cv_sim.simulation(k, cols)
+    cv_sim = readsSimulation(kmers_ds['fasta'], cls, sim_cls_dct['id'], 'miseq', sim_outdir, name)
+    sim_data = cv_sim.simulation(klen, cols)
     sim_ids = sim_data['ids']
-    sim_cls = pd.DataFrame({'sim_id':sim_ids})
+    sim_cls = pd.DataFrame({'sim_id':sim_ids}, dtype = object)
     sim_cls['id'] = sim_cls['sim_id'].str.replace('_[0-9]+_[0-9]+_[0-9]+', '', regex=True)
     sim_cls = sim_cls.set_index('id').join(cls.set_index('id'))
     sim_cls = sim_cls.drop(['sim_id'], axis=1)
     sim_cls = sim_cls.reset_index(drop = True)
     df = ray.data.read_parquet(sim_data['profile'])
-    df = scaler.transform(df)
     df = zip_X_y(df, sim_cls)
     return df
+
+def get_clf_params(classifier):
+    clf = None
+    train_params = {}
+    tune_params = {}
+
+    if classifier == 'onesvm':
+        clf = SGDOneClassSVM()
+        train_params = {
+            'nu' : 0.05,
+            'tol' : 1e-4
+        }
+        tune_params = {
+            'params' : {
+                'nu' : tune.grid_search(np.linspace(0.1, 1, 10)),
+                'learning_rate' : tune.grid_search(['constant','optimal','invscaling','adaptive']),
+                'eta0' : tune.grid_search(np.logspace(-4,4,10))
+            }
+        }
+    elif classifier == 'linearsvm' or classifier == 'sgd':
+        clf = SGDClassifier()
+        train_params = {
+            'loss' : 'squared_error'
+        }
+        tune_params = {
+            'params' : {
+                'loss' : tune.grid_search(['log_loss', 'modified_huber']),
+                'penalty' : tune.grid_search(['l2', 'l1', 'elasticnet']),
+                'alpha' : tune.grid_search(np.logspace(-4,4,10)),
+                'learning_rate' : tune.grid_search(['constant','optimal','invscaling','adaptive']),
+                'eta0' : tune.grid_search(np.logspace(-4,4,10))
+            }
+        }
+    elif classifier == 'mnb':
+        clf = MultinomialNB()
+        train_params = {
+            'alpha' : 1.0
+        }
+        tune_params = {
+            'params' : {
+                'alpha' : tune.grid_search(np.linspace(0,1,10)),
+                'fit_prior' : tune.grid_search([True,False])
+            }
+        }
+    
+    return clf, train_params, tune_params
+
+
+def output_results(opt, tuning_results):
+    print('output_results')
+    outfile = os.path.join(opt['outdir'], '{}_{}_tuning.csv'.format(opt['classifier'],opt['taxa']))
+    tuning_df = tuning_results.get_dataframe(filter_metric = 'validation/test_score', filter_mode = 'max')
+    tuning_df.index = [opt['taxa']] * len(tuning_df)
+    tuning_df.to_csv(outfile)
+
+    # delete sim files
+    for file in glob(os.path.join(os.path.dirname(data['profile']),'*sim*')):
+        if os.path.isdir(file):
+            rmtree(file)
+        else:
+            os.remove(file)
 
 # CLI argument
 ################################################################################
@@ -162,92 +286,27 @@ ray.init(
 
 # Data
 ################################################################################
-data = None
+data, datasets, preprocessor, labels_map = load_data(opt)
 
-if opt['data_host']:
-    data_db = load_Xy_data(opt['data'])
-    data_host = load_Xy_data(opt['data_host'])
-    data = merge_database_host(data_db, data_host)
-else:
-    data = load_Xy_data(opt['data'])
-
-# Ensure no column is named 'id'
-if 'id' in data['kmers']:
-    data['kmers'].remove('id')
-
-X = ray.data.read_parquet(data['profile'])
-cols = data['kmers']
-y = pd.DataFrame({opt['taxa'] : pd.DataFrame(data['classes'], columns = data['taxas']).loc[:,opt['taxa']].astype('string').str.lower()}, dtype = object)
-
-if opt['taxa'] == 'domain':
-    y[y['domain'] == 'archaea'] = 'bacteria'
-
-df_train, labels_list, scaler = preprocess(X, y, opt['taxa'], cols, opt['classifier'])
-
-if (df_train.count() / df_train.num_blocks()) < 10:
-    if (df_train.count() / os.cpu_count()) < 10:
-        df_train = df_train.repartition(10)
-    else:
-        df_train = df_train.repartition(os.cpu_count())
-df_val = df_train.random_sample(0.2)
-df_val = sim_4_cv(df_val, data, 'tuning_val', opt['taxa'], cols, opt['kmers_length'], scaler)
-df_train = df_train.drop_columns(['id'])
-df_val = df_val.drop_columns(['id'])
-
-datasets = {'train' : ray.put(df_train), 'validation' : ray.put(df_val)}
+labels_list = [mapping[1] for mapping in labels_map]
 
 # Model parameters
 ################################################################################
-clf = None
-train_params = {}
-tune_params = {}
-
-if opt['classifier'] == 'onesvm':
-    clf = SGDOneClassSVM()
-    train_params = {
-        'nu' : 0.05,
-        'tol' : 1e-4
-    }
-    tune_params = {
-        'params' : {
-            'nu' : tune.grid_search(np.linspace(0.1, 1, 10)),
-            'learning_rate' : tune.grid_search(['constant','optimal','invscaling','adaptive']),
-            'eta0' : tune.grid_search(np.logspace(-4,4,10))
-        }
-    }
-elif opt['classifier'] == 'linearsvm' or opt['classifier'] == 'sgd':
-    clf = SGDClassifier()
-    train_params = {
-        'loss' : 'squared_error'
-    }
-    tune_params = {
-        'params' : {
-            'loss' : tune.grid_search(['log_loss', 'modified_huber']),
-            'penalty' : tune.grid_search(['l2', 'l1', 'elasticnet']),
-            'alpha' : tune.grid_search(np.logspace(-4,4,10)),
-            'learning_rate' : tune.grid_search(['constant','optimal','invscaling','adaptive']),
-            'eta0' : tune.grid_search(np.logspace(-4,4,10))
-        }
-    }
-elif opt['classifier'] == 'mnb':
-    clf = MultinomialNB()
-    train_params = {
-        'alpha' : 1.0
-    }
-    tune_params = {
-        'params' : {
-            'alpha' : tune.grid_search(np.linspace(0,1,10)),
-            'fit_prior' : tune.grid_search([True,False])
-        }
-    }
+clf, train_params, tune_params = get_clf_params(opt['classifier'])
 
 # Trainer
 ################################################################################
+
+for name, ds in datasets.items():
+    ds = ray.get(ds)
+    ds = preprocessor.transform(ds)
+    datasets[name] = ray.put(ds)
+
 trainer = SklearnPartialTrainer(
     estimator = clf,
     label_column = opt['taxa'],
     labels_list = labels_list,
-    features_list = cols,
+    features_list = data['kmers'],
     params = train_params,
     scoring = 'accuracy',
     datasets = datasets,
@@ -266,12 +325,10 @@ tuner = Tuner(
     trainer,
     param_space = tune_params,
     tune_config = TuneConfig(
-        metric = 'validation/test_score',
-        mode = 'max',
         search_alg=BasicVariantGenerator(
             max_concurrent = 8
         ),
-        scheduler = ASHAScheduler()
+        scheduler = ASHAScheduler(metric = 'test/test_score', mode = 'max')
     ),
     run_config = RunConfig(
         name = opt['classifier'],
@@ -282,15 +339,6 @@ tuning_results = tuner.fit()
 
 # Tuning results
 ################################################################################
+output_results(opt, tuning_results)
 
-outfile = os.path.join(opt['outdir'], '{}_{}_tuning.csv'.format(opt['classifier'],opt['taxa']))
-tuning_df = tuning_results.get_dataframe(filter_metric = 'validation/test_score', filter_mode = 'max')
-tuning_df.index = [opt['taxa']] * len(tuning_df)
-tuning_df.to_csv(outfile)
-
-# delete sim files
-for file in glob(os.path.join(os.path.dirname(data['profile']),'*sim*')):
-    if os.path.isdir(file):
-        rmtree(file)
-    else:
-        os.remove(file)
+print(f'Hyperparameters tuning of {opt["classifier"]} successfuly completed!')
