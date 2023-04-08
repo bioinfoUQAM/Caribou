@@ -105,7 +105,7 @@ def build_LSTM_attention(nb_kmers, nb_classes):
     net = Dense(nb_classes)(net)
     outputs = Activation('softmax')(net)
     model = Model(inputs = inputs, outputs = outputs)
-    model.compile(loss=CategoricalCrossentropy(from_logits = True), optimizer='adam', metrics=['accuracy'])
+    model.compile(loss=CategoricalCrossentropy(), optimizer='adam', metrics=['accuracy'])
 
     return model
 
@@ -131,7 +131,7 @@ def build_CNN(nb_kmers, nb_classes):
     model.add(Dropout(0.5))
     model.add(Dense(nb_classes))
     model.add(Activation('softmax'))
-    model.compile(loss=CategoricalCrossentropy(from_logits = True), optimizer='adam', metrics=['accuracy'])
+    model.compile(loss=CategoricalCrossentropy(), optimizer='adam', metrics=['accuracy'])
 
     return model
 
@@ -169,6 +169,6 @@ def build_wideCNN(nb_kmers, nb_classes):
     net = Dense(nb_classes)(net)
     outputs = Activation('softmax')(net)
     model = Model(inputs = inputs, outputs = outputs)
-    model.compile(loss=CategoricalCrossentropy(from_logits = True), optimizer='adam', metrics=['accuracy'])
+    model.compile(loss=CategoricalCrossentropy(), optimizer='adam', metrics=['accuracy'])
 
     return model
