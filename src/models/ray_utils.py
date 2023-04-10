@@ -123,8 +123,12 @@ class ModelsUtils(ABC):
     def _cv_score(self, y_true, y_pred):
         print('_cv_score')
 
-        print('y_true : ', y_true)
-        print('y_pred : ', y_pred)
+        y_compare = pd.DataFrame({
+            'y_true': y_true,
+            'y_pred': y_pred
+        })
+        print(y_compare)
+        y_compare.to_csv(os.path.join(self._workdir, f'y_compare_{self.dataset}_{self.classifier}.csv'))
 
         support = precision_recall_fscore_support(y_true, y_pred, average = 'weighted')
 

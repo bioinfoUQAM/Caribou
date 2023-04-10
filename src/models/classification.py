@@ -482,13 +482,19 @@ class ClassificationMethods():
 
         df_train = zip_X_y(self._X_train, self._y_train)
         
-        df_val = df_train.random_sample(0.3)
+        df_val = df_train.random_sample(0.1)
+        if df_val.count() == 0:
+            nb_smpl = round(df_val.count() * 0.1)
+            df_val = df_val.limit(nb_smpl)
         df_val = self._sim_4_cv(df_val, self._merged_database_host, f'{self._database}_val')
 
         self._preprocess_dataset = df_train
         if self._cv:
             # df_train, df_test = df_train.train_test_split(0.2, shuffle=True)
-            df_test = df_train.random_sample(0.3)
+            df_test = df_train.random_sample(0.1)
+            if df_test.count() == 0:
+                nb_smpl = round(df_test.count() * 0.1)
+                df_test = df_test.limit(nb_smpl)
             df_test = self._sim_4_cv(df_test, self._merged_database_host, f'{self._database}_test')
             self._merged_training_datasets = {'train': df_train, 'validation': df_val, 'test': df_test}
         else:
@@ -510,13 +516,19 @@ class ClassificationMethods():
         
         df_train = zip_X_y(self._X_train, self._y_train)
 
-        df_val = df_train.random_sample(0.3)
+        df_val = df_train.random_sample(0.1)
+        if df_val.count() == 0:
+            nb_smpl = round(df_val.count() * 0.1)
+            df_val = df_val.limit(nb_smpl)
         df_val = self._sim_4_cv(df_val, self._database_data, f'{self._database}_val')
 
         self._preprocess_dataset = df_train
         if self._cv:
             # df_train, df_test = df_train.train_test_split(0.2, shuffle=True)
-            df_test = df_train.random_sample(0.3)
+            df_test = df_train.random_sample(0.1)
+            if df_test.count() == 0:
+                nb_smpl = round(df_test.count() * 0.1)
+                df_test = df_test.limit(nb_smpl)
             df_test = self._sim_4_cv(df_test, self._database_data, f'{self._database}_test')
             self._training_datasets = {'train': df_train, 'validation': df_val, 'test': df_test}
         else:

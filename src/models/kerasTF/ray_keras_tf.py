@@ -337,15 +337,20 @@ class KerasTFModel(ModelsUtils):
     def _prob_2_cls(self, predictions, threshold):
         print('_prob_2_cls')
         def map_predicted_label_binary(df, threshold):
-            lower_threshold = 0.5 - (threshold * 0.5)
-            upper_threshold = 0.5 + (threshold * 0.5)
+            # lower_threshold = 0.5 - (threshold * 0.5)
+            # upper_threshold = 0.5 + (threshold * 0.5)
             predict = pd.DataFrame({
-                'proba': df['predictions'],
-                'predicted_label': np.full(len(df), -1)
+                'best_proba': [df['predictions'][i][np.argmax(df['predictions'][i])] for i in range(len(df))],
+                'predicted_label': df["predictions"].map(lambda x: np.array(x).argmax())
             })
-            predict['predicted_label'] = np.round(predict['proba'])
-            predict.loc[predict['proba'] >= upper_threshold, 'predicted_label'] = 1
-            predict.loc[predict['proba'] <= lower_threshold, 'predicted_label'] = 0
+            # predict = pd.DataFrame({
+            #     'proba': df['predictions'],
+            #     'predicted_label': np.zeros(len(df), dtype = np.float32)
+            # })
+            print(predict)
+            # predict['predicted_label'] = np.round(predict['proba'])
+            # predict.loc[predict['proba'] >= upper_threshold, 'predicted_label'] = 1
+            # predict.loc[predict['proba'] <= lower_threshold, 'predicted_label'] = 0
             return predict['predicted_label'].to_numpy(dtype = np.int32)
         
         def map_predicted_label_multiclass(df, threshold):

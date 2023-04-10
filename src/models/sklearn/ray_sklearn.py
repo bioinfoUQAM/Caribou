@@ -202,7 +202,6 @@ class SklearnModel(ModelsUtils):
     def _fit_model(self, datasets):
         print('_fit_model')
         for name, ds in datasets.items():
-            print(f'dataset preprocessing : {name}')
             ds = ds.drop_columns(['id'])
             ds = self._preprocessor.transform(ds)
             datasets[name] = ray.put(ds)
