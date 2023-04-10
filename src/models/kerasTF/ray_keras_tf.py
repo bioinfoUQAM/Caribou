@@ -11,6 +11,7 @@ from shutil import rmtree
 # Preprocessing
 from ray.data.preprocessors import LabelEncoder, Chain
 from models.ray_tensor_min_max import TensorMinMaxScaler
+from models.ray_tensor_max_abs import TensorMaxAbsScaler
 from models.kerasTF.ray_one_hot_tensor import OneHotTensorEncoder
 
 # Parent class / models
@@ -138,7 +139,7 @@ class KerasTFModel(ModelsUtils):
             labels.append(row[self.taxa])
         self._nb_classes = len(np.unique(labels))
         self._preprocessor = Chain(
-            TensorMinMaxScaler(self.kmers),
+            TensorMaxAbsScaler(self.kmers),
             LabelEncoder(self.taxa),
             OneHotTensorEncoder(self.taxa),
         )
@@ -316,15 +317,17 @@ class KerasTFModel(ModelsUtils):
 
             print('number of classes :', self._nb_classes)
 
-            # Make predictions
-            predictions = batch_prediction(
+            predictor = BatchPredictor.from_checkpoint(
                 self._model_ckpt,
-                df,
-                self.classifier,
-                self.batch_size,
-                self._nb_classes,
-                len(self.kmers)
+                TensorflowPredictor,
+                model_definition = lambda: build_model(self.classifier, self._nb_classes, len(self.kmers))
             )
+            predictions = predictor.predict(
+                data = df,
+                batch_size = self.batch_size
+            )
+
+            print(predictions.to_pandas())
 
             # Convert predictions to labels
             predictions = self._prob_2_cls(predictions, threshold)
@@ -484,14 +487,3 @@ def build_model(classifier, nb_cls, nb_kmers):
         model = build_wideCNN(nb_kmers, nb_cls)
     return model
 
-def batch_prediction(checkpoint, batch, clf, batch_size, nb_classes, nb_kmers):
-    predictor = BatchPredictor.from_checkpoint(
-        checkpoint,
-        TensorflowPredictor,
-        model_definition = lambda: build_model(clf, nb_classes, nb_kmers)
-    )
-    predictions = predictor.predict(
-        data = batch,
-        batch_size = batch_size
-    )
-    return predictions

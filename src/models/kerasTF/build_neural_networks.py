@@ -145,7 +145,7 @@ def build_wideCNN(nb_kmers, nb_classes):
 
     inputs = Input(shape = (nb_kmers,))
     embed = Embedding(248, 100)(inputs)
-    embed = Reshape((nb_kmers, -1, 1))(embed)
+    embed = Reshape((nb_kmers, -1, 1))(inputs)
 
     conv1 = Conv2D(256, 3, activation = 'relu')(embed)
     conv1 = MaxPooling2D(pool_size = (1,1), strides = nb_kmers)(conv1)

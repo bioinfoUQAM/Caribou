@@ -9,6 +9,7 @@ from shutil import rmtree
 
 # Preprocessing
 from models.ray_tensor_min_max import TensorMinMaxScaler
+from models.ray_tensor_max_abs import TensorMaxAbsScaler
 from ray.data.preprocessors import Chain, BatchMapper, LabelEncoder
 from models.sklearn.ray_sklearn_onesvm_encoder import OneClassSVMLabelEncoder
 
@@ -108,7 +109,7 @@ class SklearnModel(ModelsUtils):
             self._encoder = LabelEncoder(self.taxa)
         
         self._preprocessor = Chain(
-            TensorMinMaxScaler(self.kmers),
+            TensorMaxAbsScaler(self.kmers),
             self._encoder,
         )
         self._preprocessor.fit(df)
@@ -204,6 +205,7 @@ class SklearnModel(ModelsUtils):
         for name, ds in datasets.items():
             ds = ds.drop_columns(['id'])
             ds = self._preprocessor.transform(ds)
+            print(ds.to_pandas())
             datasets[name] = ray.put(ds)
 
         try:
