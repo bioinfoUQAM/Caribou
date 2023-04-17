@@ -132,16 +132,12 @@ class ModelsUtils(ABC):
 
         support = precision_recall_fscore_support(y_true, y_pred, average = 'weighted')
 
-        scores = pd.DataFrame({
-            'Classifier':self.classifier,
-            'Precision':support[0],
-            'Recall':support[1],
-            'F-score':support[2]
-            },
-            index = [1]
-        ).T
+        scores = pd.DataFrame(
+            {self.classifier : [support[0],support[1],support[2]]},
+            index = ['Precision','Recall','F-score']
+        )
 
-        scores.to_csv(self._cv_csv, header = False)
+        scores.to_csv(self._cv_csv, index = True)
 
     @abstractmethod
     def predict(self):

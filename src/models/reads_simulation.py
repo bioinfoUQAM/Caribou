@@ -102,7 +102,7 @@ class readsSimulation():
             
     def _make_tmp_fasta(self):
         for file in [self._fasta_in, self._fasta_host]:
-            if isinstance(file, Path):
+            if isinstance(file, Path) or isinstance(file, str):
                 if os.path.isfile(file):
                     if os.path.splitext(file)[1] == '.gz':
                         self._add_tmp_fasta_gz(file)

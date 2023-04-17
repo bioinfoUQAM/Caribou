@@ -3,14 +3,14 @@ import copy
 import gzip
 import random
 
+import pandas as pd
+
 from Bio import SeqIO
 from glob import glob
 from Bio.SeqRecord import SeqRecord
 from collections import UserList, defaultdict
 from os.path import splitext, isfile, isdir, join
 from joblib import Parallel, delayed, parallel_backend
-
-import pandas as pd
 
 # From mlr_kgenomvir
 __author__ = ['Amine Remita', 'Nicolas de Montigny']
@@ -61,6 +61,7 @@ class SeqCollection(UserList):
         if isinstance(arg, tuple):
             self.labels, self.taxas = self.read_class_file(arg[1])
             self.data = self.read_bio_file(arg[0])
+            self._verify_remove_duplicates()
 
         elif isfile(arg):
             self.data = self.read_bio_file(arg)
@@ -196,6 +197,24 @@ class SeqCollection(UserList):
 
         return file
 
+    def _verify_remove_duplicates(self):
+        self.labels # classes
+        self.taxas # columns
+        self.ids # ids list
+        df = pd.DataFrame(
+            self.labels,
+            columns = self.taxas,
+            index = self.ids
+        )
+        df = df.reset_index(names = 'id')
+        df = df.drop_duplicates(
+            subset = 'id',
+            keep = 'first',
+            ignore_index = True
+        )
+        self.ids = df.id.values
+        df = df.drop('id', axis = 1)
+        self.labels = df.to_numpy()
 
     @classmethod
     def read_class_file(cls, file):

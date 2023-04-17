@@ -369,9 +369,9 @@ class KerasTFModel(ModelsUtils):
         else:
             fn = map_predicted_label_multiclass
 
-        with parallel_backend('threading'):
-            predict = Parallel(n_jobs=-1, prefer='threads', verbose=1)(
-                delayed(fn)(batch, threshold) for batch in predictions.iter_batches(batch_size = self.batch_size))
+        predict = []
+        for batch in predictions.iter_batches(batch_size = self.batch_size):
+            predict.append(lambda : fn(batch, threshold))
 
         return np.concatenate(predict)
 

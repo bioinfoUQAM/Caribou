@@ -291,7 +291,6 @@ class SklearnModel(ModelsUtils):
 
     def _predict_cv(self, df):
         if df.count() > 0:
-            df = self._preprocessor.preprocessors[0].transform(df)
             self._predictor = BatchPredictor.from_checkpoint(self._model_ckpt, SklearnPredictor)
             predictions = self._predictor.predict(df, batch_size = self.batch_size)
             predictions = np.array(predictions.to_pandas()).reshape(-1)

@@ -23,12 +23,6 @@ def bacteria_extraction_train_cv(opt):
 
     k_length = len(data_bacteria['kmers'][0])
 
-    # Verify that model type is valid / choose default depending on host presence
-    if opt['host_name'] is None:
-        opt['model_type'] = 'onesvm'
-    elif opt['model_type'] is None and opt['host_name'] is not None:
-        opt['model_type'] = 'attention'
-
     # Validate training parameters
     verify_positive_int(opt['batch_size'], 'batch_size')
     verify_positive_int(opt['training_epochs'], 'number of iterations in neural networks training')
@@ -85,7 +79,7 @@ if __name__ == "__main__":
     parser.add_argument('-dh','--data_host', default=None, type=Path, help='PATH to a npz file containing the data corresponding to the k-mers profile for the host')
     parser.add_argument('-dt','--database_name', required=True, help='Name of the bacteria database used to name files')
     parser.add_argument('-ds','--host_name', default=None, help='Name of the host database used to name files')
-    parser.add_argument('-model','--model_type', default=None, choices=[None,'onesvm','linearsvm','attention','lstm','deeplstm'], help='The type of model to train')
+    parser.add_argument('-model','--model_type', required = True, choices=['onesvm','linearsvm','attention','lstm','deeplstm'], help='The type of model to train')
     parser.add_argument('-bs','--batch_size', default=32, type=int, help='Size of the batch size to use, defaults to 32')
     parser.add_argument('-e','--training_epochs', default=100, type=int, help='The number of training iterations for the neural networks models if one is chosen, defaults to 100')
     parser.add_argument('-v','--verbose', action='store_true', help='Should the program be verbose')

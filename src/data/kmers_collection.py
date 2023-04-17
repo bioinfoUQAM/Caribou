@@ -104,6 +104,7 @@ class KmersCollection():
         # Get labels from seq_data
         if len(seq_data.labels) > 0:
             self._labels = pd.DataFrame(seq_data.labels, columns = seq_data.taxas, index = seq_data.ids)
+            self._labels = self._labels.reset_index(names = ['id'])
         # Get taxas from seq_data if not empty
         if len(seq_data.taxas) > 0:
             self.taxas = seq_data.taxas
@@ -136,9 +137,12 @@ class KmersCollection():
         if 'id' in self.kmers_list:
             self.kmers_list.remove('id')
         # Get labels that match K-mers extracted sequences
-        if len(seq_data.labels) > 0:
-            msk = np.array([True if id in self.ids else False for id in seq_data.ids])
-            self.classes = seq_data.labels[msk]
+        # if len(seq_data.labels) > 0:
+        #     msk = self._labels['id'].isin(self.ids)
+        #     self._labels = self._labels.loc[msk]
+        #     self.ids = list(self._labels['id'])
+        #     self._labels = self._labels.drop('id', axis = 1)
+        #     self.classes = np.array(self._labels)
         # Delete global tmp dir
         rmtree(self._tmp_dir)
 
@@ -189,7 +193,7 @@ class KmersCollection():
         id = os.path.splitext(os.path.basename(file))[0]
         os.mkdir(tmp_folder)
         # Count k-mers with KMC
-        cmd_count = os.path.join(self._kmc_path,f"kmc -k{self.k} -fm -ci10 -cs1000000000 -hp {file} {os.path.join(tmp_folder, str(ind))} {tmp_folder}")
+        cmd_count = os.path.join(self._kmc_path,f"kmc -k{self.k} -fm -ci0 -cs1000000000 -hp {file} {os.path.join(tmp_folder, str(ind))} {tmp_folder}")
         run(cmd_count, shell = True, capture_output=True)
         # Transform k-mers db with KMC
         cmd_transform = os.path.join(self._kmc_path,f"kmc_tools transform {os.path.join(tmp_folder, str(ind))} dump {os.path.join(self._tmp_dir, f'{ind}.txt')}")
@@ -282,7 +286,14 @@ class KmersCollection():
         self._zip_id_col()
         self.df.write_parquet(self.Xy_file)
     
-    def _zip_id_col(self):
+    def _zip_id_col(self):        
+        # Get labels that match K-mers extracted sequences
+        msk = self._labels['id'].isin(self.ids)
+        self._labels = self._labels.loc[msk]
+        self.ids = list(self._labels['id'])
+        self._labels = self._labels.drop('id', axis = 1)
+        self.classes = np.array(self._labels)
+        
         num_blocks = self.df.num_blocks()
         len_df = self.df.count()
         ids = pd.DataFrame({
