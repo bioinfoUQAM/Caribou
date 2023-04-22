@@ -109,7 +109,7 @@ class SklearnModel(ModelsUtils):
             self._encoder = LabelEncoder(self.taxa)
         
         self._preprocessor = Chain(
-            TensorMaxAbsScaler(self.kmers),
+            TensorMinMaxScaler(self.kmers),
             self._encoder,
         )
         self._preprocessor.fit(df)

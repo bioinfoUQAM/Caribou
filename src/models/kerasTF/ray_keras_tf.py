@@ -139,7 +139,7 @@ class KerasTFModel(ModelsUtils):
             labels.append(row[self.taxa])
         self._nb_classes = len(np.unique(labels))
         self._preprocessor = Chain(
-            TensorMaxAbsScaler(self.kmers),
+            TensorMinMaxScaler(self.kmers),
             LabelEncoder(self.taxa),
             OneHotTensorEncoder(self.taxa),
         )
