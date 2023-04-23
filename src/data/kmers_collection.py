@@ -175,7 +175,8 @@ class KmersCollection():
                     delayed(self._extract_seen_kmers)
                     (i, file) for i, file in enumerate(self._fasta_list))
             # Get list of all columns in files in parallel
-            self.kmers_list = list(np.unique(np.concatenate(lst_col)))
+            self.kmers_list = np.unique(np.concatenate(lst_col), equal_nan = True)
+            self.kmers_list = self.kmers_list[~np.isnan(self.kmers_list)]
         elif self.method == 'given':
             print('given_kmers')
             lst_ids_arr = []
@@ -199,17 +200,20 @@ class KmersCollection():
         cmd_transform = os.path.join(self._kmc_path,f"kmc_tools transform {os.path.join(tmp_folder, str(ind))} dump {os.path.join(self._tmp_dir, f'{ind}.txt')}")
         run(cmd_transform, shell = True, capture_output=True)
         # Transpose kmers profile
-        profile = pd.read_table(os.path.join(self._tmp_dir,f"{ind}.txt"), sep = '\t', index_col = 0, header = None, names = ['id', str(id)]).T
-        # Save seen kmers profile to parquet file
-        if len(profile.columns) > 0:
-            profile.reset_index(inplace=True)
-            profile = profile.rename(columns = {'index':'id'})
-            profile.to_csv(os.path.join(self._tmp_dir,f"{ind}.csv"), index = False)
-        # Delete tmp dir and file
-        rmtree(tmp_folder)
-        os.remove(os.path.join(self._tmp_dir,f"{ind}.txt"))
-        return list(profile.columns)
-
+        try:
+            profile = pd.read_table(os.path.join(self._tmp_dir,f"{ind}.txt"), sep = '\t', index_col = 0, header = None, names = ['id', str(id)]).T
+            # Save seen kmers profile to parquet file
+            if len(profile.columns) > 0:
+                profile.reset_index(inplace=True)
+                profile = profile.rename(columns = {'index':'id'})
+                profile.to_csv(os.path.join(self._tmp_dir,f"{ind}.csv"), index = False)
+            # Delete tmp dir and file
+            rmtree(tmp_folder)
+            os.remove(os.path.join(self._tmp_dir,f"{ind}.txt"))
+            return list(profile.columns)
+        except FileNotFoundError:
+            return np.nan
+        
     def _extract_given_kmers(self, ind, file, kmers_list):
         id = None
         arr = []
