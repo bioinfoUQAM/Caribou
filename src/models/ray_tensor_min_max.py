@@ -23,7 +23,7 @@ class TensorMinMaxScaler(Preprocessor):
         """
         Fit the MinMaxScaler to the given dataset.
         """
-        self._min = np.full((len(self._features_list)), np.inf)
+        self._min = np.full((len(self._features_list)), np.inf, dtype = np.int32)
         self._max = np.zeros(len(self._features_list), dtype = np.int32)
         for batch in dataset.iter_batches(batch_format = 'numpy'):
             for i in np.arange(len(self._features_list)):

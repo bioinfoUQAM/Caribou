@@ -14,3 +14,4 @@ insilicoseq
 biopython==1.78
 tqdm
 cloudpickle
+tune-sklearn
