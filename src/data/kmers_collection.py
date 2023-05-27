@@ -1,4 +1,5 @@
 import os
+import gc
 import ray
 import warnings
 
@@ -99,7 +100,6 @@ class KmersCollection():
         self.method = None
         self.kmers_list = None
         self._labels = None
-        self._lst_arr = []
         self._transformed = False
         # Get labels from seq_data
         if len(seq_data.labels) > 0:
@@ -175,19 +175,14 @@ class KmersCollection():
                     delayed(self._extract_seen_kmers)
                     (i, file) for i, file in enumerate(self._fasta_list))
             # Get list of all columns in files in parallel
-            self.kmers_list = np.unique(np.concatenate(lst_col), equal_nan = True)
-            self.kmers_list = self.kmers_list[~np.isnan(self.kmers_list)]
+            self.kmers_list = list(np.unique(np.concatenate(lst_col)))
         elif self.method == 'given':
             print('given_kmers')
-            lst_ids_arr = []
             with parallel_backend('threading'):
-                lst_ids_arr =  Parallel(n_jobs = -1, prefer = 'threads', verbose = 1)(
+                Parallel(n_jobs = -1, prefer = 'threads', verbose = 1)(
                     delayed(self._extract_given_kmers)
                     (i, file, copy(self.kmers_list)) for i, file in enumerate(self._fasta_list))
-            for id, arr in lst_ids_arr:
-                self.ids.append(id)
-                self._lst_arr.append(arr)
-
+            
     def _extract_seen_kmers(self, ind, file):
         # Make tmp folder per sequence
         tmp_folder = os.path.join(self._tmp_dir,f"tmp_{ind}")
@@ -212,7 +207,10 @@ class KmersCollection():
             os.remove(os.path.join(self._tmp_dir,f"{ind}.txt"))
             return list(profile.columns)
         except FileNotFoundError:
-            return np.nan
+            # Delete tmp dir and file
+            rmtree(tmp_folder)
+            os.remove(os.path.join(self._tmp_dir,f"{ind}.txt"))
+            return np.empty(0)
         
     def _extract_given_kmers(self, ind, file, kmers_list):
         id = None
@@ -228,36 +226,32 @@ class KmersCollection():
         cmd_transform = os.path.join(self._kmc_path, f"kmc_tools transform {os.path.join(tmp_folder, str(ind))} dump {os.path.join(self._tmp_dir,f'{ind}.txt')}")
         run(cmd_transform, shell = True, capture_output=True)
         # Transpose kmers profile
-        seen_profile = pd.read_table(os.path.join(self._tmp_dir,f"{ind}.txt"), sep = '\t', index_col = 0, header = None, names = ['id', str(id)]).T
-        # List of seen kmers
-        seen_kmers = list(seen_profile.columns)
-        arr = np.zeros((1,len(kmers_list)))
-        if len(seen_kmers) > 0:
-            id = seen_profile.index[0]
-            for col in seen_kmers:
-                if col in kmers_list:
-                    arr[0, kmers_list.index(col)] = seen_profile.at[id, col]
+        try:
+            profile = pd.read_table(os.path.join(self._tmp_dir,f"{ind}.txt"), sep = '\t', index_col = 0, header = None, names = ['id', str(id)]).T
+            # Save seen kmers profile to parquet file
+            if len(profile.columns) > 0:
+                profile.reset_index(inplace=True)
+                profile = profile.rename(columns = {'index':'id'})
+                profile.to_csv(os.path.join(self._tmp_dir,f"{ind}.csv"), index = False)
+        except FileNotFoundError:
+            pass
         # Delete tmp dir and file
         rmtree(tmp_folder)
         os.remove(os.path.join(self._tmp_dir, f"{ind}.txt"))
-        return (id, ray.put(arr))
 
     def _construct_data(self):
+        # Read/concatenate files csv -> memory tensors -> Ray
+        self._files_list = glob(os.path.join(self._tmp_dir,'*.csv')) # List csv files
         if self.method == 'seen':
-            self._files_list = glob(os.path.join(self._tmp_dir,'*.csv')) # List csv files
-            # Read/concatenate files csv -> memory tensors -> Ray
             self._batch_read_write_seen()
         elif self.method == 'given':
-            # Read/concatenate memory tensors -> Ray
             self._batch_read_write_given()
-        # Delete tmp tensors in memory
-        for ref in self._lst_arr:
-            del ref
 
     # Map csv files to numpy array refs then write to parquet file with Ray
     def _batch_read_write_seen(self):
         print('_batch_read_write_seen')
-        for file in self._files_list:
+        lst_arr = []
+        for i, file in enumerate(self._files_list):
             tmp = pd.read_csv(file)
             self.ids.append(tmp.loc[0,'id'])
             arr = np.zeros((1, len(self.kmers_list)-1))
@@ -265,9 +259,23 @@ class KmersCollection():
             cols.remove('id')
             for col in cols:
                 arr[0, self.kmers_list.index(col)] = tmp.at[0, col]
-            self._lst_arr.append(ray.put(arr))
-
-        self.df = ray.data.from_numpy_refs(self._lst_arr)
+            lst_arr.append(ray.put(arr))
+            if i % 10 == 0:
+                if self.df is None:
+                    self.df = ray.data.from_numpy_refs(lst_arr)
+                else:
+                    tmp_df = ray.data.from_numpy_refs(lst_arr)
+                    self.df = self.df.union(tmp_df)
+                    tmp_df = None
+                lst_arr = []
+                gc.collect()
+            
+        if not (i % 10 == 0) :
+            tmp_df = ray.data.from_numpy_refs(lst_arr)
+            self.df = self.df.union(tmp_df)
+            tmp_df = None
+            lst_arr = []
+            gc.collect()
 
         # Diminish nb of features
         feature_selector = TensorLowVarSelection(
@@ -286,7 +294,36 @@ class KmersCollection():
 
     def _batch_read_write_given(self):
         print('_batch_read_write_given')
-        self.df = ray.data.from_numpy_refs(self._lst_arr)
+        lst_arr = []
+        for i, file in enumerate(self._files_list):
+            seen_profile = pd.read_csv(file)
+            self.ids.append(seen_profile.loc[0,'id'])
+            id = seen_profile.loc[0,'id']
+            arr = np.zeros((1, len(self.kmers_list)))
+            seen_kmers = list(seen_profile.columns)
+            seen_kmers.remove('id')
+            if len(seen_kmers) > 0:
+                for col in seen_kmers:
+                    if col in self.kmers_list:
+                        arr[0, self.kmers_list.index(col)] = seen_profile.at[0, col]
+            lst_arr.append(ray.put(arr))
+            if i % 10 == 0:
+                if self.df is None:
+                    self.df = ray.data.from_numpy_refs(lst_arr)
+                else:
+                    tmp_df = ray.data.from_numpy_refs(lst_arr)
+                    self.df = self.df.union(tmp_df)
+                    tmp_df = None
+                lst_arr = []
+                gc.collect()
+            
+        if not (i % 10 == 0) :
+            tmp_df = ray.data.from_numpy_refs(lst_arr)
+            self.df = self.df.union(tmp_df)
+            tmp_df = None
+            lst_arr = []
+            gc.collect()
+
         self._zip_id_col()
         self.df.write_parquet(self.Xy_file)
     

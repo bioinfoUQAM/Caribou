@@ -66,10 +66,6 @@ class TensorLowVarSelection(Preprocessor):
             if self.nb_keep != np.inf and (self.nb_keep + (p10 * 2)) < self.nb_features:
                 var_mapping = {ind : var_arr[ind] for ind in np.arange(self.nb_features)}
                 keep_arr = np.ravel(np.sort(var_arr))
-                print(keep_arr)
-                print(p10)
-                print(len(keep_arr))
-                print(len(keep_arr) - p10)
                 keep_arr = keep_arr[p10:(len(keep_arr) - p10)]
                 keep_arr = np.random.choice(keep_arr, self.nb_keep)
                 remove_arr = np.ravel(np.sort(var_arr))
