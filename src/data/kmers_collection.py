@@ -209,7 +209,6 @@ class KmersCollection():
         except FileNotFoundError:
             # Delete tmp dir and file
             rmtree(tmp_folder)
-            os.remove(os.path.join(self._tmp_dir,f"{ind}.txt"))
             return np.empty(0)
         
     def _extract_given_kmers(self, ind, file, kmers_list):
@@ -233,12 +232,12 @@ class KmersCollection():
                 profile.reset_index(inplace=True)
                 profile = profile.rename(columns = {'index':'id'})
                 profile.to_csv(os.path.join(self._tmp_dir,f"{ind}.csv"), index = False)
+            # Delete tmp dir and file
+            rmtree(tmp_folder)
+            os.remove(os.path.join(self._tmp_dir, f"{ind}.txt"))
         except FileNotFoundError:
-            pass
-        # Delete tmp dir and file
-        rmtree(tmp_folder)
-        os.remove(os.path.join(self._tmp_dir, f"{ind}.txt"))
-
+            rmtree(tmp_folder)
+        
     def _construct_data(self):
         # Read/concatenate files csv -> memory tensors -> Ray
         self._files_list = glob(os.path.join(self._tmp_dir,'*.csv')) # List csv files
