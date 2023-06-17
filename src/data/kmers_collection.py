@@ -11,6 +11,7 @@ from glob import glob
 from copy import copy
 from shutil import rmtree
 from subprocess import run
+from pyarrow import parquet as pq
 from joblib import Parallel, delayed, parallel_backend
 
 from data.ray_tensor_lowvar_selection import TensorLowVarSelection
@@ -246,11 +247,13 @@ class KmersCollection():
         elif self.method == 'given':
             self._batch_read_write_given()
 
-    # Map csv files to numpy array refs then write to parquet file with Ray
+    # Map csv files to numpy array refs then write to parquet file with pyarrow
     def _batch_read_write_seen(self):
         print('_batch_read_write_seen')
+        ray.data.set_progress_bars(False)
         lst_arr = []
         for i, file in enumerate(self._files_list):
+            dir = os.path.dirname(file)
             tmp = pd.read_csv(file)
             self.ids.append(tmp.loc[0,'id'])
             arr = np.zeros((1, len(self.kmers_list)-1))
@@ -258,25 +261,43 @@ class KmersCollection():
             cols.remove('id')
             for col in cols:
                 arr[0, self.kmers_list.index(col)] = tmp.at[0, col]
-            lst_arr.append(ray.put(arr))
-            if i % 10 == 0:
-                if self.df is None:
-                    self.df = ray.data.from_numpy_refs(lst_arr)
-                else:
-                    tmp_df = ray.data.from_numpy_refs(lst_arr)
-                    self.df = self.df.union(tmp_df)
-                    tmp_df = None
-                lst_arr = []
-                gc.collect()
-            
-        if not (i % 10 == 0) :
-            tmp_df = ray.data.from_numpy_refs(lst_arr)
-            self.df = self.df.union(tmp_df)
-            tmp_df = None
-            lst_arr = []
-            gc.collect()
+            arr = ray.data.from_numpy(arr)
+            arr.write_parquet(dir)
 
-        # Diminish nb of features
+        lst_arr = glob(os.path.join(dir,'*.parquet'))
+        ray.data.set_progress_bars(True)
+        self.df = ray.data.read_parquet_bulk(lst_arr)
+        if self._features_threshold != np.inf or self._nb_features_keep != np.inf :
+            self._reduce_features()
+        self._convert_tensors_ray_ds()
+
+    # Map csv files to numpy array refs then write to parquet file with pyarrow before loading into Ray
+    def _batch_read_write_given(self):
+        print('_batch_read_write_given')
+        ray.data.set_progress_bars(False)
+        lst_arr = []
+        for i, file in enumerate(self._files_list):
+            dir = os.path.dirname(file)
+            seen_profile = pd.read_csv(file)
+            self.ids.append(seen_profile.loc[0,'id'])
+            id = seen_profile.loc[0,'id']
+            arr = np.zeros((1, len(self.kmers_list)))
+            seen_kmers = list(seen_profile.columns)
+            seen_kmers.remove('id')
+            if len(seen_kmers) > 0:
+                for col in seen_kmers:
+                    if col in self.kmers_list:
+                        arr[0, self.kmers_list.index(col)] = seen_profile.at[0, col]
+            arr = ray.data.from_numpy(arr)
+            arr.write_parquet(dir)
+
+        lst_arr = glob(os.path.join(dir,'*.parquet'))
+        ray.data.set_progress_bars(True)
+        self.df = ray.data.read_parquet_bulk(lst_arr)
+        self._convert_tensors_ray_ds()
+    
+    # Diminish nb of features
+    def _reduce_features(self):
         feature_selector = TensorLowVarSelection(
             '__value__',
             self.kmers_list,
@@ -288,44 +309,10 @@ class KmersCollection():
         if self._transformed:
             self.kmers_list = [kmer for kmer in self.kmers_list if kmer not in feature_selector.removed_features]
 
+    def _convert_tensors_ray_ds(self):
         self._zip_id_col()
         self.df.write_parquet(self.Xy_file)
 
-    def _batch_read_write_given(self):
-        print('_batch_read_write_given')
-        lst_arr = []
-        for i, file in enumerate(self._files_list):
-            seen_profile = pd.read_csv(file)
-            self.ids.append(seen_profile.loc[0,'id'])
-            id = seen_profile.loc[0,'id']
-            arr = np.zeros((1, len(self.kmers_list)))
-            seen_kmers = list(seen_profile.columns)
-            seen_kmers.remove('id')
-            if len(seen_kmers) > 0:
-                for col in seen_kmers:
-                    if col in self.kmers_list:
-                        arr[0, self.kmers_list.index(col)] = seen_profile.at[0, col]
-            lst_arr.append(ray.put(arr))
-            if i % 10 == 0:
-                if self.df is None:
-                    self.df = ray.data.from_numpy_refs(lst_arr)
-                else:
-                    tmp_df = ray.data.from_numpy_refs(lst_arr)
-                    self.df = self.df.union(tmp_df)
-                    tmp_df = None
-                lst_arr = []
-                gc.collect()
-            
-        if not (i % 10 == 0) :
-            tmp_df = ray.data.from_numpy_refs(lst_arr)
-            self.df = self.df.union(tmp_df)
-            tmp_df = None
-            lst_arr = []
-            gc.collect()
-
-        self._zip_id_col()
-        self.df.write_parquet(self.Xy_file)
-    
     def _zip_id_col(self):        
         # Get labels that match K-mers extracted sequences
         msk = self._labels['id'].isin(self.ids)
