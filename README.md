@@ -11,7 +11,7 @@ This data was also used to test and debug the Caribou analysis pipeline.
 ## Installation
 The Caribou analysis pipeline was developped in python3 and can be easily installed through the python wheel. The repo must be cloned first and then the package can be installed using the following commands lines in the desired folder :
 ```
-git clone https://github.com/bioinfoUQAM/Caribou.git
+git clone --recursive https://github.com/bioinfoUQAM/Caribou.git
 pip install path/to/Caribou/
 ```
 
