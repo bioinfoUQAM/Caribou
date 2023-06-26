@@ -21,7 +21,6 @@ class kmers_index():
         2.2 https://docs.ray.io/en/latest/ray-air/api/doc/ray.data.preprocessors.HashingVectorizer.html#ray.data.preprocessors.HashingVectorizer
 
     UDF tokenization function to use extracted kmers with KMC -> Count vectorization ?
-    1. Extract k-mers using KMC
     2. UDF to split sequence into k-mers found
     3. Overload CountVectorizer Class from Ray to use index
         3.1 Fit : Build index
