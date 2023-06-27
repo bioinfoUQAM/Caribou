@@ -1,17 +1,14 @@
 import os
-import gc
 import ray
 import warnings
 
 import numpy as np
 import pandas as pd
-import pyarrow as pa
 
 from glob import glob
 from copy import copy
 from shutil import rmtree
 from subprocess import run
-from pyarrow import parquet as pq
 from joblib import Parallel, delayed, parallel_backend
 
 from data.ray_tensor_lowvar_selection import TensorLowVarSelection
@@ -255,21 +252,19 @@ class KmersCollection():
         for i, file in enumerate(self._files_list):
             dir = os.path.dirname(file)
             tmp = pd.read_csv(file)
-            self.ids.append(tmp.loc[0,'id'])
+            id = tmp.loc[0,'id']
             arr = np.zeros((1, len(self.kmers_list)-1))
             cols = list(tmp.columns)
             cols.remove('id')
             for col in cols:
                 arr[0, self.kmers_list.index(col)] = tmp.at[0, col]
             arr = ray.data.from_numpy(arr)
+            arr = arr.add_column('id', lambda x : id)
             arr.write_parquet(dir)
 
         lst_arr = glob(os.path.join(dir,'*.parquet'))
         ray.data.set_progress_bars(True)
-        self.df = ray.data.read_parquet_bulk(lst_arr)
-        if self._features_threshold != np.inf or self._nb_features_keep != np.inf :
-            self._reduce_features()
-        self._convert_tensors_ray_ds()
+        self._convert_tensors_ray_ds(lst_arr)
 
     # Map csv files to numpy array refs then write to parquet file with pyarrow before loading into Ray
     def _batch_read_write_given(self):
@@ -279,7 +274,6 @@ class KmersCollection():
         for i, file in enumerate(self._files_list):
             dir = os.path.dirname(file)
             seen_profile = pd.read_csv(file)
-            self.ids.append(seen_profile.loc[0,'id'])
             id = seen_profile.loc[0,'id']
             arr = np.zeros((1, len(self.kmers_list)))
             seen_kmers = list(seen_profile.columns)
@@ -289,15 +283,16 @@ class KmersCollection():
                     if col in self.kmers_list:
                         arr[0, self.kmers_list.index(col)] = seen_profile.at[0, col]
             arr = ray.data.from_numpy(arr)
+            arr = arr.add_column('id', lambda x : id)
             arr.write_parquet(dir)
 
         lst_arr = glob(os.path.join(dir,'*.parquet'))
         ray.data.set_progress_bars(True)
-        self.df = ray.data.read_parquet_bulk(lst_arr)
-        self._convert_tensors_ray_ds()
+        self._convert_tensors_ray_ds(lst_arr)
     
     # Diminish nb of features
     def _reduce_features(self):
+        print('_reduce_features')
         feature_selector = TensorLowVarSelection(
             '__value__',
             self.kmers_list,
@@ -309,40 +304,20 @@ class KmersCollection():
         if self._transformed:
             self.kmers_list = [kmer for kmer in self.kmers_list if kmer not in feature_selector.removed_features]
 
-    def _convert_tensors_ray_ds(self):
-        self._zip_id_col()
+    def _convert_tensors_ray_ds(self, lst_arr):
+        print('_convert_tensors_ray_ds')
+        self.df = ray.data.read_parquet_bulk(lst_arr)
+        for row in self.df.iter_rows():
+            self.ids.append(row['id'])
+        if self._features_threshold != np.inf or self._nb_features_keep != np.inf :
+            self._reduce_features()
+        if self._labels is not None:
+            self._get_classes_labels()
         self.df.write_parquet(self.Xy_file)
 
-    def _zip_id_col(self):        
-        # Get labels that match K-mers extracted sequences
-        msk = self._labels['id'].isin(self.ids)
-        self._labels = self._labels.loc[msk]
-        self.ids = list(self._labels['id'])
-        self._labels = self._labels.drop('id', axis = 1)
-        self.classes = np.array(self._labels)
-        
-        num_blocks = self.df.num_blocks()
-        len_df = self.df.count()
-        ids = pd.DataFrame({
-            'id': self.ids
-        })
-        self._ensure_length_ds(len_df, len(ids))
-        # Convert ids -> ray.data.Dataset with arrow schema
-        if self._transformed:
-            ids = ray.data.from_pandas(ids)
-        else:
-            ids = ray.data.from_arrow(pa.Table.from_pandas(ids))
-        # Repartition to 1 row/partition
-        self.df = self.df.repartition(len_df)
-        ids = ids.repartition(len_df)
-        # Ensure both ds fully executed
-        for ds in [self.df, ids]:
-            if not ds.is_fully_executed():
-                ds.fully_executed()
-        # Zip X and y
-        self.df = self.df.zip(ids).repartition(num_blocks)
-
-    def _ensure_length_ds(self, len_df, len_ids):
-        if len_df != len_ids:
-            raise ValueError(
-                f'K-mers profile and ids list have different lengths: {len_df} and {len_ids}')
+    def _get_classes_labels(self):
+        print('_get_classes_labels')
+        self.classes = pd.DataFrame({'id' : self.ids})
+        self.classes = self.classes.merge(self._labels, on = 'id', how = 'left')
+        self.classes = self.classes.drop('id', axis = 1)
+        self.classes = np.array(self.classes)
