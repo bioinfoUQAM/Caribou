@@ -20,11 +20,11 @@ from models.sklearn.ray_sklearn_partial_trainer import SklearnPartialTrainer
 from models.sklearn.ray_sklearn_onesvm_encoder import OneClassSVMLabelEncoder
 
 # Preprocessing
-from ray.data.preprocessors import Chain, BatchMapper, LabelEncoder
+from ray.data.preprocessors import Chain, LabelEncoder
 # Training
 from supplement.scoring_one_svm import ScoringSGDOneClassSVM
 from sklearn.naive_bayes import MultinomialNB
-from sklearn.linear_model import SGDOneClassSVM, SGDClassifier
+from sklearn.linear_model import SGDClassifier
 # Tuning
 from ray import tune
 from ray.tune import Tuner, TuneConfig
