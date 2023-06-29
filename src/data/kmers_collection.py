@@ -249,8 +249,8 @@ class KmersCollection():
         print('_batch_read_write_seen')
         ray.data.set_progress_bars(False)
         lst_arr = []
+        dir = os.path.dirname(self._files_list[0])
         for i, file in enumerate(self._files_list):
-            dir = os.path.dirname(file)
             tmp = pd.read_csv(file)
             id = tmp.loc[0,'id']
             arr = np.zeros((1, len(self.kmers_list)-1))
@@ -271,8 +271,8 @@ class KmersCollection():
         print('_batch_read_write_given')
         ray.data.set_progress_bars(False)
         lst_arr = []
+        dir = os.path.dirname(self._files_list[0])
         for i, file in enumerate(self._files_list):
-            dir = os.path.dirname(file)
             seen_profile = pd.read_csv(file)
             id = seen_profile.loc[0,'id']
             arr = np.zeros((1, len(self.kmers_list)))
