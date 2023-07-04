@@ -249,6 +249,9 @@ class KmersCollection():
         elif self.method == 'given':
             self._read_index_given()
         self._convert_tensors_ray_ds()
+        # import sys
+        # print(self._index)
+        # sys.exit()
 
     # Map k-mers to index
     def _inverted_index_build(self):
@@ -272,7 +275,7 @@ class KmersCollection():
     # Ray ds from items
     def _convert_tensors_ray_ds(self):
         import sys
-        self.df = ray.data.from_items([self._index])
+        self.df = ray.data.from_numpy([self._index])
         # self._zip_id_col()
         print(self.df.to_pandas())
         sys.exit()
