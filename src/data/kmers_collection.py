@@ -1,4 +1,5 @@
 import os
+import gc
 import ray
 import warnings
 
@@ -261,6 +262,9 @@ class KmersCollection():
             arr = ray.data.from_numpy(arr)
             arr = arr.add_column('id', lambda x : id)
             arr.write_parquet(dir)
+            # empty memory
+            del arr
+            gc.collect()
 
         lst_arr = glob(os.path.join(dir,'*.parquet'))
         ray.data.set_progress_bars(True)
