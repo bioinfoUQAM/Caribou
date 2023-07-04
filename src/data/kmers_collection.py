@@ -97,6 +97,7 @@ class KmersCollection():
         self.classes = []
         self.method = None
         self.kmers_list = None
+        self._index = {}
         self._labels = None
         self._transformed = False
         # Get labels from seq_data
@@ -132,8 +133,6 @@ class KmersCollection():
         # Get informations from extracted data
         if self.kmers_list is None:
             self.kmers_list = list(self.kmers_list)
-        if 'id' in self.kmers_list:
-            self.kmers_list.remove('id')
         # Get labels that match K-mers extracted sequences
         # if len(seq_data.labels) > 0:
         #     msk = self._labels['id'].isin(self.ids)
@@ -174,12 +173,15 @@ class KmersCollection():
                     (i, file) for i, file in enumerate(self._fasta_list))
             # Get list of all columns in files in parallel
             self.kmers_list = list(np.unique(np.concatenate(lst_col)))
+            if 'id' in self.kmers_list:
+                self.kmers_list.remove('id')
+
         elif self.method == 'given':
             print('given_kmers')
             with parallel_backend('threading'):
                 Parallel(n_jobs = -1, prefer = 'threads', verbose = 1)(
                     delayed(self._extract_given_kmers)
-                    (i, file, copy(self.kmers_list)) for i, file in enumerate(self._fasta_list))
+                    (i, file) for i, file in enumerate(self._fasta_list))
             
     def _extract_seen_kmers(self, ind, file):
         # Make tmp folder per sequence
@@ -209,7 +211,7 @@ class KmersCollection():
             rmtree(tmp_folder)
             return np.empty(0)
         
-    def _extract_given_kmers(self, ind, file, kmers_list):
+    def _extract_given_kmers(self, ind, file):
         id = None
         arr = []
         # Make tmp folder per sequence
@@ -239,15 +241,47 @@ class KmersCollection():
     def _construct_data(self):
         # Read/concatenate files csv -> memory tensors -> Ray
         self._files_list = glob(os.path.join(self._tmp_dir,'*.csv')) # List csv files
+        self._inverted_index_build()
         if self.method == 'seen':
-            self._batch_read_write_seen()
+            self._read_index_seen()
+            if self._features_threshold != np.inf or self._nb_features_keep != np.inf :
+                self._reduce_features()
         elif self.method == 'given':
-            self._batch_read_write_given()
+            self._read_index_given()
+        self._convert_tensors_ray_ds()
 
+    # Map k-mers to index
+    def _inverted_index_build(self):
+        nb_records = len(self._files_list)
+        for kmer in self.kmers_list:
+            self._index[kmer] = np.zeros(nb_records)
+    
+    # iterate over sequences to populate count vectors
+    def _read_index_seen(self):
+        for i, file in enumerate(self._files_list):
+            tmp = pd.read_csv(file)
+            self.ids.append(tmp.loc[0,'id'])
+            for kmer in self.kmers_list:
+                if kmer in tmp.columns:
+                    self._index[kmer][i] = tmp.loc[0,kmer]
+
+    def _read_index_given(self):
+        print('todo')
+
+
+    # Ray ds from items
+    def _convert_tensors_ray_ds(self):
+        import sys
+        self.df = ray.data.from_items([self._index])
+        # self._zip_id_col()
+        print(self.df.to_pandas())
+        sys.exit()
+        self.df.write_parquet(self.Xy_file)
+    
+    """
     # Map csv files to numpy array refs then write to parquet file with pyarrow
-    def _batch_read_write_seen(self):
-        print('_batch_read_write_seen')
-        ray.data.set_progress_bars(False)
+    def _read_index_seen(self):
+        print('_read_index_seen')
         lst_arr = []
         dir = os.path.dirname(self._files_list[0])
         for i, file in enumerate(self._files_list):
@@ -261,14 +295,13 @@ class KmersCollection():
             arr = ray.data.from_numpy(arr)
             arr = arr.add_column('id', lambda x : id)
             arr.write_parquet(dir)
-
         lst_arr = glob(os.path.join(dir,'*.parquet'))
         ray.data.set_progress_bars(True)
         self._convert_tensors_ray_ds(lst_arr)
 
     # Map csv files to numpy array refs then write to parquet file with pyarrow before loading into Ray
-    def _batch_read_write_given(self):
-        print('_batch_read_write_given')
+    def _read_index_given(self):
+        print('_read_index_given')
         ray.data.set_progress_bars(False)
         lst_arr = []
         dir = os.path.dirname(self._files_list[0])
@@ -314,6 +347,7 @@ class KmersCollection():
         if self._labels is not None:
             self._get_classes_labels()
         self.df.write_parquet(self.Xy_file)
+    """
 
     def _get_classes_labels(self):
         print('_get_classes_labels')
