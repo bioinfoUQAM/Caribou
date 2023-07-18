@@ -203,7 +203,7 @@ class KmersCollection():
     
     # Map csv files to numpy array refs then write to parquet file with pyarrow
     def _build_dataset(self):
-        print('_construct_seen_ds')
+        print('_construct_dataset')
         ray.data.set_progress_bars(False)
         for file in self._files_list:
             profile, profile_kmers, id = self._read_kmers_profile(file)
