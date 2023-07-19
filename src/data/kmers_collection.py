@@ -98,6 +98,7 @@ class KmersCollection():
         self.method = None
         self.kmers_list = None
         self._nb_kmers = 0
+        self._index = {}
         self._labels = None
         self._transformed = False
         # Get labels from seq_data
@@ -171,8 +172,8 @@ class KmersCollection():
         self._files_list = glob(os.path.join(self._tmp_dir,'*.txt'))
 
         if self.method == 'seen':
-            self._get_kmers_list()
-            
+            self._reduce_features()
+                        
     def _parallel_KMC_kmers(self, file):
         # Make tmp folder per sequence
         id = os.path.splitext(os.path.basename(file))[0]
@@ -185,6 +186,14 @@ class KmersCollection():
         cmd_transform = os.path.join(self._kmc_path,f"kmc_tools transform {os.path.join(tmp_folder, id)} dump {os.path.join(self._tmp_dir, f'{id}.txt')}")
         run(cmd_transform, shell = True, capture_output=True)
         rmtree(tmp_folder)
+
+    # Diminish nb of features
+    def _reduce_features(self):
+        print('_reduce_features')
+        self._get_kmers_list()
+        self._kmers_indexing()
+        index_var = self._index_variation()
+        self._features_choice(index_var)
 
     def _get_kmers_list(self):
         print('_get_kmers_list')
@@ -200,7 +209,38 @@ class KmersCollection():
         self.kmers_list = np.unique(lst_col)
         self.kmers_list = list(self.kmers_list)
         self._nb_kmers = len(self.kmers_list)
+
+    # Index k-mers abundances
+    def _kmers_indexing(self):
+        print('_kmers_index')
+        for kmer in self.kmers_list:
+            self._index[kmer] = np.zeros(len(self._files_list))
+        for i, file in enumerate(self._files_list):
+            id = os.path.splitext(os.path.basename(file))[0]
+            profile = pd.read_table(file, sep = '\t', index_col = 0, header = None, names = ['id', str(id)]).T
+            for kmer in self.kmers_list:
+                if kmer in profile.columns:
+                    self._index[kmer][i] = profile.loc[id,kmer]
     
+    # Compute variance for each k-mers indexed
+    def _index_variation(self):
+        print('_index_variation')
+        index_var = {}
+        for kmer in self.kmers_list:
+            arr = self._index[kmer]
+            index_var[kmer] = np.var(arr)
+        return index_var
+    
+    # Exclude k-mers features when variance is lower than 25% or higher than 75% of variance distribution
+    def _features_choice(self, index_var):
+        print('_features_choice')
+        s_var = pd.Series(index_var)
+        quartiles = s_var.quantile([0.25,0.75])
+        s_var = s_var[s_var>quartiles[0.25]]
+        s_var = s_var[s_var<quartiles[0.75]] # 867
+        self.kmers_list = list(s_var.index)
+        self._nb_kmers = len(self.kmers_list)
+
     # Map csv files to numpy array refs then write to parquet file with pyarrow
     def _build_dataset(self):
         print('_construct_dataset')
@@ -231,20 +271,6 @@ class KmersCollection():
         tensor = ray.data.from_numpy(tensor)
         tensor = tensor.add_column('id', lambda x : id)
         tensor.write_parquet(self._tmp_dir)
-
-    # Diminish nb of features
-    def _reduce_features(self):
-        print('_reduce_features')
-        feature_selector = TensorLowVarSelection(
-            '__value__',
-            self.kmers_list,
-            threshold = self._features_threshold,
-            nb_keep = self._nb_features_keep,
-        )
-        self.df = feature_selector.fit_transform(self.df)
-        self._transformed = False if feature_selector.transform_stats() is None else True
-        if self._transformed:
-            self.kmers_list = [kmer for kmer in self.kmers_list if kmer not in feature_selector.removed_features]
 
     def _convert_tensors_ray_ds(self, lst_arr):
         print('_convert_tensors_ray_ds')
