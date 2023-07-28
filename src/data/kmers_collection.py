@@ -9,6 +9,7 @@ import pandas as pd
 from glob import glob
 from shutil import rmtree
 from subprocess import run
+from itertools import chain
 from joblib import Parallel, delayed, parallel_backend
 
 from data.ray_tensor_lowvar_selection import TensorLowVarSelection
@@ -173,7 +174,7 @@ class KmersCollection():
 
         if self.method == 'seen':
             self._reduce_features()
-                        
+
     def _parallel_KMC_kmers(self, file):
         # Make tmp folder per sequence
         id = os.path.splitext(os.path.basename(file))[0]
@@ -190,24 +191,28 @@ class KmersCollection():
     # Diminish nb of features
     def _reduce_features(self):
         print('_reduce_features')
-        self._get_kmers_list()
+        with parallel_backend('threading'):
+            print('parallel _get_kmers_list')
+            lst_col = Parallel(n_jobs = -1, prefer = 'threads', verbose = 1)(
+                delayed(self._get_kmers_list)
+                (file) for file in self._files_list)
+        self._flatten_kmers_array(lst_col)
         self._kmers_indexing()
         index_var = self._index_variation()
         self._features_choice(index_var)
 
-    def _get_kmers_list(self):
-        print('_get_kmers_list')
+    # Parallel extract k-mers from profiles
+    def _get_kmers_list(self, file):
         lst_col = []
-        for file in self._files_list:
-            id = os.path.splitext(os.path.basename(file))[0]
-            profile = pd.read_table(file, sep = '\t', index_col = 0, header = None, names = ['id', str(id)]).T
-            local_kmers = profile.columns
-            if len(local_kmers) > 0:
-                lst_col.extend(local_kmers)
-            del profile
-            gc.collect()
-        self.kmers_list = np.unique(lst_col)
-        self.kmers_list = list(self.kmers_list)
+        id = os.path.splitext(os.path.basename(file))[0]
+        profile = pd.read_table(file, sep = '\t', index_col = 0, header = None, names = ['id', str(id)])
+        if len(profile.index) > 0:
+            lst_col = profile.index
+        return np.array(lst_col)
+
+    # Flatten list of arrays
+    def _flatten_kmers_array(self, lst_col):
+        self.kmers_list = list(set(chain.from_iterable(lst_col)))
         self._nb_kmers = len(self.kmers_list)
 
     # Index k-mers abundances
@@ -217,10 +222,10 @@ class KmersCollection():
             self._index[kmer] = np.zeros(len(self._files_list))
         for i, file in enumerate(self._files_list):
             id = os.path.splitext(os.path.basename(file))[0]
-            profile = pd.read_table(file, sep = '\t', index_col = 0, header = None, names = ['id', str(id)]).T
+            profile = pd.read_table(file, sep = '\t', index_col = 0, header = None, names = ['id', str(id)])
             for kmer in self.kmers_list:
-                if kmer in profile.columns:
-                    self._index[kmer][i] = profile.loc[id,kmer]
+                if kmer in profile.index:
+                    self._index[kmer][i] = profile.loc[kmer,id]
     
     # Compute variance for each k-mers indexed
     def _index_variation(self):
@@ -241,33 +246,31 @@ class KmersCollection():
         self.kmers_list = list(s_var.index)
         self._nb_kmers = len(self.kmers_list)
 
-    # Map csv files to numpy array refs then write to parquet file with pyarrow
+    # Map csv files to numpy array then write to parquet file with ray
     def _build_dataset(self):
         print('_construct_dataset')
-        ray.data.set_progress_bars(False)
-        for file in self._files_list:
-            profile, profile_kmers, id = self._read_kmers_profile(file)
-            self._map_profile_to_tensor(profile, profile_kmers, id)
+        with parallel_backend('threading'):
+            print('parallel _get_kmers_list')
+            Parallel(n_jobs = -1, prefer = 'threads', verbose = 1)(
+                delayed(self._map_profile_to_tensor)
+                (file) for file in self._files_list)
         lst_tensor_files = glob(os.path.join(self._tmp_dir,'*.parquet'))
-        ray.data.set_progress_bars(True)
         self._convert_tensors_ray_ds(lst_tensor_files)
-        if self.method == 'seen' and (self._features_threshold != np.inf or self._nb_features_keep != np.inf) :
-            self._reduce_features()
+        # if self.method == 'seen' and (self._features_threshold != np.inf or self._nb_features_keep != np.inf) :
+        #     self._reduce_features()
 
     def _read_kmers_profile(self, file):
         id = os.path.splitext(os.path.basename(file))[0]
-        profile = pd.read_table(file, sep = '\t', index_col = 0, header = None, names = ['id', str(id)]).T
-        profile_kmers = profile.columns
-        if len(profile_kmers) > 0:
-            profile.reset_index(inplace=True)
-            profile = profile.rename(columns = {'index':'id'})
+        profile = pd.read_table(file, sep = '\t', index_col = 0, header = None, names = ['id', id])
+        profile_kmers = profile.index
         return(profile, profile_kmers, id)
 
-    def _map_profile_to_tensor(self, profile, profile_kmers, id):
+    def _map_profile_to_tensor(self, file):
+        profile, profile_kmers, id = self._read_kmers_profile(file)
         tensor = np.zeros((1, self._nb_kmers))
         for kmer in profile_kmers:
             if kmer in self.kmers_list:
-                tensor[0, self.kmers_list.index(kmer)] = profile.at[0, kmer]
+                tensor[0, self.kmers_list.index(kmer)] = profile.at[kmer, id]
         tensor = ray.data.from_numpy(tensor)
         tensor = tensor.add_column('id', lambda x : id)
         tensor.write_parquet(self._tmp_dir)
