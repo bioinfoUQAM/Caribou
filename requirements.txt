@@ -1,6 +1,6 @@
 setuptools
 wheel
-grpcio==1.42.0
+grpcio==1.48.2
 ray==2.2.0
 pyarrow>=6.0.1
 keras>=2.0.0
