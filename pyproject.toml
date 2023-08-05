@@ -1,3 +1,11 @@
+[tool.poetry]
+name = "caribou"
+version = "1.2.0"
+description = "Alignment-free bacterial identification and classification in metagenomics sequencing data using machine learning."
+authors = ["Nicolas de Montigny <nicolas.de.montigny0323@gmail.com>"]
+license = "MIT license"
+readme = "README.md"
+
 [build-system]
 requires = [
     "pip",
