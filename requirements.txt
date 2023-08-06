@@ -88,7 +88,7 @@ msgpack==1.0.5
 multidict==6.0.4
 nest-asyncio==1.5.6
 numexpr==2.8.4
-numpy==1.24.4
+numpy==1.22.4
 nvidia-ml-py==12.535.77
 oauthlib==3.2.1
 olefile==0.46
