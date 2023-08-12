@@ -45,6 +45,10 @@ class SeqCollection(UserList):
 
     """
 
+# Fasta file path
+# Taxas
+# Labels
+
     def __init__(self, arg):
 
         self.data = []

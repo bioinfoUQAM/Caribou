@@ -12,7 +12,7 @@ __author__ = 'Nicolas de Montigny'
 __all__ = ['build_load_save_data', 'build_Xy_data', 'build_X_data']
 
 
-def build_load_save_data(file, hostfile, prefix, dataset, host, kmers_list=None, k=20, features_threshold = np.inf, nb_features_keep = np.inf):
+def build_load_save_data(file, hostfile, prefix, dataset, host, kmers_list=None, k=20):
     # Declare data variables as none
     data = None
     data_host = None
@@ -21,8 +21,8 @@ def build_load_save_data(file, hostfile, prefix, dataset, host, kmers_list=None,
     data_file = os.path.join(prefix, 'Xy_genome_{}_data_K{}.npz'.format(dataset, k))
     Xy_file_host = os.path.join(prefix, 'Xy_genome_{}_data_K{}'.format(host, k))
     data_file_host = os.path.join(prefix, 'Xy_genome_{}_data_K{}.npz'.format(host, k))
-    seqfile = os.path.join(prefix, 'seqdata_{}.txt'.format(dataset))
-    seqfile_host = os.path.join(prefix, 'seqdata_{}.txt'.format(host))
+    # seqfile = os.path.join(prefix, 'seqdata_{}.txt'.format(dataset))
+    # seqfile_host = os.path.join(prefix, 'seqdata_{}.txt'.format(host))
 
     # Load file if already exists
     if os.path.isfile(data_file) and os.path.isfile(data_file_host) and isinstance(hostfile, tuple):
@@ -32,26 +32,27 @@ def build_load_save_data(file, hostfile, prefix, dataset, host, kmers_list=None,
         data = load_Xy_data(data_file)
     else:
         # Build Xy_data of database
-        if isinstance(file, tuple):
-            if not os.path.isfile(seqfile):
-                print('Database seq_data')
-                seq_data = SeqCollection((list(file)[0], list(file)[1]))
-                with open(seqfile, 'wb') as handle:
-                    pickle.dump(seq_data, handle)
-            else:
-                with open(seqfile, 'rb') as handle:
-                    seq_data = pickle.load(handle)
+        # if isinstance(file, tuple):
+        #     if not os.path.isfile(seqfile):
+        #         print('Database seq_data')
+        #         seq_data = SeqCollection((list(file)[0], list(file)[1]))
+        #         with open(seqfile, 'wb') as handle:
+        #             pickle.dump(seq_data, handle)
+        #     else:
+        #         with open(seqfile, 'rb') as handle:
+        #             seq_data = pickle.load(handle)
 
-            # Build Xy_data to drive
-            print('Database Xy_data, k = {}'.format(k))
-            data = build_Xy_data(
-                seq_data,
-                k,
-                Xy_file,dataset,
-                kmers_list=None,
-                features_threshold = features_threshold,
-                nb_features_keep = nb_features_keep)
-            save_Xy_data(data, data_file)
+        # Build Xy_data to drive
+        print('Database Xy_data, k = {}'.format(k))
+        data = build_Xy_data(
+            # seq_data,
+            fasta = list(file)[0],
+            csv = list(file)[1],
+            k = k,
+            Xy_file = Xy_file,
+            kmers_list=None,
+        )
+        save_Xy_data(data, data_file)
 
         # Assign kmers_list to variable after extracting database data
         if kmers_list is None:
@@ -59,31 +60,40 @@ def build_load_save_data(file, hostfile, prefix, dataset, host, kmers_list=None,
 
         # Build Xy_data of host
         if isinstance(hostfile, tuple) and kmers_list is not None:
-            if not os.path.isfile(seqfile_host):
-                print('Host/simulated seq_data')
-                seq_data_host = SeqCollection((list(hostfile)[0], list(hostfile)[1]))
-                with open(seqfile_host, 'wb') as handle:
-                    pickle.dump(seq_data_host, handle)
-            else:
-                with open(seqfile_host, 'rb') as handle:
-                    seq_data_host = pickle.load(handle)
+            # if not os.path.isfile(seqfile_host):
+            #     print('Host/simulated seq_data')
+            #     seq_data_host = SeqCollection((list(hostfile)[0], list(hostfile)[1]))
+            #     with open(seqfile_host, 'wb') as handle:
+            #         pickle.dump(seq_data_host, handle)
+            # else:
+            #     with open(seqfile_host, 'rb') as handle:
+            #         seq_data_host = pickle.load(handle)
 
             # Build Xy_data to drive
             print('Host/simulated Xy_data, k = {}'.format(k))
             data_host = build_Xy_data(
-                seq_data_host,
-                k,
-                Xy_file_host,
-                dataset,
-                kmers_list)
+                # seq_data_host,
+                fasta = list(file)[0],
+                csv = list(file)[1],
+                k = k,
+                Xy_file = Xy_file_host,
+                kmers_list = kmers_list,
+
+            )
             save_Xy_data(data_host, data_file_host)
 
         # Build X_data of dataset to analyse
         if not isinstance(file, tuple) and not isinstance(hostfile, tuple) and kmers_list is not None:
-            print('Dataset seq_data')
-            seq_data = SeqCollection(file)
+            # print('Dataset seq_data')
+            # seq_data = SeqCollection(file)
             print('Dataset X_data, k = {}'.format(k))
-            data = build_X_data(seq_data, k, Xy_file, dataset, kmers_list)
+            data = build_X_data(
+                #  seq_data,
+                fasta = file,
+                k = k,
+                Xy_file = Xy_file,
+                kmers_list = kmers_list
+            )
             save_Xy_data(data, data_file)
 
     if data is not None and data_host is None:
@@ -94,17 +104,18 @@ def build_load_save_data(file, hostfile, prefix, dataset, host, kmers_list=None,
         return data, data_host
 
 # Build kmers collections with known classes and taxas
-def build_Xy_data(seq_data, k, Xy_file, dataset, kmers_list=None, features_threshold = np.inf, nb_features_keep = np.inf):
+def build_Xy_data(fasta, csv, k, Xy_file, kmers_list = None):
     data = {}
 
     collection = KmersCollection(
-        seq_data,
+        # seq_data,
+        fasta,
         Xy_file,
         k,
-        dataset,
+        csv,
         kmers_list,
-        features_threshold,
-        nb_features_keep)
+    )
+    collection.compute_kmers()
 
     # Data in a dictionnary
     data['profile'] = collection.Xy_file  # Kmers profile
@@ -117,15 +128,17 @@ def build_Xy_data(seq_data, k, Xy_file, dataset, kmers_list=None, features_thres
     return data
 
 # Build kmers collection with unknown classes
-def build_X_data(seq_data, k, X_file, dataset, kmers_list):
+def build_X_data(fasta, k, X_file, kmers_list):
     data = {}
 
     collection = KmersCollection(
-        seq_data,
+        # seq_data,
+        fasta,
         X_file,
         k,
-        dataset,
-        kmers_list)
+        kmers_list
+    )
+    collection.compute_kmers()
 
     # Data in a dictionnary
     data['profile'] = collection.Xy_file
