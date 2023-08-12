@@ -1,10 +1,7 @@
 
 import os
-import pickle
-import numpy as np
 
 from utils import load_Xy_data, save_Xy_data
-from data.seq_collections import SeqCollection
 from data.kmers_collection import KmersCollection
 
 __author__ = 'Nicolas de Montigny'

@@ -44,7 +44,11 @@ class KmersVectorizer(CountVectorizer):
 
             return [get_token_counts(col) for col in self.columns]
 
-        value_counts = dataset.map_batches(get_pd_value_counts, batch_format="pandas")
+        value_counts = dataset.map_batches(
+            get_pd_value_counts,
+            batch_format="pandas",
+            batch_size = 1
+        )
         total_counts = [Counter() for _ in self.columns]
         for batch in value_counts.iter_batches(batch_size=None):
             for i, col_value_counts in enumerate(batch):

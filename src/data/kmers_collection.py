@@ -176,7 +176,7 @@ class KmersCollection():
                 for i, record in enumerate(SeqIO.parse(handle, 'fasta')):
                     data['id'].append(record.id)
                     data['sequence'].append(str(record.seq).upper())
-                    if i % 100 == 0 :
+                    if i % 10 == 0 :
                         df = pd.DataFrame(data)
                         df.to_parquet(os.path.join(self._tmp_dir, f'batch_{int(i/100)}.parquet'))
                         data = {
@@ -208,7 +208,7 @@ class KmersCollection():
                     for record in SeqIO.parse(handle, 'fasta'):
                         data['id'].append(record.id)
                         data['sequence'].append(str(record.seq).upper())
-            if i % 100 == 0 :
+            if i % 10 == 0 :
                 df = pd.DataFrame(data)
                 df.to_parquet(os.path.join(self._tmp_dir, f'batch_{int(i/100)}.parquet'))
                 data = {
@@ -223,8 +223,9 @@ class KmersCollection():
 
     def _make_ray_ds(self):
         print('_make_ray_ds')
-        self._files_list = glob(os.path.join(self._tmp_dir, '*.parquet'))
-        self.df = ray.data.read_parquet_bulk(self._files_list)
+        # self._files_list = glob(os.path.join(self._tmp_dir, '*.parquet'))
+        # self.df = ray.data.read_parquet_bulk(self._files_list)
+        self.df = ray.data.read_parquet(self._tmp_dir)
 
     def _kmers_tokenization(self):
         print('_kmers_tokenization')
@@ -262,7 +263,8 @@ class KmersCollection():
         #     self.df = self.df.add_column(col, lambda df : 0)
         mapper = BatchMapper(
             fn = add_missing_columns,
-            batch_format = 'pandas'
+            batch_format = 'pandas',
+            batch_size = 1
         )
         self.df = mapper.transform(self.df)
 
