@@ -32,8 +32,8 @@ def build_load_save_data(file, hostfile, prefix, dataset, host, kmers_list=None,
         # Build Xy_data of database
         print('Database Xy_data, k = {}'.format(k))
         data = build_Xy_data(
-            fasta = list(file)[0],
-            csv = list(file)[1],
+            fasta = file[0],
+            csv = file[1],
             k = k,
             Xy_file = Xy_file,
             kmers_list=None,
@@ -49,8 +49,8 @@ def build_load_save_data(file, hostfile, prefix, dataset, host, kmers_list=None,
             # Build Xy_data to drive
             print('Host/simulated Xy_data, k = {}'.format(k))
             data_host = build_Xy_data(
-                fasta = list(file)[0],
-                csv = list(file)[1],
+                fasta = file[0],
+                csv = file[1],
                 k = k,
                 Xy_file = Xy_file_host,
                 kmers_list = kmers_list,

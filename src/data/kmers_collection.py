@@ -142,7 +142,8 @@ class KmersCollection():
         print('_parse_fasta')
         if os.path.isfile(self.fasta):
             self._single_fasta_ds()
-        elif isinstance(self.fasta, list):
+        elif os.path.isdir(self.fasta):
+            self.fasta = glob(os.path.join(self.fasta, '*.fa'))
             self._multi_fasta_ds()
         else:
             raise ValueError('Fasta must be an interleaved fasta file or a directory containing fasta files.')
@@ -198,15 +199,15 @@ class KmersCollection():
             path, ext = splitext(file)
             ext = ext.lstrip(".")
             if ext in ["fa","fna","fasta"]:
-                with open(self.fasta, 'rt') as handle:
-                    record = SeqIO.parse(handle, 'fasta')
-                    data['id'].append(record.id)
-                    data['sequence'].append(str(record.seq).upper())
+                with open(file, 'rt') as handle:
+                    for record in SeqIO.parse(handle, 'fasta'):
+                        data['id'].append(record.id)
+                        data['sequence'].append(str(record.seq).upper())
             elif ext == "gz":
-                with gzip.open(self.fasta, 'rt') as handle:
-                    record = SeqIO.parse(handle, 'fasta')
-                    data['id'].append(record.id)
-                    data['sequence'].append(str(record.seq).upper())
+                with gzip.open(file, 'rt') as handle:
+                    for record in SeqIO.parse(handle, 'fasta'):
+                        data['id'].append(record.id)
+                        data['sequence'].append(str(record.seq).upper())
             if i % 100 == 0 :
                 df = pd.DataFrame(data)
                 df.to_parquet(os.path.join(self._tmp_dir, f'batch_{int(i/100)}.parquet'))
