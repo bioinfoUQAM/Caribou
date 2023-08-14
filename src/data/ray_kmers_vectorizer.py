@@ -50,7 +50,7 @@ class KmersVectorizer(CountVectorizer):
             batch_size = 1
         )
         total_counts = [Counter() for _ in self.columns]
-        for batch in value_counts.iter_batches(batch_size=None):
+        for batch in value_counts.iter_batches(batch_size=1):
             for i, col_value_counts in enumerate(batch):
                 total_counts[i].update(col_value_counts)
 
