@@ -233,19 +233,22 @@ class KmersCollection():
             k = self.k,
             column = 'sequence'
         )
-        self.df = tokenizer.fit_transform(self.df)
+        tokenizer.fit(self.df)
+        self.df = tokenizer.transform(self.df)
         if self.method == 'seen':
-            print('seen_kmers')
-            self.kmers_list = self.df.schema().names
-            self.kmers_list.remove('id')
+            self._seen_kmers()
         elif self.method == 'given':
-            print('given_kmers')
             self._given_kmers()
         concatenator = Concatenator(
             output_column_name = '__value__',
             include = self.kmers_list
         )
         self.df = concatenator.fit_transform(self.df)
+
+    def _seen_kmers(self):
+        print('seen_kmers')
+        self.kmers_list = self.df.schema().names
+        self.kmers_list.remove('id')
 
     def _given_kmers(self):
         print('_given_kmers')
