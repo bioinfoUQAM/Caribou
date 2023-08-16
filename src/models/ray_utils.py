@@ -3,11 +3,16 @@ import ray
 import warnings
 import pandas as pd
 
+from utils import zip_X_y
+
 # Class construction
 from abc import ABC, abstractmethod
 
 # CV metrics
 from sklearn.metrics import precision_recall_fscore_support
+
+# Simulation class
+from models.reads_simulation import readsSimulation
 
 __author__ = 'Nicolas de Montigny'
 
@@ -63,6 +68,7 @@ class ModelsUtils(ABC):
         outdir_model,
         outdir_results,
         batch_size,
+        training_epochs,
         k,
         taxa,
         kmers_list,
@@ -79,14 +85,14 @@ class ModelsUtils(ABC):
         self.verbose = verbose
         # Initialize hidden
         self._nb_kmers = len(kmers_list)
+        self._training_epochs = training_epochs
         # Initialize empty
         self._labels_map = None
         self._predict_ids = []
         # Initialize Ray variables
         self._clf = None
-        self._model_ckpt = None
         self._preprocessor = None
-        #self._encoder = None
+        self._model_ckpt = None
         self._trainer = None
         self._train_params = {}
         self._predictor = None
@@ -117,21 +123,21 @@ class ModelsUtils(ABC):
     def _cv_score(self, y_true, y_pred):
         print('_cv_score')
 
-        print('y_true : ', y_true)
-        print('y_pred : ', y_pred)
+        y_compare = pd.DataFrame({
+            'y_true': y_true,
+            'y_pred': y_pred
+        })
+        print(y_compare)
+        y_compare.to_csv(os.path.join(self._workdir, f'y_compare_{self.dataset}_{self.classifier}.csv'))
 
         support = precision_recall_fscore_support(y_true, y_pred, average = 'weighted')
 
-        scores = pd.DataFrame({
-            'Classifier':self.classifier,
-            'Precision':support[0],
-            'Recall':support[1],
-            'F-score':support[2]
-            },
-            index = [1]
-        ).T
+        scores = pd.DataFrame(
+            {self.classifier : [support[0],support[1],support[2]]},
+            index = ['Precision','Recall','F-score']
+        )
 
-        scores.to_csv(self._cv_csv, header = False)
+        scores.to_csv(self._cv_csv, index = True)
 
     @abstractmethod
     def predict(self):

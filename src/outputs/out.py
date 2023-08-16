@@ -79,11 +79,11 @@ class Outputs():
         self.reads_classified = 0
         self.reads_unknown = 0
         # File names
-        self._summary_file = '{}summary_K{}_{}_{}.csv'.format(results_dir, k, classifier, dataset)
-        self._krona_file = '{}kronagram_K{}_{}_{}.csv'.format(results_dir, k, classifier, dataset)
-        self._krona_out = '{}kronagram_K{}_{}_{}.html'.format(results_dir, k, classifier, dataset)
-        self._report_file = '{}report_K{}_{}_{}.csv'.format(results_dir, k, classifier, dataset)
-        self._mpa_file = '{}mpa_K{}_{}_{}.csv'.format(results_dir, k, classifier, dataset)
+        self._summary_file = os.path.join(results_dir,f'summary_K{k}_{classifier}_{dataset}.csv')
+        self._krona_file = os.path.join(results_dir,f'kronagram_K{k}_{classifier}_{dataset}.csv')
+        self._krona_out = os.path.join(results_dir,f'kronagram_K{k}_{classifier}_{dataset}.html')
+        self._report_file = os.path.join(results_dir,f'report_K{k}_{classifier}_{dataset}.csv')
+        self._mpa_file = os.path.join(results_dir,f'mpa_K{k}_{classifier}_{dataset}.csv')
         # Initialize empty
         self._abundances = {}
         # Get abundances used for other outputs
@@ -94,8 +94,8 @@ class Outputs():
 
 
     def _get_abundances(self):
+        df = self.classified_data['classification']
         for taxa in self.order:
-            df = self.classified_data[taxa]['classification']
             self._abundances[taxa] = {
                 'counts': df.value_counts(subset = [taxa]),
                 'total': df.value_counts(subset = [taxa]).sum()

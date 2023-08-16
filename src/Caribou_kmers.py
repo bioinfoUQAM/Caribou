@@ -139,16 +139,17 @@ def kmers_dataset(opt):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='This script extracts K-mers of the given dataset using the available ressources on the computer before saving it to drive.')
+    # Database
     parser.add_argument('-s','--seq_file', default=None, type=Path, help='PATH to a fasta file containing bacterial genomes to build k-mers from \
         or a folder containing fasta files with one sequence per file')
     parser.add_argument('-c','--cls_file', default=None, type=Path, help='PATH to a csv file containing classes of the corresponding fasta')
     parser.add_argument('-dt','--dataset_name', default='dataset', help='Name of the dataset used to name files')
-
+    # Host
     parser.add_argument('-sh','--seq_file_host', default=None, type=Path, help='PATH to a fasta file containing host genomes to build k-mers from \
         or a folder containing fasta files with one sequence per file')
     parser.add_argument('-ch','--cls_file_host', default=None, type=Path, help='PATH to a csv file containing classes of the corresponding host fasta')
     parser.add_argument('-dh','--host_name', default='host', help='Name of the host used to name files')
-
+    # Parameters
     parser.add_argument('-k','--k_length', required=True, type=int, help='Length of k-mers to extract')
     parser.add_argument('-l','--kmers_list', default=None, type=Path, help='PATH to a file containing a list of k-mers to be extracted if the dataset is not a training database')
     parser.add_argument('-t','--features_threshold', default=np.inf, type=float, help='Treshold of features varaicne to restric extraction to, will keep only features with higher variance')

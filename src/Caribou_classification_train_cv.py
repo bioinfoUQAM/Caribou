@@ -34,7 +34,11 @@ def bacteria_classification_train_cv(opt):
     outdirs = define_create_outdirs(opt['outdir'])
     
     # Validate and extract list of taxas
-    lst_taxas = verify_taxas(opt['taxa'], data_bacteria['taxas'])
+    if opt['taxa'] is not None:
+        lst_taxas = verify_taxas(opt['taxa'], data_bacteria['taxas'])
+    else:
+        lst_taxas = data_bacteria['taxas'].copy()
+    
     if 'domain' in lst_taxas:
         lst_taxas.remove('domain')
     
@@ -73,7 +77,7 @@ if __name__ == "__main__":
     parser.add_argument('-db','--data_bacteria', required=True, type=Path, help='PATH to a npz file containing the data corresponding to the k-mers profile for the bacteria database')
     parser.add_argument('-dt','--database_name', required=True, help='Name of the bacteria database used to name files')
     parser.add_argument('-model','--model_type', default='lstm_attention', choices=['sgd','mnb','lstm_attention','cnn','widecnn'], help='The type of model to train')
-    parser.add_argument('-t','--taxa', default='species', help='The taxonomic level to use for the classification, defaults to species. Can be one level or a list of levels separated by commas.')
+    parser.add_argument('-t','--taxa', default=None, help='The taxonomic level to use for the classification, defaults to None. Can be one level or a list of levels separated by commas.')
     parser.add_argument('-bs','--batch_size', default=32, type=int, help='Size of the batch size to use, defaults to 32')
     parser.add_argument('-e','--training_epochs', default=100, type=int, help='The number of training iterations for the neural networks models if one ise chosen, defaults to 100')
     parser.add_argument('-v','--verbose', action='store_true', help='Should the program be verbose')

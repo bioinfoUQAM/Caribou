@@ -6,13 +6,13 @@ import numpy as np
 import pandas as pd
 
 from glob import glob
-from utils import zip_X_y
 from shutil import rmtree
 
 # Preprocessing
-from models.ray_tensor_min_max import TensorMinMaxScaler
-from models.kerasTF.ray_one_hot_tensor import OneHotTensorEncoder
 from ray.data.preprocessors import LabelEncoder, Chain
+from models.ray_tensor_min_max import TensorMinMaxScaler
+from models.ray_tensor_max_abs import TensorMaxAbsScaler
+from models.kerasTF.ray_one_hot_tensor import OneHotTensorEncoder
 
 # Parent class / models
 from models.ray_utils import ModelsUtils
@@ -32,9 +32,6 @@ from ray.air.config import RunConfig
 from ray.train.tensorflow import TensorflowPredictor
 from ray.train.batch_predictor import BatchPredictor
 from joblib import Parallel, delayed, parallel_backend
-
-# Simulation class
-from models.reads_simulation import readsSimulation
 
 __author__ = 'Nicolas de Montigny'
 
@@ -95,7 +92,8 @@ class KerasTFModel(ModelsUtils):
             dataset,
             outdir_model,
             outdir_results,
-            batch_size, # Must be small to reduce mem usage
+            batch_size,
+            training_epochs,
             k,
             taxa,
             kmers_list,
@@ -103,7 +101,6 @@ class KerasTFModel(ModelsUtils):
         )
         # Parameters
         # Initialize hidden
-        self._training_epochs = training_epochs
         self._nb_CPU_data = int(os.cpu_count() * 0.2)
         self._nb_CPU_training = int(os.cpu_count() - self._nb_CPU_data)
         self._nb_GPU = len(tf.config.list_physical_devices('GPU'))
@@ -161,65 +158,28 @@ class KerasTFModel(ModelsUtils):
         for label, coded in zip(labels, encoded):
             decoded[predict == coded] = label
 
-        return decoded
+        return np.array(decoded)
 
     def train(self, datasets, kmers_ds, cv = True):
         print('train')
 
-        df_train = datasets['train']
-        
         if cv:
-            df_test = datasets['test']
-            self._cross_validation(df_train, df_test, kmers_ds)
+            self._cross_validation(datasets, kmers_ds)
         else:
-            # df_train, df_val = df_train.train_test_split(0.2, shuffle = True)
-            df_val = df_train.random_sample(0.3)
-            df_val = self._sim_4_val(df_val, kmers_ds, 'validation')
-            df_train = df_train.drop_columns(['id'])
-            df_val = df_val.drop_columns(['id'])
-            datasets = {'train': df_train, 'validation': df_val}
             self._fit_model(datasets)
 
-    def _sim_4_val(self, df, kmers_ds, name):
-        sim_genomes = []
-        sim_taxas = []
-        for row in df.iter_rows():
-            sim_genomes.append(row['id'])
-            sim_taxas.append(row[self.taxa])
-        cls = pd.DataFrame({'id':sim_genomes,self.taxa:sim_taxas})
-        sim_outdir = os.path.dirname(kmers_ds['profile'])
-        cv_sim = readsSimulation(kmers_ds['fasta'], cls, sim_genomes, 'miseq', sim_outdir, name)
-        sim_data = cv_sim.simulation(self.k, self.kmers)
-        sim_ids = sim_data['ids']
-        sim_cls = pd.DataFrame({'sim_id':sim_ids}, dtype = object)
-        sim_cls['id'] = sim_cls['sim_id'].str.replace('_[0-9]+_[0-9]+_[0-9]+', '', regex=True)
-        sim_cls = sim_cls.set_index('id').join(cls.set_index('id'))
-        sim_cls = sim_cls.drop(['sim_id'], axis=1)
-        sim_cls = sim_cls.reset_index(drop = True)
-        df = ray.data.read_parquet(sim_data['profile'])
-        df = zip_X_y(df, sim_cls)
-        return df
-
-    def _cross_validation(self, df_train, df_test, kmers_ds):
+    def _cross_validation(self, datasets, kmers_ds):
         print('_cross_validation')
 
-        # df_train, df_val = df_train.train_test_split(0.2, shuffle = True)
-        df_val = df_train.random_sample(0.3)
-        
-        df_val = self._sim_4_val(df_val, kmers_ds, f'{self.dataset}_val')
-        
-        df_train = df_train.drop_columns(['id'])
-        df_test = df_test.drop_columns(['id'])
-        df_val = df_val.drop_columns(['id'])
+        df_test = datasets.pop('test')
 
-        datasets = {'train' : df_train, 'validation' : df_val}
         self._fit_model(datasets)
 
         y_true = []
         for row in df_test.iter_rows():
             y_true.append(row[self.taxa])
 
-        y_pred = self.predict(df_test.drop_columns([self.taxa]), cv = True)
+        y_pred = self.predict(df_test.drop_columns([self.taxa]), threshold = 0)
 
         for file in glob(os.path.join(os.path.dirname(kmers_ds['profile']), '*sim*')):
             if os.path.isdir(file):
@@ -229,11 +189,12 @@ class KerasTFModel(ModelsUtils):
 
         self._cv_score(y_true, y_pred)
 
-    # Model training with DatasetPipeline
     def _fit_model(self, datasets):
         print('_fit_model')
+        # Preprocessing loop
         for name, ds in datasets.items():
             print(f'dataset preprocessing : {name}')
+            ds = ds.drop_columns(['id'])
             ds = self._preprocessor.transform(ds)
             datasets[name] = ds.fully_executed()
 
@@ -248,42 +209,103 @@ class KerasTFModel(ModelsUtils):
 
         # Define trainer / tuner
         self._trainer = TensorflowTrainer(
-            train_loop_per_worker = train_func,
-            train_loop_config = self._train_params,
-            scaling_config = ScalingConfig(
+            train_loop_per_worker=train_func,
+            train_loop_config=self._train_params,
+            scaling_config=ScalingConfig(
                 trainer_resources={'CPU': self._nb_CPU_data},
-                num_workers = self._n_workers,
-                use_gpu = self._use_gpu,
+                num_workers=self._n_workers,
+                use_gpu=self._use_gpu,
                 resources_per_worker={
                     'CPU': self._nb_CPU_per_worker,
                     'GPU': self._nb_GPU_per_worker
                 }
             ),
-            dataset_config = {
+            dataset_config={
                 'train': DatasetConfig(
-                    fit = False,
-                    transform = False,
-                    split = True,
-                    use_stream_api = True
+                    fit=False,
+                    transform=False,
+                    split=True,
+                    use_stream_api=True
                 ),
                 'validation': DatasetConfig(
-                    fit = False,
-                    transform = False,
-                    split = True,
-                    use_stream_api = False
+                    fit=False,
+                    transform=False,
+                    split=True,
+                    use_stream_api=False
                 )
             },
-            run_config = RunConfig(
-                name = self.classifier,
-                local_dir = self._workdir,
+            run_config=RunConfig(
+                name=self.classifier,
+                local_dir=self._workdir,
             ),
-            datasets = datasets,
+            datasets=datasets,
         )
         training_result = self._trainer.fit()
         self._model_ckpt = training_result.best_checkpoints[0][0]
-    
 
-    def predict(self, df, threshold=0.8, cv=False):
+    """
+    # This is a function for using with parent class training data decomposition that may be implemented later on
+    def _fit_model_multiclass(self, datasets):
+        print('_fit_model')
+        training_collection = datasets.pop('train')
+        for name, ds in datasets.items():
+            print(f'dataset preprocessing : {name}')
+            ds = ds.drop_columns(['id'])
+            ds = self._preprocessor.transform(ds)
+            datasets[name] = ds.fully_executed()
+
+        # Training parameters
+        self._train_params = {
+            'batch_size': self.batch_size,
+            'epochs': self._training_epochs,
+            'size': self._nb_kmers,
+            'nb_cls': self._nb_classes,
+            'model': self.classifier
+        }
+
+        for tax, ds in training_collection.items():
+            ds = ds.drop_columns(['id'])
+            ds = self._preprocessor.transform(ds)
+            training_ds = {**{'train' : ds.fully_executed()}, **datasets}
+
+            # Define trainer / tuner
+            self._trainer = TensorflowTrainer(
+                train_loop_per_worker = train_func,
+                train_loop_config = self._train_params,
+                scaling_config = ScalingConfig(
+                    trainer_resources={'CPU': self._nb_CPU_data},
+                    num_workers = self._n_workers,
+                    use_gpu = self._use_gpu,
+                    resources_per_worker={
+                        'CPU': self._nb_CPU_per_worker,
+                        'GPU': self._nb_GPU_per_worker
+                    }
+                ),
+                dataset_config = {
+                    'train': DatasetConfig(
+                        fit = False,
+                        transform = False,
+                        split = True,
+                        use_stream_api = True
+                    ),
+                    'validation': DatasetConfig(
+                        fit = False,
+                        transform = False,
+                        split = True,
+                        use_stream_api = False
+                    )
+                },
+                run_config = RunConfig(
+                    name = self.classifier,
+                    local_dir = self._workdir,
+                ),
+                datasets = training_ds,
+            )
+            training_result = self._trainer.fit()
+            self._models_collection[tax] = training_result.best_checkpoints[0][0]
+    """
+    
+    def predict(self, df, threshold=0.8):
         print('predict')
         if df.count() > 0:
             if len(df.schema().names) > 1:
@@ -295,19 +317,21 @@ class KerasTFModel(ModelsUtils):
 
             print('number of classes :', self._nb_classes)
 
-            # Make predictions
-            predictions = batch_prediction(
+            predictor = BatchPredictor.from_checkpoint(
                 self._model_ckpt,
-                df,
-                self.classifier,
-                self.batch_size,
-                self._nb_classes,
-                len(self.kmers)
+                TensorflowPredictor,
+                model_definition = lambda: build_model(self.classifier, self._nb_classes, len(self.kmers))
             )
+            predictions = predictor.predict(
+                data = df,
+                batch_size = self.batch_size
+            )
+
+            print(predictions.to_pandas())
 
             # Convert predictions to labels
             predictions = self._prob_2_cls(predictions, threshold)
-
+                
             return self._label_decode(predictions)
         else:
             raise ValueError('No data to predict')
@@ -316,16 +340,22 @@ class KerasTFModel(ModelsUtils):
     def _prob_2_cls(self, predictions, threshold):
         print('_prob_2_cls')
         def map_predicted_label_binary(df, threshold):
-            lower_threshold = 0.5 - (threshold * 0.5)
-            upper_threshold = 0.5 + (threshold * 0.5)
+            # lower_threshold = 0.5 - (threshold * 0.5)
+            # upper_threshold = 0.5 + (threshold * 0.5)
             predict = pd.DataFrame({
-                'proba': df['predictions'],
-                'predicted_label': np.full(len(df), -1)
+                'best_proba': [df['predictions'][i][np.argmax(df['predictions'][i])] for i in range(len(df))],
+                'predicted_label': df["predictions"].map(lambda x: np.array(x).argmax())
             })
-            predict.loc[predict['proba'] >= upper_threshold, 'predicted_label'] = 1
-            predict.loc[predict['proba'] <= lower_threshold, 'predicted_label'] = 0
+            # predict = pd.DataFrame({
+            #     'proba': df['predictions'],
+            #     'predicted_label': np.zeros(len(df), dtype = np.float32)
+            # })
+            print(predict)
+            # predict['predicted_label'] = np.round(predict['proba'])
+            # predict.loc[predict['proba'] >= upper_threshold, 'predicted_label'] = 1
+            # predict.loc[predict['proba'] <= lower_threshold, 'predicted_label'] = 0
             return predict['predicted_label'].to_numpy(dtype = np.int32)
-
+        
         def map_predicted_label_multiclass(df, threshold):
             predict = pd.DataFrame({
                 'best_proba': [df['predictions'][i][np.argmax(df['predictions'][i])] for i in range(len(df))],
@@ -333,18 +363,47 @@ class KerasTFModel(ModelsUtils):
             })
             predict.loc[predict['best_proba'] < threshold, 'predicted_label'] = -1
             return predict['predicted_label'].to_numpy(dtype = np.int32)
-
+        
         if self._nb_classes == 2:
             fn = map_predicted_label_binary
         else:
             fn = map_predicted_label_multiclass
 
-        with parallel_backend('threading'):
-            predict = Parallel(n_jobs=-1, prefer='threads', verbose=1)(
-                delayed(fn)(batch, threshold) for batch in predictions.iter_batches(batch_size = self.batch_size))
+        predict = []
+        for batch in predictions.iter_batches(batch_size = self.batch_size):
+            predict.append(lambda : fn(batch, threshold))
 
         return np.concatenate(predict)
-                
+
+
+
+    """
+    # This is a function for using with parent class training data decomposition that may be implemented later on
+    def _prob_2_cls_multiclass(self, pred_dct, nb_records, threshold):
+        print('_prob_2_cls_multiclass')
+        def map_predicted_label(df):
+            predict = pd.DataFrame({
+                'best_proba': [df['predictions'][i][np.argmax(df['predictions'][i])] for i in range(len(df))],
+                'predicted_label': df["predictions"].map(lambda x: np.array(x).argmax())
+            })
+            return predict
+
+        global_predict = pd.DataFrame({
+            'predict_proba': np.zeros(nb_records, dtype=np.float32),
+            'predict_cls': np.zeros(nb_records, dtype=np.int32),
+        })
+
+        for tax, local_predict in pred_dct.items():
+            with parallel_backend('threading'):
+                local_predict = Parallel(n_jobs=-1, prefer='threads', verbose=1)(
+                    delayed(map_predicted_label)(batch) for batch in local_predict.iter_batches(batch_size = self.batch_size))
+            local_predict = pd.concat(local_predict, ignore_index=True)
+            global_predict.loc[global_predict['predict_proba'] < local_predict['best_proba'],'predict_cls'] = np.array(local_predict.loc[local_predict['best_proba'] > global_predict['predict_proba'], 'predicted_label'])
+            global_predict.loc[global_predict['predict_proba'] < local_predict['best_proba'],'predict_proba'] = np.array(local_predict.loc[local_predict['best_proba'] > global_predict['predict_proba'], 'best_proba'])
+        # global_predict.loc[global_predict['predict_proba'] < threshold, 'predict_cls'] = -1
+    
+        return np.array(global_predict['predict_cls'])
+    """            
 # Training/building function outside of the class as mentioned on the Ray discussion
 # https://discuss.ray.io/t/statuscode-resource-exhausted/4379/16
 ################################################################################
@@ -428,47 +487,3 @@ def build_model(classifier, nb_cls, nb_kmers):
         model = build_wideCNN(nb_kmers, nb_cls)
     return model
 
-"""
-def batch_predict_val(checkpoint, batch, clf, batch_size, nb_classes, nb_kmers):
-    def convert_logits_to_classes(df):
-        best_class = df["predictions"].map(lambda x: np.array(x).argmax())
-        df["predictions"] = best_class
-        return df
-
-    def calculate_prediction_scores(df):
-            return pd.DataFrame({"correct": df["predictions"] == df["labels"]})
-
-    predictor = BatchPredictor.from_checkpoint(
-        checkpoint,
-        TensorflowPredictor,
-        model_definition = lambda: build_model(clf, nb_classes, nb_kmers)
-    )
-    predictions = predictor.predict(
-        data = batch,
-        batch_size = batch_size,
-        feature_columns = ['__value__'],
-        keep_columns = ['labels']
-    )
-    pred_results = predictions.map_batches(
-        convert_logits_to_classes,
-        batch_format="pandas"
-    )
-    correct_dataset = pred_results.map_batches(
-        calculate_prediction_scores,
-        batch_format="pandas",
-    )
-    
-    return correct_dataset
-"""
-
-def batch_prediction(checkpoint, batch, clf, batch_size, nb_classes, nb_kmers):
-    predictor = BatchPredictor.from_checkpoint(
-        checkpoint,
-        TensorflowPredictor,
-        model_definition = lambda: build_model(clf, nb_classes, nb_kmers)
-    )
-    predictions = predictor.predict(
-        data = batch,
-        batch_size = batch_size
-    )
-    return predictions

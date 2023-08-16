@@ -61,13 +61,16 @@ class TensorLowVarSelection(Preprocessor):
                 sqr_dev_arr = sqr_dev_func(batch, mean_arr, sqr_dev_arr)
             # Get variance per column
             var_arr = mean_func(sqr_dev_arr, nb_records)
+            p10 = int(0.1 * self.nb_features)
 
-            if self.nb_keep != np.inf and self.nb_keep < self.nb_features:
+            if self.nb_keep != np.inf and (self.nb_keep + (p10 * 2)) < self.nb_features:
                 var_mapping = {ind : var_arr[ind] for ind in np.arange(self.nb_features)}
+                keep_arr = np.ravel(np.sort(var_arr))
+                keep_arr = keep_arr[p10:(len(keep_arr) - p10)]
+                keep_arr = np.random.choice(keep_arr, self.nb_keep)
                 remove_arr = np.ravel(np.sort(var_arr))
-                keep_arr = remove_arr[(self.nb_features - self.nb_keep):]
-                remove_arr = remove_arr[:(self.nb_features - self.nb_keep)]
-                
+                remove_arr = np.array([ind for ind in remove_arr if ind not in keep_arr])
+
                 # Switch values from keep_arr to remove if number is discordant
                 if len(keep_arr) > self.nb_keep:
                     nb_switch = len(keep_arr) - self.nb_keep

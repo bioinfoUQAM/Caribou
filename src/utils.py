@@ -29,10 +29,8 @@ __all__ = [
     'verify_load_data',
     'verify_concordance_klength',
     'verify_taxas',
-    'verify_preclassified',
-    'verify_load_classified',
-    'populate_save_data_domain',
-    'populate_save_data',
+    'verify_load_preclassified',
+    'merge_save_data',
     'zip_X_y',
     'ensure_length_ds'
 ]
@@ -173,27 +171,6 @@ def verify_load_data(data_file: Path):
         raise ValueError("Invalid data file !")
     return data
 
-def verify_load_classified(classified_data: Path):
-    verify_file(classified_data)
-    data = load_Xy_data(classified_data)
-    if len(data['sequence']) == 0:
-        raise ValueError("No classified taxa present in data file !")
-    elif len(data['sequence']) != len(data.keys())-1:
-        raise ValueError("Inconsistent number of classified data vs metadata in data file !")
-    else:
-        for taxa in data['sequence']:
-            verify_data_path(data[taxa]['profile'])
-        if not isinstance(data[taxa]['ids'], list):
-            raise ValueError("Invalid classified data file !")
-        elif not isinstance(data[taxa]['kmers'], list):
-            raise ValueError("Invalid classified data file !")
-        elif not isinstance(data[taxa]['classification'], pd.DataFrame):
-            raise ValueError("Invalid classified data file !")
-        elif not isinstance(data[taxa]['classified_ids'], list):
-            raise ValueError("Invalid classified data file !")
-            
-    return data
-
 def verify_taxas(taxas : str, db_taxas : list):
     taxas = str.split(taxas, ',')
     for taxa in taxas:
@@ -202,36 +179,48 @@ def verify_taxas(taxas : str, db_taxas : list):
     return taxas
 
 
-def verify_preclassified(data: dict):
-    preclassified = None
-    if 'sequence' in data.keys():
-        preclassified = data.keys()
-        preclassified.remove('sequence')
-        preclassified.remove('kmers')
-        if len(preclassified) > 1:
-            raise ValueError('More than one classified taxa present in data.\n' +
-                             'Please provide data containing only one or relaunch classification with an empty k-mers dataset !')
-        else:
-            preclassified = preclassified[0]
+def verify_load_preclassified(data_file: Path):
+    verify_file(data_file)
+    preclassified = load_Xy_data(data_file)
+    if not isinstance(preclassified['sequence'], list):
+        raise ValueError("Invalid preclassified file !")
+    elif not isinstance(preclassified['classification'], pd.DataFrame):
+        raise ValueError("Invalid data file !")
+    elif not isinstance(preclassified['classified_ids'], list):
+        raise ValueError("Invalid data file !")
+    elif not isinstance(preclassified['unknown_ids'], list):
+        raise ValueError("Invalid data file !")
     return preclassified
 
 # Saving
 #########################################################################################################
 
-def populate_save_data_domain(clf_data : dict):
-    clf_dict = {
-        'profile' : clf_data['domain']['bacteria'],
-        'ids' : clf_data['domain']['bacteria_ids'],
-        'unknown_profile' : clf_data['domain']['unknown'],
-        'unknown_ids' : clf_data['domain']['unknown_ids'],
-    }
-    if 'host' in clf_data.keys():
-        clf_data['host_profile'] = clf_data['host']['classification']
-        clf_data['host_ids'] = clf_data['host']['classified_ids']
-    
-    return clf_dict
+def merge_classified_data(
+    clf_data : dict,
+    db_data: dict,
+):
+    # sequence
+    sequence = db_data['sequence'].copy()
+    sequence.extend(clf_data['sequence'])
+    clf_data['sequence'] = sequence
+    # classification
+    classif = db_data['classification']
+    clf_data['classification'] = classif.join(clf_data['classification'], how = 'outer', on = 'id')
+    # classified_ids
+    clf_ids = db_data['classified_ids'].copy()
+    clf_ids.extend(clf_data['classified_ids'])
+    clf_data['classified_ids'] = list(np.unique(clf_ids))
+    # unknown_ids
+    clf_ids = db_data['unknown_ids'].copy()
+    clf_ids.extend(clf_data['unknown_ids'])
+    clf_data['unknown_ids'] = list(np.unique(clf_ids))
+    # classes
+    dct_diff = {k : v for k,v in db_data.items() if k not in clf_data.keys()}
+    clf_data = {**clf_data,**dct_diff}
 
-def populate_save_data(
+    return clf_data
+
+def merge_save_data(
     clf_data : dict,
     db_data : dict,
     end_taxa : str,
@@ -239,33 +228,16 @@ def populate_save_data(
     metagenome : str,
     preclassified : str = None,
 ):
-    clf_dict = {
-        'sequence':clf_data['sequence'].copy(),
-        'kmers': db_data['kmers'],
-    }
-    if end_taxa is not None:
-        clf_dict['sequence'] = clf_dict['sequence'][:clf_dict['sequence'].index(end_taxa)]
-
-    for taxa in clf_dict['sequence']:
-        if taxa == 'domain':
-            clf_dict[taxa] = populate_save_data_domain(
-                clf_data
-            )
-        else:
-            clf_dict[taxa] = {
-                'profile': clf_data[taxa]['unknown'],
-                'ids': clf_data[taxa]['unknown_ids'],
-                'classification': clf_data[taxa]['classification'],
-                'classified_ids': clf_data[taxa]['classified_ids'],
-            }
-
     if preclassified is not None:
-        clf_dict[preclassified] = db_data[preclassified]
-        clf_dict['sequence'].insert(0, preclassified)
+        clf_data = merge_classified_data(clf_data, preclassified)
+
+    if end_taxa is not None:
+        clf_data['sequence'] = clf_data['sequence'][:clf_data['sequence'].index(end_taxa)]
 
     clf_file = os.path.join(outdir, f'{metagenome}_classified.npz')
-    save_Xy_data(clf_dict, clf_file)
-    return clf_dict
+    save_Xy_data(clf_data, clf_file)
+    
+    return clf_data
 
 def zip_X_y(X, y):
     num_blocks = X.num_blocks()
@@ -280,6 +252,7 @@ def zip_X_y(X, y):
         if not ds.is_fully_executed():
             ds.fully_executed()
         df = X.zip(y).repartition(num_blocks)
+    
     return df
 
 def ensure_length_ds(len_x, len_y):

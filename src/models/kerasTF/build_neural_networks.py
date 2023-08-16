@@ -1,5 +1,6 @@
 
 from keras.models import Model, Sequential
+from tensorflow.keras.losses import BinaryCrossentropy, CategoricalCrossentropy
 from keras.layers import Dense, Input, LSTM, Embedding, Dropout, Conv1D, Conv2D, MaxPooling1D, MaxPooling2D, Concatenate, Flatten, Attention, Activation, Bidirectional, Reshape
 
 from models.kerasTF.attentionLayer import AttentionWeightedAverage
@@ -24,10 +25,10 @@ def build_attention(nb_kmers):
 
     x = Dense(128, activation = "relu")(x)
     x = Dropout(0.1)(x)
-    x = Dense(1, activation = "tanh")(x)
+    x = Dense(2, activation = "tanh")(x)
 
     model = Model(inputs = inputs, outputs = x)
-    model.compile(loss = 'binary_crossentropy', optimizer = 'adam', metrics = ['accuracy'])
+    model.compile(loss = BinaryCrossentropy(from_logits = True), optimizer = 'adam', metrics = ['accuracy'])
 
     return model
 
@@ -44,10 +45,10 @@ def build_LSTM(nb_kmers):
 
     x = LSTM(128, recurrent_dropout = 0.1, dropout = 0.1)(x)
 
-    x = Dense(1, activation = 'tanh')(x)
+    x = Dense(2, activation = 'tanh')(x)
     
     model = Model(inputs = inputs, outputs = x)
-    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+    model.compile(loss=BinaryCrossentropy(from_logits = True), optimizer='adam', metrics=['accuracy'])
 
     return model
 
@@ -76,9 +77,9 @@ def build_deepLSTM(nb_kmers):
     net = Dense(10, activation='relu', name='D_%d'%10)(net)
     net = Dropout(0.1,name='fr_same')(net)
 
-    outputs = Dense(1, activation='tanh', name='score')(net)
+    outputs = Dense(2, activation='tanh', name='score')(net)
     model = Model(inputs=inputs, outputs=outputs)
-    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+    model.compile(loss=BinaryCrossentropy(from_logits = True), optimizer='adam', metrics=['accuracy'])
 
     return model
 
@@ -104,7 +105,7 @@ def build_LSTM_attention(nb_kmers, nb_classes):
     net = Dense(nb_classes)(net)
     outputs = Activation('softmax')(net)
     model = Model(inputs = inputs, outputs = outputs)
-    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+    model.compile(loss=CategoricalCrossentropy(), optimizer='adam', metrics=['accuracy'])
 
     return model
 
@@ -130,7 +131,7 @@ def build_CNN(nb_kmers, nb_classes):
     model.add(Dropout(0.5))
     model.add(Dense(nb_classes))
     model.add(Activation('softmax'))
-    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+    model.compile(loss=CategoricalCrossentropy(), optimizer='adam', metrics=['accuracy'])
 
     return model
 
@@ -168,6 +169,6 @@ def build_wideCNN(nb_kmers, nb_classes):
     net = Dense(nb_classes)(net)
     outputs = Activation('softmax')(net)
     model = Model(inputs = inputs, outputs = outputs)
-    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+    model.compile(loss=CategoricalCrossentropy(), optimizer='adam', metrics=['accuracy'])
 
     return model
