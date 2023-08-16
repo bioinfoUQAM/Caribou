@@ -47,26 +47,31 @@ class KmersVectorizer(CountVectorizer):
             batch_format="pandas"
             # batch_size = 1
         )
-        total_counts = [Counter() for _ in self.columns]
+        total_counts = Counter() # Only one as we are using only one self.column
         # for batch in value_counts.iter_batches(batch_size=1):
         for batch in value_counts.iter_batches(batch_size=None):
             for i, col_value_counts in enumerate(batch):
-                total_counts[i].update(col_value_counts)
-        
+                total_counts.update(col_value_counts)
+        total_tokens = frozenset(total_counts.keys())
+
         def most_common(counter: Counter, n: int):
             return Counter(dict(counter.most_common(n)))
         
         def least_common(counter: Counter, n: int):
             return Counter(dict(counter.most_common()[:-n-1:-1]))
 
-        nb_quantile = int(len(total_counts[0])/4)
+        nb_quantile = int(len(total_counts)/4)
 
-        top_counts = most_common(total_counts[0], nb_quantile)
+        top_counts = most_common(total_counts, nb_quantile)
+        top_counts = frozenset(top_counts.keys())
 
-        bottom_counts = least_common(total_counts[0], nb_quantile)
+        bottom_counts = least_common(total_counts, nb_quantile)
+        bottom_counts = frozenset(bottom_counts.keys())
+
+        mid_tokens = total_tokens.difference(top_counts,bottom_counts)
 
         mid_counts = Counter({
-            token : count for token, count in total_counts[0].items() if token not in top_counts.keys() and token not in bottom_counts.keys()
+            token : total_counts[token] for token in mid_tokens
         })
 
         self.stats_ = {
