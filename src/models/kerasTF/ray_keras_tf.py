@@ -348,7 +348,9 @@ def train_func(config):
                 batch_size = batch_size,
                 batch_format = 'pandas'
             ):
-
+                labels = batch.loc['labels']
+                batch = batch.drop(['id','labels'], axis = 1)
+                return batch.to_numpy(), labels.to_numpy()
             # for batch in data.iter_tf_batches(
             #     batch_size = batch_size
             # ):
