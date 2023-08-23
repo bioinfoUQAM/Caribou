@@ -247,7 +247,7 @@ class KmersCollection():
 
     def _seen_kmers(self):
         print('seen_kmers')
-        self.kmers_list = self.df.schema().names
+        self.kmers_list = self.df.limit(1).schema().names
         self.kmers_list.remove('id')
 
     def _given_kmers(self):
@@ -257,7 +257,7 @@ class KmersCollection():
         def add_missing_columns(df):
             return df.reindex(columns = cols_final, fill_value = 0)
         
-        cols_ds = self.df.schema().names
+        cols_ds = self.df.limit(1).schema().names
         cols_ds.remove('id')
         cols_drop = [col for col in cols_ds if col not in self.kmers_list]
         # cols_add = [col for col in self.kmers_list if col not in cols_ds]
