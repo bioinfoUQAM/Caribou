@@ -171,9 +171,9 @@ class ClassificationMethods():
     def _binary_training(self, taxa):
         print('_binary_training')
         self._verify_classifier_binary()
+        self._merge_database_host(self._database_data, self._host_data)
+        self._load_training_data_merged(taxa)
         if self._classifier_binary == 'onesvm':
-            self._merge_database_host(self._database_data, self._host_data)
-            self._load_training_data_merged(taxa)
             self.models[taxa] = SklearnModel(
                 self._classifier_binary,
                 self._database,
@@ -189,8 +189,8 @@ class ClassificationMethods():
             self.models[taxa].preprocess(self._preprocess_dataset)
             self.models[taxa].train(self._training_datasets, self._database_data, self._cv)
         else:
-            self._merge_database_host(self._database_data, self._host_data)
-            self._load_training_data_merged(taxa)
+            # self._merge_database_host(self._database_data, self._host_data)
+            # self._load_training_data_merged(taxa)
             if self._classifier_binary == 'linearsvm':
                 self.models[taxa] = SklearnModel(
                     self._classifier_binary,
@@ -565,7 +565,7 @@ class ClassificationMethods():
             if len(taxa_cols) == 0:
                 taxa_cols = list(row.keys())
                 taxa_cols.remove('id')
-                taxa_cols.remove('__value__')
+                # taxa_cols.remove('__value__')
                 for taxa in taxa_cols:
                     sim_cls_dct[taxa] = []
             sim_cls_dct['id'].append(row['id'])
@@ -580,23 +580,3 @@ class ClassificationMethods():
         df = zip_X_y(df, sim_cls)
         return df
     
-    """
-    # This is a function for using with parent class training data decomposition that may be implemented later on
-    def _get_taxa_ds_collection(self, current_taxa):
-        print('_get_taxa_ds_collection')
-        ds_collection = {}
-        df = self._training_datasets['train']
-
-        previous_taxa = self._taxas_order[self._taxas_order.index(current_taxa) - 1]
-        previous_cls_lst = np.unique(self._y_train[previous_taxa])
-        for cls in previous_cls_lst:
-            ds_collection[cls] = ray.data.from_pandas(pd.DataFrame(columns = df.schema().names))
-        for batch in df.iter_batches(
-            batch_size=10,
-            batch_format='pandas'
-        ):
-            for cls in np.unique(batch[previous_taxa]):
-                ds_collection[cls] = ds_collection[cls].union(ray.data.from_pandas(batch[batch[previous_taxa] == cls]))
-        
-        self._training_datasets['train'] = ds_collection
-    """

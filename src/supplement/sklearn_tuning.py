@@ -16,7 +16,7 @@ from pathlib import Path
 from utils import *
 from models.reads_simulation import readsSimulation
 from models.ray_tensor_min_max import TensorMinMaxScaler
-from models.sklearn.ray_sklearn_partial_trainer import SklearnPartialTrainer
+from src.models.sklearn.ray_sklearn_partial_trainer_TENSOR import SklearnPartialTrainer
 from models.sklearn.ray_sklearn_onesvm_encoder import OneClassSVMLabelEncoder
 
 # Preprocessing
@@ -31,7 +31,7 @@ from ray.tune import Tuner, TuneConfig
 from ray.tune.schedulers import ASHAScheduler
 from ray.air.config import RunConfig, ScalingConfig
 # Parent class
-from models.sklearn.ray_sklearn_partial_trainer import SklearnPartialTrainer
+from src.models.sklearn.ray_sklearn_partial_trainer_TENSOR import SklearnPartialTrainer
 
 warnings.simplefilter(action='ignore')
 

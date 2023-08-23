@@ -239,11 +239,12 @@ class KmersCollection():
             self._seen_kmers()
         elif self.method == 'given':
             self._given_kmers()
-        concatenator = Concatenator(
-            output_column_name = '__value__',
-            include = self.kmers_list
-        )
-        self.df = concatenator.fit_transform(self.df)
+        # print('Concatenator')
+        # concatenator = Concatenator(
+        #     output_column_name = '__value__',
+        #     include = self.kmers_list
+        # )
+        # self.df = concatenator.fit_transform(self.df)
 
     def _seen_kmers(self):
         print('seen_kmers')
