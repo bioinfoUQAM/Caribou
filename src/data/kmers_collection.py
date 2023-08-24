@@ -176,9 +176,9 @@ class KmersCollection():
                 for i, record in enumerate(SeqIO.parse(handle, 'fasta')):
                     data['id'].append(record.id)
                     data['sequence'].append(str(record.seq).upper())
-                    if i % 10 == 0 :
+                    if i % 5 == 0 :
                         df = pd.DataFrame(data)
-                        df.to_parquet(os.path.join(self._tmp_dir, f'batch_{int(i/10)}.parquet'))
+                        df.to_parquet(os.path.join(self._tmp_dir, f'batch_{int(i/5)}.parquet'))
                         data = {
                             'id':[],
                             'sequence':[]

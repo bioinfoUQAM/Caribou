@@ -1,4 +1,5 @@
 from typing import List
+from itertools import compress
 from collections import Counter
 
 import pandas as pd
@@ -22,16 +23,10 @@ class KmersVectorizer(CountVectorizer):
         def kmer_tokenize(s):
             tokens = []
             for start in range(0, len(s)-k, 1):
-                token = s[start:start+k]
-                if 'N' not in token:
-                    tokens.append(token)
+                tokens.append(s[start:start+k])
             return tokens
         self.column = column
-        
-        return super().__init__(
-            columns = [self.column],
-            tokenization_fn = kmer_tokenize
-        )
+        self.tokenization_fn = kmer_tokenize
     
     def _fit(self, dataset: Dataset) -> Preprocessor:
         def get_pd_value_counts(df: pd.DataFrame) -> List[Counter]:
@@ -40,7 +35,7 @@ class KmersVectorizer(CountVectorizer):
                 tokens = token_series.sum()
                 return Counter(tokens)
 
-            return [get_token_counts(col) for col in self.columns]
+            return [get_token_counts(self.column)]
 
         value_counts = dataset.map_batches(
             get_pd_value_counts,
@@ -52,9 +47,9 @@ class KmersVectorizer(CountVectorizer):
         for batch in value_counts.iter_batches(batch_size=None):
             for col_value_counts in batch:
                 total_counts.update(col_value_counts)
-
+        
         self.stats_ = {
-            f"token_counts({self.column})": total_counts
+            f"token_counts({self.column})": total_counts 
         }
 
         return self
@@ -66,7 +61,9 @@ class KmersVectorizer(CountVectorizer):
         }
         token_counts = self.stats_[f"token_counts({self.column})"]
         tokenized = df[self.column].map(self.tokenization_fn).map(Counter)
+        alphabet = set('ATCG')
         for token in token_counts:
-            mapping[token] = tokenized.map(lambda val: val[token])
+            if set(token) <= alphabet:
+                mapping[token] = tokenized.map(lambda val: val[token])
         df = pd.concat(mapping, axis = 1)
         return df
