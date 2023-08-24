@@ -52,6 +52,7 @@ def kmers_dataset(opt):
         t_start = time()
         # Reference Database Only
         if opt['seq_file'] is not None and opt['cls_file'] is not None and opt['seq_file_host'] is None and opt['cls_file_host'] is None:
+            print("DB")
             k_profile_database = build_load_save_data((opt['seq_file'],opt['cls_file']),
                 None,
                 outdirs["data_dir"],
@@ -72,7 +73,7 @@ def kmers_dataset(opt):
 
         # Reference database and host
         elif opt['seq_file'] is not None and opt['cls_file'] is not None and opt['seq_file_host'] is not None and opt['cls_file_host'] is not None:
-
+            print("DB + Host")
             t_start = time()
             k_profile_database, k_profile_host  = build_load_save_data((opt['seq_file'],opt['cls_file']),
                 (opt['seq_file_host'],opt['cls_file_host']),
@@ -94,7 +95,7 @@ def kmers_dataset(opt):
     else:
         # Reference Host only
         if opt['seq_file'] is not None and opt['cls_file'] is not None:
-
+            print("Host")
             t_start = time()
             k_profile_host = build_load_save_data(None,
             (opt['seq_file'],opt['cls_file']),
@@ -110,9 +111,9 @@ def kmers_dataset(opt):
 
         # Dataset to analyse only
         elif opt['seq_file'] is not None and opt['cls_file'] is None:
-
+            print("Dataset")
             t_start = time()
-            k_profile_metagenome = build_load_save_data(opt['seq_file'],
+            k_profile_metagenome = build_load_save_data((opt['seq_file']),
             None,
             outdirs["data_dir"],
             opt['dataset_name'],

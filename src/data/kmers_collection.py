@@ -178,7 +178,7 @@ class KmersCollection():
                     data['sequence'].append(str(record.seq).upper())
                     if i % 10 == 0 :
                         df = pd.DataFrame(data)
-                        df.to_parquet(os.path.join(self._tmp_dir, f'batch_{int(i/100)}.parquet'))
+                        df.to_parquet(os.path.join(self._tmp_dir, f'batch_{int(i/10)}.parquet'))
                         data = {
                             'id':[],
                             'sequence':[]
@@ -210,7 +210,7 @@ class KmersCollection():
                         data['sequence'].append(str(record.seq).upper())
             if i % 10 == 0 :
                 df = pd.DataFrame(data)
-                df.to_parquet(os.path.join(self._tmp_dir, f'batch_{int(i/100)}.parquet'))
+                df.to_parquet(os.path.join(self._tmp_dir, f'batch_{int(i/10)}.parquet'))
                 data = {
                     'id':[],
                     'sequence':[]

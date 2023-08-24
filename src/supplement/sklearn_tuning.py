@@ -15,8 +15,9 @@ from pathlib import Path
 # Package modules
 from utils import *
 from models.reads_simulation import readsSimulation
-from models.ray_tensor_min_max import TensorMinMaxScaler
-from src.models.sklearn.ray_sklearn_partial_trainer_TENSOR import SklearnPartialTrainer
+# from models.ray_tensor_min_max import TensorMinMaxScaler
+from ray.data.preprocessors import MinMaxScaler
+from models.sklearn.ray_sklearn_partial_trainer import SklearnPartialTrainer
 from models.sklearn.ray_sklearn_onesvm_encoder import OneClassSVMLabelEncoder
 
 # Preprocessing
@@ -31,7 +32,7 @@ from ray.tune import Tuner, TuneConfig
 from ray.tune.schedulers import ASHAScheduler
 from ray.air.config import RunConfig, ScalingConfig
 # Parent class
-from src.models.sklearn.ray_sklearn_partial_trainer_TENSOR import SklearnPartialTrainer
+from models.sklearn.ray_sklearn_partial_trainer import SklearnPartialTrainer
 
 warnings.simplefilter(action='ignore')
 
@@ -137,6 +138,11 @@ for col in db_cls.columns:
 if 'domain' in db_cls.columns:
     db_cls.loc[db_cls['domain'] == 'archaea','domain'] = 'bacteria'
 
+import sys
+print(train_ds)
+print(db_cls)
+sys.exit()
+
 train_ds = zip_X_y(train_ds,db_cls)
 
 # Preprocessing
@@ -161,7 +167,7 @@ test_ds = test_ds.drop_columns(col2drop)
 
 if opt['classifier'] == 'onesvm':
     preprocessor = Chain(
-        TensorMinMaxScaler(db_data['kmers']),
+        MinMaxScaler(db_data['kmers']),
         OneClassSVMLabelEncoder('domain')
     )
     train_ds = preprocessor.fit_transform(train_ds)
@@ -174,7 +180,7 @@ if opt['classifier'] == 'onesvm':
     )
 else:
     preprocessor = Chain(
-        TensorMinMaxScaler(db_data['kmers']),
+        MinMaxScaler(db_data['kmers']),
         LabelEncoder(opt['taxa'])
     )
     train_ds = preprocessor.fit_transform(train_ds)

@@ -129,7 +129,7 @@ def caribou(opt):
 
     # Metagenome to analyse
     k_profile_metagenome = build_load_save_data(
-        metagenome_seq_file,
+        (metagenome_seq_file),
         None,
         outdirs['data_dir'],
         metagenome,
