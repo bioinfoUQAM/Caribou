@@ -91,7 +91,7 @@ class KmersCollection():
         self.Xy_file = Xy_file
         self.fasta = fasta_file
         self.csv = cls_file
-        # Initialize empty
+        # Initialize variables
         self.df = None
         self.ids = []
         self.taxas = []
@@ -161,9 +161,9 @@ class KmersCollection():
                 for i, record in enumerate(SeqIO.parse(handle, 'fasta')):
                     data['id'].append(record.id)
                     data['sequence'].append(str(record.seq).upper())
-                    if i % 100 == 0 :
+                    if i % 10 == 0 :
                         df = pd.DataFrame(data)
-                        df.to_parquet(os.path.join(self._tmp_dir, f'batch_{int(i/100)}.parquet'))
+                        df.to_parquet(os.path.join(self._tmp_dir, f'batch_{int(i/10)}.parquet'))
                         data = {
                             'id':[],
                             'sequence':[]
@@ -176,9 +176,9 @@ class KmersCollection():
                 for i, record in enumerate(SeqIO.parse(handle, 'fasta')):
                     data['id'].append(record.id)
                     data['sequence'].append(str(record.seq).upper())
-                    if i % 5 == 0 :
+                    if i % 10 == 0 :
                         df = pd.DataFrame(data)
-                        df.to_parquet(os.path.join(self._tmp_dir, f'batch_{int(i/5)}.parquet'))
+                        df.to_parquet(os.path.join(self._tmp_dir, f'batch_{int(i/10)}.parquet'))
                         data = {
                             'id':[],
                             'sequence':[]
@@ -223,9 +223,9 @@ class KmersCollection():
 
     def _make_ray_ds(self):
         print('_make_ray_ds')
-        # self._files_list = glob(os.path.join(self._tmp_dir, '*.parquet'))
-        # self.df = ray.data.read_parquet_bulk(self._files_list)
-        self.df = ray.data.read_parquet(self._tmp_dir)
+        self._files_list = glob(os.path.join(self._tmp_dir, '*.parquet'))
+        self.df = ray.data.read_parquet_bulk(self._files_list, parallelism = len(self._files_list))
+        # self.df = ray.data.read_parquet(self._tmp_dir)
 
     def _kmers_tokenization(self):
         print('_kmers_tokenization')
@@ -239,12 +239,6 @@ class KmersCollection():
             self._seen_kmers()
         elif self.method == 'given':
             self._given_kmers()
-        # print('Concatenator')
-        # concatenator = Concatenator(
-        #     output_column_name = '__value__',
-        #     include = self.kmers_list
-        # )
-        # self.df = concatenator.fit_transform(self.df)
 
     def _seen_kmers(self):
         print('seen_kmers')
