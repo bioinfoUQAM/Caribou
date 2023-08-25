@@ -56,6 +56,7 @@ def build_kmers_db(file, dataset, prefix, k, kmers_list = None):
                 'taxas': collection.taxas,  # Known taxas for classification
                 'fasta': collection.fasta,  # Fasta file -> simulate reads if cv
         }
+        save_Xy_data(data, data_file)
     return data
        
 def build_kmers_dataset(file, dataset, prefix, k, kmers_list):
