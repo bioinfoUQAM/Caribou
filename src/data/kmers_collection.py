@@ -10,7 +10,7 @@ from Bio import SeqIO
 from glob import glob
 from shutil import rmtree
 from os.path import splitext
-from ray.data.preprocessors import Concatenator, BatchMapper
+from ray.data.preprocessors import BatchMapper
 
 from data.ray_kmers_vectorizer import KmersVectorizer
 
@@ -95,7 +95,6 @@ class KmersCollection():
         self.df = None
         self.ids = []
         self.taxas = []
-        self.classes = []
         self.method = None
         self.kmers_list = None
         self._nb_kmers = 0
@@ -121,11 +120,11 @@ class KmersCollection():
             self._read_cls_file()
 
     def _read_cls_file(self):
-        cls = pd.read_csv(self.csv)
+        self._labels = pd.read_csv(self.csv)
         # Get taxas from csv file
-        self.classes = np.array(cls)
-        if len(cls.columns) > 0:
-            self.taxas = cls.columns
+        if len(self._labels.columns) > 0:
+            self.taxas = list(self._labels.columns)
+            self.taxas.remove('id')
         else:
             raise ValueError(f'No information found in the classes csv file : {self.csv}')
 
@@ -163,7 +162,11 @@ class KmersCollection():
                     data['sequence'].append(str(record.seq).upper())
                     if i % 10 == 0 :
                         df = pd.DataFrame(data)
+                        if self._labels is not None:
+                            cls = self._labels[self._labels['id'].isin(data['id'])]
+                            df = pd.merge(df, cls, on = 'id', how = 'left')
                         df.to_parquet(os.path.join(self._tmp_dir, f'batch_{int(i/10)}.parquet'))
+                        self.ids.extend(data['id'])
                         data = {
                             'id':[],
                             'sequence':[]
@@ -171,6 +174,7 @@ class KmersCollection():
                 if len(data['id']) != 0:
                     df = pd.DataFrame(data)
                     df.to_parquet(os.path.join(self._tmp_dir, f'batch_end.parquet'))
+                    self.ids.extend(data['id'])
         elif ext == "gz":
             with gzip.open(self.fasta, 'rt') as handle:
                 for i, record in enumerate(SeqIO.parse(handle, 'fasta')):
@@ -178,16 +182,22 @@ class KmersCollection():
                     data['sequence'].append(str(record.seq).upper())
                     if i % 10 == 0 :
                         df = pd.DataFrame(data)
+                        if self._labels is not None:
+                            cls = self._labels[self._labels['id'].isin(data['id'])]
+                            df = pd.merge(df, cls, on = 'id', how = 'left')
                         df.to_parquet(os.path.join(self._tmp_dir, f'batch_{int(i/10)}.parquet'))
+                        self.ids.extend(data['id'])
                         data = {
                             'id':[],
                             'sequence':[]
                         }
                 if len(data['id']) != 0:
                     df = pd.DataFrame(data)
+                    if self._labels is not None:
+                        cls = self._labels[self._labels['id'].isin(data['id'])]
+                        df = pd.merge(df, cls, on = 'id', how = 'left')
                     df.to_parquet(os.path.join(self._tmp_dir, f'batch_end.parquet'))
-        
-        self.ids = data['id']
+                    self.ids.extend(data['id'])
 
     def _multi_fasta_ds(self):
         print('_multi_fasta_ds')
@@ -210,28 +220,35 @@ class KmersCollection():
                         data['sequence'].append(str(record.seq).upper())
             if i % 10 == 0 :
                 df = pd.DataFrame(data)
+                if self._labels is not None:
+                    cls = self._labels[self._labels['id'].isin(data['id'])]
+                    df = pd.merge(df, cls, on = 'id', how = 'left')
                 df.to_parquet(os.path.join(self._tmp_dir, f'batch_{int(i/10)}.parquet'))
+                self.ids.extend(data['id'])
                 data = {
                     'id':[],
                     'sequence':[]
                 }
         if len(data['id']) != 0:
             df = pd.DataFrame(data)
+            if self._labels is not None:
+                cls = self._labels[self._labels['id'].isin(data['id'])]
+                df = pd.merge(df, cls, on = 'id', how = 'left')
             df.to_parquet(os.path.join(self._tmp_dir, f'batch_end.parquet'))
+            self.ids.extend(data['id'])
         
-        self.ids = data['id']
 
     def _make_ray_ds(self):
         print('_make_ray_ds')
         self._files_list = glob(os.path.join(self._tmp_dir, '*.parquet'))
         self.df = ray.data.read_parquet_bulk(self._files_list, parallelism = len(self._files_list))
-        # self.df = ray.data.read_parquet(self._tmp_dir)
 
     def _kmers_tokenization(self):
         print('_kmers_tokenization')
         tokenizer = KmersVectorizer(
             k = self.k,
-            column = 'sequence'
+            column = 'sequence',
+            classes = self.taxas
         )
         tokenizer.fit(self.df)
         self.df = tokenizer.transform(self.df)
@@ -244,17 +261,26 @@ class KmersCollection():
         print('seen_kmers')
         self.kmers_list = self.df.limit(1).schema().names
         self.kmers_list.remove('id')
+        for tax in self.taxas:
+            self.kmers_list.remove(tax)
 
     def _given_kmers(self):
         print('_given_kmers')
         cols_final = ['id']
+        if self.taxas is not None:
+            cols_final.extend(self.taxas)
         cols_final.extend(self.kmers_list)
+        print(len(cols_final))
         def add_missing_columns(df):
             return df.reindex(columns = cols_final, fill_value = 0)
         
         cols_ds = self.df.limit(1).schema().names
-        cols_ds.remove('id')
-        cols_drop = [col for col in cols_ds if col not in self.kmers_list]
+        # cols_ds.remove('id')
+        # if self._labels is not None:
+        #     for tax in self.taxas:
+        #         if tax in cols_ds:
+        #             cols_ds.remove(tax)
+        cols_drop = [col for col in cols_ds if col not in cols_final]
         # cols_add = [col for col in self.kmers_list if col not in cols_ds]
         self.df = self.df.drop_columns(cols_drop)
         # for col in cols_add:
@@ -265,10 +291,8 @@ class KmersCollection():
             batch_size = 1
         )
         self.df = mapper.transform(self.df)
+        print(self.df.to_pandas())
 
     def _write_dataset(self):
-        """
-        Save dataset to disk
-        """
         self.df.write_parquet(self.Xy_file)
         rmtree(self._tmp_dir)

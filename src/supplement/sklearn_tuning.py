@@ -80,7 +80,7 @@ def sim_4_cv(df, database_data, name):
         if len(taxa_cols) == 0:
             taxa_cols = list(row.keys())
             taxa_cols.remove('id')
-            taxa_cols.remove('__value__')
+            # taxa_cols.remove('__value__')
             for taxa in taxa_cols:
                 sim_cls_dct[taxa] = []
         sim_cls_dct['id'].append(row['id'])
@@ -138,11 +138,6 @@ for col in db_cls.columns:
 if 'domain' in db_cls.columns:
     db_cls.loc[db_cls['domain'] == 'archaea','domain'] = 'bacteria'
 
-import sys
-print(train_ds)
-print(db_cls)
-sys.exit()
-
 train_ds = zip_X_y(train_ds,db_cls)
 
 # Preprocessing
@@ -160,10 +155,10 @@ if test_ds.count() == 0:
 val_ds = sim_4_cv(train_ds, db_data, 'validation')
 test_ds = sim_4_cv(train_ds, db_data, 'test')
 
-col2drop = [col for col in train_ds.schema().names if col not in ['__value__',opt['taxa']]]
-train_ds = train_ds.drop_columns(col2drop)
-val_ds = val_ds.drop_columns(col2drop)
-test_ds = test_ds.drop_columns(col2drop)
+# col2drop = [col for col in train_ds.schema().names if col not in ['__value__',opt['taxa']]]
+# train_ds = train_ds.drop_columns(col2drop)
+# val_ds = val_ds.drop_columns(col2drop)
+# test_ds = test_ds.drop_columns(col2drop)
 
 if opt['classifier'] == 'onesvm':
     preprocessor = Chain(

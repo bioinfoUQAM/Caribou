@@ -51,10 +51,11 @@ def build_kmers_db(file, dataset, prefix, k, kmers_list = None):
                 # Data in a dictionnary
                 'profile': collection.Xy_file,  # Kmers profile
                 'ids': collection.ids,  # Ids of profiles
-                'classes': collection.classes,  # Class labels
+                # 'classes': collection.classes,  # Class labels
                 'kmers': collection.kmers_list,  # Features
                 'taxas': collection.taxas,  # Known taxas for classification
-                'fasta': collection.fasta,  # Fasta file -> simulate reads if cv
+                'fasta': file[0],  # Fasta file -> simulate reads if cv
+                'csv': file[1], # CSV file -> simulate reads if cv
         }
         save_Xy_data(data, data_file)
     return data

@@ -18,7 +18,8 @@ class KmersVectorizer(CountVectorizer):
     def __init__(
         self,
         k,
-        column: str
+        column: str,
+        classes: List[str]
     ):
         def kmer_tokenize(s):
             tokens = []
@@ -26,6 +27,7 @@ class KmersVectorizer(CountVectorizer):
                 tokens.append(s[start:start+k])
             return tokens
         self.column = column
+        self.classes = classes
         self.tokenization_fn = kmer_tokenize
     
     def _fit(self, dataset: Dataset) -> Preprocessor:
@@ -59,6 +61,9 @@ class KmersVectorizer(CountVectorizer):
         mapping = {
             'id' : df['id']
         }
+        if self.classes is not None:
+            for cls in self.classes:
+                mapping[cls] = df[cls]
         token_counts = self.stats_[f"token_counts({self.column})"]
         tokenized = df[self.column].map(self.tokenization_fn).map(Counter)
         alphabet = set('ATCG')
