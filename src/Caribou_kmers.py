@@ -1,10 +1,7 @@
 #!/usr/bin python3
 
-import ray
-import json
 import os.path
 import argparse
-import numpy as np
 
 from utils import *
 from time import time
@@ -38,12 +35,7 @@ def kmers_dataset(opt):
     outdirs = define_create_outdirs(opt['outdir'])
     
     # Initialize cluster
-    ray.init(
-        _system_config = {
-            'object_spilling_config': json.dumps(
-                {'type': 'filesystem', 'params': {'directory_path': str(opt['workdir'])}})
-        }
-    )
+    init_ray_cluster(opt['workdir'])
 
 # K-mers profile extraction
 ################################################################################

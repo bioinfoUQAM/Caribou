@@ -1,7 +1,5 @@
 #!/usr/bin python3
 
-import ray
-import json
 import argparse
 import numpy as np
 import configparser
@@ -95,13 +93,7 @@ def caribou(opt):
     outdirs = define_create_outdirs(outdir)
     
     # Initialize cluster
-    ray.init(
-        
-        _system_config = {
-            'object_spilling_config': json.dumps(
-                {'type': 'filesystem', 'params': {'directory_path': str(workdir)}})
-        }
-    )
+    init_ray_cluster(workdir)
 
 # Part 1 - K-mers profile extraction
 ################################################################################

@@ -1,7 +1,5 @@
 #!/usr/bin python3
 
-import ray
-import json
 import warnings
 import argparse
 
@@ -43,13 +41,7 @@ def bacteria_classification_train_cv(opt):
         lst_taxas.remove('domain')
     
     # Initialize cluster
-    ray.init(
-        logging_level = ERROR,
-        _system_config = {
-            'object_spilling_config': json.dumps(
-                {'type': 'filesystem', 'params': {'directory_path': str(opt['workdir'])}})
-        }
-    )
+    init_ray_cluster(opt['workdir'])
 
 # Training and cross-validation of models for classification of bacterias
 ################################################################################

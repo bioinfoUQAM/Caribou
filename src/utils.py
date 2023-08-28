@@ -1,15 +1,19 @@
 import os
 import ray
+import json
+import logging
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 
 from pathlib import Path
 from warnings import warn
+from psutil import virtual_memory
 
 __author__ = "Nicolas de Montigny"
 
 __all__ = [
+    'init_ray_cluster',
     'load_Xy_data',
     'save_Xy_data',
     'verify_file',
@@ -34,6 +38,23 @@ __all__ = [
     'zip_X_y',
     'ensure_length_ds'
 ]
+
+# System
+#########################################################################################################
+
+# Initialize ray cluster
+def init_ray_cluster(workdir):
+    mem = virtual_memory().total * 0.5
+    ray.init(
+        object_store_memory = mem,
+        logging_level=logging.ERROR,
+        _system_config = {
+            'object_spilling_config': json.dumps({
+                'type': 'filesystem',
+                'params': {'directory_path': str(workdir)}
+            })
+        }
+    )
 
 # Data handling
 #########################################################################################################

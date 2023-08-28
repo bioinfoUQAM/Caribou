@@ -270,7 +270,6 @@ class KmersCollection():
         if self.taxas is not None:
             cols_final.extend(self.taxas)
         cols_final.extend(self.kmers_list)
-        print(len(cols_final))
         def add_missing_columns(df):
             return df.reindex(columns = cols_final, fill_value = 0)
         
@@ -291,7 +290,6 @@ class KmersCollection():
             batch_size = 1
         )
         self.df = mapper.transform(self.df)
-        print(self.df.to_pandas())
 
     def _write_dataset(self):
         self.df.write_parquet(self.Xy_file)

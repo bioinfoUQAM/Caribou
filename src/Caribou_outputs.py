@@ -1,7 +1,5 @@
 #!/usr/bin python3
 
-import ray
-import json
 import argparse
 
 from utils import *
@@ -39,8 +37,6 @@ def out_2_user(opt):
     #     outs.biom()
 
     print('Outputs generated with success')
-# 
-################################################################################
 
 # Argument parsing from CLI
 ################################################################################
@@ -60,11 +56,6 @@ if __name__ == "__main__":
 
     opt = vars(args)
 
-    ray.init(
-        _system_config = {
-            'object_spilling_config': json.dumps(
-                {'type': 'filesystem', 'params': {'directory_path': str(opt['workdir'])}})
-        }
-    )
+    init_ray_cluster(opt['workdir'])
 
     out_2_user(opt)
