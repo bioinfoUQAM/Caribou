@@ -44,17 +44,22 @@ __all__ = [
 
 # Initialize ray cluster
 def init_ray_cluster(workdir):
-    mem = virtual_memory().total * 0.5
-    ray.init(
-        object_store_memory = mem,
-        logging_level=logging.ERROR,
-        _system_config = {
-            'object_spilling_config': json.dumps({
-                'type': 'filesystem',
-                'params': {'directory_path': str(workdir)}
-            })
-        }
-    )
+    mem = virtual_memory().total
+    frac = 0.8
+    while not ray.is_initialized():
+        try:
+            ray.init(
+                object_store_memory = mem * frac,
+                logging_level=logging.ERROR,
+                _system_config = {
+                    'object_spilling_config': json.dumps({
+                        'type': 'filesystem',
+                        'params': {'directory_path': str(workdir)}
+                    })
+                }
+            )
+        except ValueError :
+            frac -= 0.05
 
 # Data handling
 #########################################################################################################
