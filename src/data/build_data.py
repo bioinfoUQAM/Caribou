@@ -39,11 +39,11 @@ def build_kmers_db(file, dataset, prefix, k, kmers_list = None):
     else:
         # Build kmers collections with known classes and taxas
         collection = KmersCollection(
-            file[0],
-            Xy_file,
-            k,
-            file[1],
-            kmers_list,
+            fasta_file = file[0],
+            Xy_file = Xy_file,
+            k = k,
+            cls_file = file[1],
+            kmers_list = kmers_list,
         )
         collection.compute_kmers()
 

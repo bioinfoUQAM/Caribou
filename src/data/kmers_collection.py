@@ -309,13 +309,13 @@ class KmersCollection():
                 df = pd.merge(df, cls, on = 'id', how = 'left')
             df.to_parquet(os.path.join(self._tmp_dir, f'batch_end.parquet'))
             self.ids.extend(data['id'])
-        
 
     def _make_ray_ds(self):
         print('_make_ray_ds')
         if self.memory_parsing:
             self.df = ray.data.from_pandas(self.df)
-            self.df = self.df.repartition(int(self.df.count()/10))
+            if self.df.count() > 10:
+                self.df = self.df.repartition(int(self.df.count()/10))
         else:
             self._files_list = glob(os.path.join(self._tmp_dir, '*.parquet'))
             self.df = ray.data.read_parquet_bulk(self._files_list, parallelism = len(self._files_list))

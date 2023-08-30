@@ -7,9 +7,7 @@ import pandas as pd
 from ray.data import Dataset
 from ray.data.preprocessor import Preprocessor
 
-from ray.data.preprocessors import CountVectorizer
-
-class KmersVectorizer(CountVectorizer):
+class KmersVectorizer(Preprocessor):
     """
     Class adapted from ray.data.preprocessors.CountVectorizer to debug a pandas warning and better adapt to K-mers
     Computes all the k-mers that can be found in the sequences in the order they were seen then removes 25% most & least common
@@ -39,23 +37,26 @@ class KmersVectorizer(CountVectorizer):
 
             return {self.column : [get_token_counts(self.column)]}
 
+        print(dataset)
+
         value_counts = dataset.map_batches(
             get_pd_value_counts,
-            batch_format="pandas"
+            batch_format = "pandas"
             # batch_size = 1
         )
 
+        print(value_counts)
+        print(self.column)
+        print(self.classes)
         total_counts = Counter()
         for batch in value_counts.iter_batches(batch_size=None):
-            for col_value_counts in batch:
+            for col_value_counts in batch[self.column]:
                 total_counts.update(col_value_counts)
-        
         self.stats_ = {
-            f"token_counts({self.column})": total_counts 
+            f"token_counts({self.column})": total_counts
         }
 
         return self
-
 
     def _transform_pandas(self, df: pd.DataFrame):
         mapping = {
@@ -72,3 +73,9 @@ class KmersVectorizer(CountVectorizer):
                 mapping[token] = tokenized.map(lambda val: val[token])
         df = pd.concat(mapping, axis = 1)
         return df
+    
+    def __repr__(self):
+        fn_name = getattr(self.tokenization_fn, "__name__", self.tokenization_fn)
+        return (
+            f"{self.__class__.__name__}(column = {self.column!r}, tokenization_fn = {fn_name})"
+        )
