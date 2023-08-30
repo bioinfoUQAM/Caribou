@@ -100,6 +100,7 @@ class KmersCollection():
         self._nb_kmers = 0
         self._labels = None
         self._files_list = []
+        self.memory_parsing = False
         
         # Infer method from presence of already extracted kmers or not
         if isinstance(kmers_list, list):
@@ -131,24 +132,62 @@ class KmersCollection():
     # Execute k-mers extraction
     def compute_kmers(self):
         print('compute_kmers')
+        self._verif_mem_vs_disk()
         self._parse_fasta()
         self._make_ray_ds()
         self._kmers_tokenization()
         self._write_dataset()
 
+    def _verif_mem_vs_disk(self):
+        mem = ray.cluster_resources()['memory']
+        fasta_size = os.path.getsize(os.path.expanduser(self.fasta))
+        if mem > fasta_size:
+            self.memory_parsing = True
 
     def _parse_fasta(self):
         print('_parse_fasta')
         if os.path.isfile(self.fasta):
-            self._single_fasta_ds()
+            if self.memory_parsing:
+                self._single_fasta_ds_mem()
+            else:
+                self._single_fasta_ds_disk()
         elif os.path.isdir(self.fasta):
-            self.fasta = glob(os.path.join(self.fasta, '*.fa'))
-            self._multi_fasta_ds()
+            if self.memory_parsing:
+                self._multi_fasta_ds_mem()
+            else:
+                self.fasta = glob(os.path.join(self.fasta, '*.fa'))
+                self._multi_fasta_ds_disk()
         else:
             raise ValueError('Fasta must be an interleaved fasta file or a directory containing fasta files.')
     
-    def _single_fasta_ds(self):
-        print('_single_fasta_ds')
+    def _single_fasta_ds_mem(self):
+        print('_single_fasta_ds_mem')
+        data = {
+            'id':[],
+            'sequence':[]
+        }
+        path, ext = splitext(self.fasta)
+        ext = ext.lstrip(".")
+        if ext in ["fa","fna","fasta"]:
+            with open(self.fasta, 'rt') as handle:
+                for i, record in enumerate(SeqIO.parse(handle, 'fasta')):
+                    data['id'].append(record.id)
+                    data['sequence'].append(str(record.seq).upper())
+        elif ext == "gz":
+            with gzip.open(self.fasta, 'rt') as handle:
+                for i, record in enumerate(SeqIO.parse(handle, 'fasta')):
+                    data['id'].append(record.id)
+                    data['sequence'].append(str(record.seq).upper())
+        else:
+            raise ValueError(f'Unknown file extension : {ext}')
+        
+        self.ids = data['id']
+        self.df = pd.DataFrame(data)
+        if self._labels is not None:
+            self.df = pd.merge(self.df, self._labels, on = 'id', how = 'left')
+
+    def _single_fasta_ds_disk(self):
+        print('_single_fasta_ds_disk')
         data = {
             'id':[],
             'sequence':[]
@@ -201,9 +240,11 @@ class KmersCollection():
                         df = pd.merge(df, cls, on = 'id', how = 'left')
                     df.to_parquet(os.path.join(self._tmp_dir, f'batch_end.parquet'))
                     self.ids.extend(data['id'])
+        else:
+            raise ValueError(f'Unknown file extension : {ext}')
 
-    def _multi_fasta_ds(self):
-        print('_multi_fasta_ds')
+    def _multi_fasta_ds_mem(self):
+        print('_multi_fasta_ds_mem')
         data = {
             'id':[],
             'sequence':[]
@@ -221,6 +262,35 @@ class KmersCollection():
                     for record in SeqIO.parse(handle, 'fasta'):
                         data['id'].append(record.id)
                         data['sequence'].append(str(record.seq).upper())
+            else:
+                raise ValueError(f'Unknown file extension : {ext}')
+        
+        self.ids = data['id']
+        self.df = pd.DataFrame(data)
+        if self._labels is not None:
+            self.df = pd.merge(self.df, self._labels, on = 'id', how = 'left')
+        
+    def _multi_fasta_ds_disk(self):
+        print('_multi_fasta_ds_disk')
+        data = {
+            'id':[],
+            'sequence':[]
+        }
+        for i, file in enumerate(self.fasta):
+            path, ext = splitext(file)
+            ext = ext.lstrip(".")
+            if ext in ["fa","fna","fasta"]:
+                with open(file, 'rt') as handle:
+                    for record in SeqIO.parse(handle, 'fasta'):
+                        data['id'].append(record.id)
+                        data['sequence'].append(str(record.seq).upper())
+            elif ext == "gz":
+                with gzip.open(file, 'rt') as handle:
+                    for record in SeqIO.parse(handle, 'fasta'):
+                        data['id'].append(record.id)
+                        data['sequence'].append(str(record.seq).upper())
+            else:
+                raise ValueError(f'Unknown file extension : {ext}')
             if i % 100 == 0 :
                 df = pd.DataFrame(data)
                 if self._labels is not None:
@@ -243,8 +313,12 @@ class KmersCollection():
 
     def _make_ray_ds(self):
         print('_make_ray_ds')
-        self._files_list = glob(os.path.join(self._tmp_dir, '*.parquet'))
-        self.df = ray.data.read_parquet_bulk(self._files_list, parallelism = len(self._files_list))
+        if self.memory_parsing:
+            self.df = ray.data.from_pandas(self.df)
+            self.df = self.df.repartition(int(self.df.count()/10))
+        else:
+            self._files_list = glob(os.path.join(self._tmp_dir, '*.parquet'))
+            self.df = ray.data.read_parquet_bulk(self._files_list, parallelism = len(self._files_list))
 
     def _kmers_tokenization(self):
         print('_kmers_tokenization')
@@ -262,7 +336,7 @@ class KmersCollection():
 
     def _seen_kmers(self):
         print('seen_kmers')
-        self.kmers_list = self.df.limit(1).schema().names
+        self.kmers_list = self.df.schema().names
         self.kmers_list.remove('id')
         for tax in self.taxas:
             self.kmers_list.remove(tax)
@@ -276,7 +350,7 @@ class KmersCollection():
         def add_missing_columns(df):
             return df.reindex(columns = cols_final, fill_value = 0)
         
-        cols_ds = self.df.limit(1).schema().names
+        cols_ds = self.df.schema().names
         # cols_ds.remove('id')
         # if self._labels is not None:
         #     for tax in self.taxas:

@@ -60,6 +60,7 @@ def init_ray_cluster(workdir):
                 # }
             )
         except ValueError :
+            ray.shutdown()
             frac -= 0.05
 
 # Data handling
