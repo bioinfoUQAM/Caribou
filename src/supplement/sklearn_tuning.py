@@ -34,6 +34,8 @@ from models.sklearn.ray_sklearn_partial_trainer import SklearnPartialTrainer
 warnings.simplefilter(action='ignore')
 
 # Functions
+################################################################################
+
 def merge_db_host(db_data, host_data):
     merged_database_host = {}
     merged_database_host['profile'] = "{}_host_merged".format(os.path.splitext(db_data["profile"])[0]) # Kmers profile
@@ -69,27 +71,20 @@ def merge_db_host(db_data, host_data):
 def sim_4_cv(df, database_data, name):
     print('_sim_4_cv')
     k = len(database_data['kmers'][0])
-    sim_cls_dct = {
-        'id':[],
-    }
-    taxa_cols = []
-    for row in df.iter_rows():
-        if len(taxa_cols) == 0:
-            taxa_cols = list(row.keys())
-            taxa_cols.remove('id')
-            # taxa_cols.remove('__value__')
-            for taxa in taxa_cols:
-                sim_cls_dct[taxa] = []
-        sim_cls_dct['id'].append(row['id'])
-        for taxa in taxa_cols:
-            sim_cls_dct[taxa].append(row[taxa])
-    cls = pd.DataFrame(sim_cls_dct)
+    cols = ['id']
+    cols.extend(database_data['taxas'])
+    cls = pd.DataFrame(columns = cols)
+    for batch in df.iter_batches(batch_format = 'pandas'):
+        cls = pd.concat([cls, batch[cols]], axis = 0, ignore_index = True)
+    
     sim_outdir = os.path.dirname(database_data['profile'])
-    cv_sim = readsSimulation(database_data['fasta'], cls, sim_cls_dct['id'], 'miseq', sim_outdir, name)
+    cv_sim = readsSimulation(database_data['fasta'], cls, list(cls['id']), 'miseq', sim_outdir, name)
     sim_data = cv_sim.simulation(k, database_data['kmers'])
-    sim_cls = pd.DataFrame(sim_data['classes'], columns = sim_data['taxas'])
     df = ray.data.read_parquet(sim_data['profile'])
-    df = zip_X_y(df, sim_cls)
+    return df
+
+def convert_archaea_bacteria(df):
+    df.loc[df['domain'] == 'Archaea', 'domain'] = 'Bacteria'
     return df
 
 # CLI argument
@@ -121,15 +116,10 @@ if opt['host_name'] is not None and opt['taxa'] == 'domain':
     db_data = merge_db_host(db_data, host_data)
 
 train_ds = ray.data.read_parquet(db_data['profile'])
-db_cls = pd.DataFrame(db_data['classes'], columns = db_data['taxas'])
+db_cls = pd.read_csv(db_data['csv'])
 
-for col in db_cls.columns:
-    db_cls[col] = db_cls[col].str.lower()
-
-if 'domain' in db_cls.columns:
-    db_cls.loc[db_cls['domain'] == 'archaea','domain'] = 'bacteria'
-
-train_ds = zip_X_y(train_ds,db_cls)
+if 'domain' in train_ds.schema().names:
+    train_ds = train_ds.map_batches(convert_archaea_bacteria)
 
 # Preprocessing
 ################################################################################
@@ -143,13 +133,9 @@ if val_ds.count() == 0:
 if test_ds.count() == 0:
     nb_smpl = round(test_ds.count() * 0.1)
     test_ds = test_ds.limit(nb_smpl)
-val_ds = sim_4_cv(train_ds, db_data, 'validation')
-test_ds = sim_4_cv(train_ds, db_data, 'test')
+# val_ds = sim_4_cv(train_ds, db_data, 'validation')
+# test_ds = sim_4_cv(train_ds, db_data, 'test')
 
-# col2drop = [col for col in train_ds.schema().names if col not in ['__value__',opt['taxa']]]
-# train_ds = train_ds.drop_columns(col2drop)
-# val_ds = val_ds.drop_columns(col2drop)
-# test_ds = test_ds.drop_columns(col2drop)
 
 if opt['classifier'] == 'onesvm':
     preprocessor = Chain(
@@ -175,15 +161,6 @@ else:
     labels = list(preprocessor.preprocessors[1].stats_[f'unique_values({opt["taxa"]})'].keys())
     encoded = np.arange(len(labels))
     labels_map = zip(labels, encoded)
-
-
-"""
-X_train = train_ds.to_pandas()['__value__']
-X_train = pd.DataFrame(X_train.to_list()).to_numpy()
-X_train = pd.DataFrame(X_train, columns = db_data['kmers'])
-y_train = train_ds.to_pandas()[opt['taxa']]
-y_train = y_train.to_numpy()
-"""
 
 datasets = {
     'train' : ray.put(train_ds),

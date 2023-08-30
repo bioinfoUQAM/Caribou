@@ -173,6 +173,9 @@ class KmersCollection():
                         }
                 if len(data['id']) != 0:
                     df = pd.DataFrame(data)
+                    if self._labels is not None:
+                        cls = self._labels[self._labels['id'].isin(data['id'])]
+                        df = pd.merge(df, cls, on = 'id', how = 'left')
                     df.to_parquet(os.path.join(self._tmp_dir, f'batch_end.parquet'))
                     self.ids.extend(data['id'])
         elif ext == "gz":

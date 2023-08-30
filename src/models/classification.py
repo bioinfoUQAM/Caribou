@@ -557,26 +557,15 @@ class ClassificationMethods():
 
     def _sim_4_cv(self, df, kmers_ds, name):
         print('_sim_4_cv')
-        sim_cls_dct = {
-            'id':[],
-        }
-        taxa_cols = []
-        for row in df.iter_rows():
-            if len(taxa_cols) == 0:
-                taxa_cols = list(row.keys())
-                taxa_cols.remove('id')
-                # taxa_cols.remove('__value__')
-                for taxa in taxa_cols:
-                    sim_cls_dct[taxa] = []
-            sim_cls_dct['id'].append(row['id'])
-            for taxa in taxa_cols:
-                sim_cls_dct[taxa].append(row[taxa])
-        cls = pd.DataFrame(sim_cls_dct)
+        cols = ['id']
+        cols.extend(kmers_ds['taxas'])
+        cls = pd.DataFrame(columns = cols)
+        for batch in df.iter_batches(batch_format = 'pandas'):
+            cls = pd.concat([cls, batch[cols]], axis = 0, ignore_index = True)
+        
         sim_outdir = os.path.dirname(kmers_ds['profile'])
-        cv_sim = readsSimulation(kmers_ds['fasta'], cls, sim_cls_dct['id'], 'miseq', sim_outdir, name)
-        sim_data = cv_sim.simulation(self._k, self._database_data['kmers'])
-        sim_cls = pd.DataFrame(sim_data['classes'], columns = sim_data['taxas'])
+        cv_sim = readsSimulation(kmers_ds['fasta'], cls, list(cls['id']), 'miseq', sim_outdir, name)
+        sim_data = cv_sim.simulation(self._k, kmers_ds['kmers'])
         df = ray.data.read_parquet(sim_data['profile'])
-        df = zip_X_y(df, sim_cls)
         return df
     

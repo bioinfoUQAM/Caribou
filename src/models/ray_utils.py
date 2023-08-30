@@ -1,18 +1,12 @@
 import os
-import ray
 import warnings
 import pandas as pd
-
-from utils import zip_X_y
 
 # Class construction
 from abc import ABC, abstractmethod
 
 # CV metrics
 from sklearn.metrics import precision_recall_fscore_support
-
-# Simulation class
-from models.reads_simulation import readsSimulation
 
 __author__ = 'Nicolas de Montigny'
 
