@@ -50,15 +50,10 @@ def init_ray_cluster(workdir):
         try:
             ray.init(
                 object_store_memory = mem * frac,
-                # logging_level=logging.ERROR,
                 _temp_dir = str(workdir),
-                # _system_config = {
-                #     'object_spilling_config': json.dumps({
-                #         'type': 'filesystem',
-                #         'params': {'directory_path': str(workdir)}
-                #     })
-                # }
             )
+            ray.data.DataContext.get_current().execution_options.verbose_progress = True
+            logging.getLogger("ray").setLevel(logging.WARNING)
         except ValueError :
             ray.shutdown()
             frac -= 0.05

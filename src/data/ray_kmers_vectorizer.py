@@ -37,7 +37,7 @@ class KmersVectorizer(CountVectorizer):
                 tokens = token_series.sum()
                 return Counter(tokens)
 
-            return [get_token_counts(self.column)]
+            return {self.column : [get_token_counts(self.column)]}
 
         value_counts = dataset.map_batches(
             get_pd_value_counts,
