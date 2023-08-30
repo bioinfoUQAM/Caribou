@@ -160,12 +160,12 @@ class KmersCollection():
                 for i, record in enumerate(SeqIO.parse(handle, 'fasta')):
                     data['id'].append(record.id)
                     data['sequence'].append(str(record.seq).upper())
-                    if i % 10 == 0 :
+                    if i % 100 == 0 :
                         df = pd.DataFrame(data)
                         if self._labels is not None:
                             cls = self._labels[self._labels['id'].isin(data['id'])]
                             df = pd.merge(df, cls, on = 'id', how = 'left')
-                        df.to_parquet(os.path.join(self._tmp_dir, f'batch_{int(i/10)}.parquet'))
+                        df.to_parquet(os.path.join(self._tmp_dir, f'batch_{int(i/100)}.parquet'))
                         self.ids.extend(data['id'])
                         data = {
                             'id':[],
@@ -183,12 +183,12 @@ class KmersCollection():
                 for i, record in enumerate(SeqIO.parse(handle, 'fasta')):
                     data['id'].append(record.id)
                     data['sequence'].append(str(record.seq).upper())
-                    if i % 10 == 0 :
+                    if i % 100 == 0 :
                         df = pd.DataFrame(data)
                         if self._labels is not None:
                             cls = self._labels[self._labels['id'].isin(data['id'])]
                             df = pd.merge(df, cls, on = 'id', how = 'left')
-                        df.to_parquet(os.path.join(self._tmp_dir, f'batch_{int(i/10)}.parquet'))
+                        df.to_parquet(os.path.join(self._tmp_dir, f'batch_{int(i/100)}.parquet'))
                         self.ids.extend(data['id'])
                         data = {
                             'id':[],
@@ -221,12 +221,12 @@ class KmersCollection():
                     for record in SeqIO.parse(handle, 'fasta'):
                         data['id'].append(record.id)
                         data['sequence'].append(str(record.seq).upper())
-            if i % 10 == 0 :
+            if i % 100 == 0 :
                 df = pd.DataFrame(data)
                 if self._labels is not None:
                     cls = self._labels[self._labels['id'].isin(data['id'])]
                     df = pd.merge(df, cls, on = 'id', how = 'left')
-                df.to_parquet(os.path.join(self._tmp_dir, f'batch_{int(i/10)}.parquet'))
+                df.to_parquet(os.path.join(self._tmp_dir, f'batch_{int(i/100)}.parquet'))
                 self.ids.extend(data['id'])
                 data = {
                     'id':[],
