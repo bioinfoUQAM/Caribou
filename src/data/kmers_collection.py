@@ -12,7 +12,7 @@ from shutil import rmtree
 from os.path import splitext
 from ray.data.preprocessors import BatchMapper
 
-from data.ray_kmers_vectorizer import KmersVectorizer
+from data.ray_kmers_vectorizer import SeenKmersVectorizer, GivenKmersVectorizer
 
 __author__ = ['Amine Remita', 'Nicolas de Montigny']
 
@@ -322,51 +322,21 @@ class KmersCollection():
 
     def _kmers_tokenization(self):
         print('_kmers_tokenization')
-        tokenizer = KmersVectorizer(
-            k = self.k,
-            column = 'sequence',
-            classes = self.taxas
-        )
+        if self.method == 'seen':
+            tokenizer = SeenKmersVectorizer(
+                k = self.k,
+                column = 'sequence'
+            )
+        elif self.method == 'given':
+            tokenizer = GivenKmersVectorizer(
+                k = self.k,
+                column = 'sequence',
+                tokens = self.kmers_list
+            )
         tokenizer.fit(self.df)
         self.df = tokenizer.transform(self.df)
-        if self.method == 'seen':
-            self._seen_kmers()
-        elif self.method == 'given':
-            self._given_kmers()
-
-    def _seen_kmers(self):
-        print('seen_kmers')
-        self.kmers_list = self.df.schema().names
-        self.kmers_list.remove('id')
-        for tax in self.taxas:
-            self.kmers_list.remove(tax)
-
-    def _given_kmers(self):
-        print('_given_kmers')
-        cols_final = ['id']
-        if self.taxas is not None:
-            cols_final.extend(self.taxas)
-        cols_final.extend(self.kmers_list)
-        def add_missing_columns(df):
-            return df.reindex(columns = cols_final, fill_value = 0)
-        
-        cols_ds = self.df.schema().names
-        # cols_ds.remove('id')
-        # if self._labels is not None:
-        #     for tax in self.taxas:
-        #         if tax in cols_ds:
-        #             cols_ds.remove(tax)
-        cols_drop = [col for col in cols_ds if col not in cols_final]
-        # cols_add = [col for col in self.kmers_list if col not in cols_ds]
-        self.df = self.df.drop_columns(cols_drop)
-        # for col in cols_add:
-        #     self.df = self.df.add_column(col, lambda df : 0)
-        mapper = BatchMapper(
-            fn = add_missing_columns,
-            batch_format = 'pandas',
-            batch_size = 1
-        )
-        self.df = mapper.transform(self.df)
+        if self.kmers_list is None:
+            self.kmers_list = tokenizer.stats_['tokens(sequence)']
 
     def _write_dataset(self):
         self.df.write_parquet(self.Xy_file)
