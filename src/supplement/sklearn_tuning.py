@@ -91,7 +91,7 @@ def verify_load_host_merge(db_data, host_data):
     )
     return merged_data, merged_ds
 
-def split_val_test_ds(ds):
+def split_val_test_ds(ds, data):
     val_ds = ds.random_sample(0.1)
     test_ds = ds.random_sample(0.1)
     if val_ds.count() == 0:
@@ -100,8 +100,8 @@ def split_val_test_ds(ds):
     if test_ds.count() == 0:
         nb_smpl = round(ds.count() * 0.1)
         test_ds = ds.random_shuffle().limit(nb_smpl)
-    # val_ds = sim_4_cv(ds, db_data, 'validation')
-    # test_ds = sim_4_cv(ds, db_data, 'test')
+    val_ds = sim_4_cv(ds, data, 'validation')
+    test_ds = sim_4_cv(ds, data, 'test')
     return val_ds, test_ds
 
 # CLI argument
@@ -133,7 +133,7 @@ if opt['classifier'] == 'onesvm' and opt['taxa'] == 'domain':
                         It is used to confirm that the models can discern other sequences than bacteria.')
     else:
         test_val_data, test_val_ds = verify_load_host_merge(opt['data'], opt['data_host'])
-        val_ds, test_ds = split_val_test_ds(test_val_ds)
+        val_ds, test_ds = split_val_test_ds(test_val_ds,test_val_data)
         db_data = verify_load_data(opt['data'])
         train_ds = ray.data.read_parquet(db_data['profile'])
 elif opt['classifier'] == 'linearsvm' and opt['taxa'] == 'domain':
@@ -142,11 +142,11 @@ elif opt['classifier'] == 'linearsvm' and opt['taxa'] == 'domain':
                         It is used to confirm that the models can discern other sequences than bacteria.')
     else:
         db_data, train_ds = verify_load_host_merge(opt['data'], opt['data_host'])
-        val_ds, test_ds = split_val_test_ds(train_ds)
+        val_ds, test_ds = split_val_test_ds(train_ds, db_data)
 else:
     db_data = verify_load_data(opt['data'])
     train_ds = ray.data.read_parquet(db_data['profile'])
-    val_ds, test_ds = split_val_test_ds(train_ds)
+    val_ds, test_ds = split_val_test_ds(train_ds, db_data)
 
 # Preprocessing
 ################################################################################

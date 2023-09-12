@@ -84,7 +84,6 @@ class ClassificationMethods():
         self._taxas_order = []
         self._host_data = None
         self._database_data = None
-        self._preprocess_dataset = None
         self._training_datasets = None
         self._merged_training_datasets = None
         self._merged_database_host = None
@@ -171,7 +170,7 @@ class ClassificationMethods():
     def _binary_training(self, taxa):
         print('_binary_training')
         self._verify_classifier_binary()
-        self._merge_database_host(self._database_data, self._host_data)
+        # self._merge_database_host(self._database_data, self._host_data)
         self._load_training_data_merged(taxa)
         if self._classifier_binary == 'onesvm':
             self.models[taxa] = SklearnModel(
@@ -186,7 +185,7 @@ class ClassificationMethods():
                 self._database_data['kmers'],
                 self._verbose
             )
-            self.models[taxa].preprocess(self._preprocess_dataset)
+            self.models[taxa].preprocess(self._training_datasets['train'])
             self.models[taxa].train(self._training_datasets, self._database_data, self._cv)
         else:
             # self._merge_database_host(self._database_data, self._host_data)
@@ -217,7 +216,7 @@ class ClassificationMethods():
                     self._merged_database_host['kmers'],
                     self._verbose
                 )
-            self.models[taxa].preprocess(self._preprocess_dataset)
+            self.models[taxa].preprocess(self._merged_training_datasets['train'])
             self.models[taxa].train(self._merged_training_datasets, self._merged_database_host, self._cv)
 
         self._save_model(self._model_file, taxa)            
@@ -253,7 +252,7 @@ class ClassificationMethods():
                 self._database_data['kmers'],
                 self._verbose
             )
-        self.models[taxa].preprocess(self._preprocess_dataset)
+        self.models[taxa].preprocess(self._training_datasets['train'])
         self.models[taxa].train(self._training_datasets, self._database_data, self._cv)
         self._save_model(self._model_file, taxa)
         
@@ -365,41 +364,6 @@ class ClassificationMethods():
     # Utils functions
     #########################################################################################################
     
-     # Merge database and host reference data for bacteria extraction training
-    def _merge_database_host(self, database_data, host_data):
-        print('_merge_database_host')
-        self._merged_database_host = {}
-
-        self._merged_database_host['profile'] = "{}_host_merged".format(os.path.splitext(database_data["profile"])[0]) # Kmers profile
-
-        df_classes = pd.DataFrame(database_data["classes"], columns=database_data["taxas"])
-        df_cls_host = pd.DataFrame(host_data["classes"], columns=host_data["taxas"])
-
-        if len(df_cls_host) > len(host_data['ids']):
-            to_remove = np.arange(len(df_cls_host) - len(host_data['ids']))
-            df_cls_host.drop(to_remove, axis=0, inplace=True)
-        elif len(df_cls_host) < len(host_data['ids']):
-            diff = len(host_data['ids']) - len(df_cls_host)
-            row = df_cls_host.iloc[0]
-            for i in range(diff):
-                df_cls_host = pd.concat([df_cls_host, row.to_frame().T], ignore_index=True)
-
-        df_classes = pd.concat([df_classes, df_cls_host], ignore_index=True)
-        for col in df_classes.columns:
-            df_classes[col] = df_classes[col].str.lower()
-        if 'domain' in df_classes.columns:
-            df_classes.loc[df_classes['domain'] == 'archaea','domain'] = 'bacteria'
-        self._merged_database_host['classes'] = np.array(df_classes)  # Class labels
-        self._merged_database_host['ids'] = np.concatenate((database_data["ids"], host_data["ids"]))  # IDs
-        self._merged_database_host['kmers'] = database_data["kmers"]  # Features
-        self._merged_database_host['taxas'] = database_data["taxas"]  # Known taxas for classification
-        self._merged_database_host['fasta'] = (database_data['fasta'], host_data['fasta'])  # Fasta file needed for reads simulation
-
-        df_db = ray.data.read_parquet(database_data["profile"])
-        df_host = ray.data.read_parquet(host_data["profile"])
-        df_merged = df_db.union(df_host)
-        df_merged.write_parquet(self._merged_database_host['profile'])
-
     # Verify taxas and assign to class variable
     def _verify_assign_taxas(self, taxa):
         print('_verify_assign_taxas')
@@ -458,7 +422,7 @@ class ClassificationMethods():
             elif self._cv == True and self._host == False:
                 raise ValueError('Classifier One-Class SVM cannot be cross-validated with bacteria data only!\nEither add host data from parameters or choose to predict directly using this method')
             elif self._cv == False and self._host == True:
-                raise ValueError('Classifier One-Class SVM cannot be used with host data!\nEither remove host data from parameters or choose another bacteria extraction method')
+                raise ValueError('Classifier One-Class SVM cannot classify with host data!\nEither remove host data from parameters or choose another bacteria extraction method')
             elif self._cv == False and self._host == False:
                 pass
         elif self._classifier_binary == 'onesvm' and self._host == False:
@@ -466,7 +430,7 @@ class ClassificationMethods():
         elif self._classifier_binary in ['linearsvm','attention','lstm','deeplstm'] and self._host == True:
             pass
         elif self._classifier_binary in ['linearsvm','attention','lstm','deeplstm'] and self._host == False:
-            raise ValueError('Classifier {} cannot be used without host data!\nEither add host data to config file or choose the One-Class SVM classifier'.format(self._classifier_binary))
+            raise ValueError('Classifier {} cannot classify without host data!\nEither add host data to config file or choose the One-Class SVM classifier'.format(self._classifier_binary))
         else:
             raise ValueError('Invalid classifier option for bacteria extraction!\n\tModels implemented at this moment are :\n\tBacteria isolator :  One Class SVM (onesvm)\n\tClassic algorithm : Linear SVM (linearsvm)\n\tNeural networks : Attention (attention), Shallow LSTM (lstm) and Deep LSTM (deeplstm)')
 
@@ -477,73 +441,82 @@ class ClassificationMethods():
         else:
             raise ValueError('Invalid classifier option for bacteria classification!\n\tModels implemented at this moment are :\n\tClassic algorithm : Stochastic Gradient Descent (sgd) and Multinomial Naïve Bayes (mnb)\n\tNeural networks : Deep hybrid between LSTM and Attention (lstm_attention), CNN (cnn) and Wide CNN (widecnn)')
 
+    # Merge database and host reference data for bacteria extraction training
+    def _merge_database_host(self, database_data, host_data):
+        print('_merge_database_host')
+        self._merged_database_host = {}
+        self._merged_database_host['profile'] = f"{os.path.splitext(database_data['profile'])}_host_merged" # Kmers profile
+
+        df_db = ray.data.read_parquet(database_data['profile'])
+        df_host = ray.data.read_parquet(host_data['profile'])
+
+        cols2drop = []
+        for col in df_db.schema().names:
+            if col not in ['id','domain','__value__']:
+                cols2drop.append(col)
+        df_db = df_db.drop_columns(cols2drop)
+        cols2drop = []
+        for col in df_host.schema().names:
+            if col not in ['id','domain','__value__']:
+                cols2drop.append(col)
+        df_host = df_host.drop_columns(cols2drop)
+
+        self._merged_database_host['ids'] = np.concatenate((database_data["ids"], host_data["ids"]))  # IDs
+        self._merged_database_host['kmers'] = database_data["kmers"]  # Features
+        self._merged_database_host['taxas'] = ['domain']  # Known taxas for classification
+        self._merged_database_host['fasta'] = (database_data['fasta'], host_data['fasta'])  # Fasta file needed for reads simulation
+
+        df_merged = df_db.union(df_host)
+        df_merged.write_parquet(self._merged_database_host['profile'])
+
+        return df_merged
+
+    # Load, merge db + host & simulate validation / test datasets
     def _load_training_data_merged(self, taxa):
         print('_load_training_data_merged')
-        self._X_train = ray.data.read_parquet(self._merged_database_host['profile'])
-        self._y_train = pd.DataFrame({
-            taxa: pd.DataFrame(
-                self._merged_database_host['classes'],
-                columns=self._merged_database_host['taxas']
-            ).loc[:,taxa]
-        })
-
-        df_train = zip_X_y(self._X_train, self._y_train)
-        
-        df_val = df_train.random_sample(0.1)
-        if df_val.count() == 0:
-            nb_smpl = round(df_val.count() * 0.1)
-            df_val = df_val.limit(nb_smpl)
-        df_val = self._sim_4_cv(df_val, self._merged_database_host, f'{self._database}_val')
-
-        if self._cv:
-            # df_train, df_test = df_train.train_test_split(0.2, shuffle=True)
-            df_test = df_train.random_sample(0.1)
-            if df_test.count() == 0:
-                nb_smpl = round(df_test.count() * 0.1)
-                df_test = df_test.limit(nb_smpl)
-            df_test = self._sim_4_cv(df_test, self._merged_database_host, f'{self._database}_test')
-            if self._classifier_binary == 'onesvm':
-                self._X_train = ray.data.read_parquet(self._database_data['profile'])
-                self._y_train = pd.DataFrame(
-                        self._database_data['classes'],
-                        columns=self._database_data['taxas']
-                    ).loc[:,taxa].str.lower()
-                df_train = zip_X_y(self._X_train, self._y_train)
-            self._preprocess_dataset = df_train
-            self._merged_training_datasets = {'train': df_train, 'validation': df_val, 'test': df_test}
-        else:
-            if self._classifier_binary == 'onesvm':
-                self._X_train = ray.data.read_parquet(self._database_data['profile'])
-                self._y_train = pd.DataFrame(
-                        self._database_data['classes'],
-                        columns=self._database_data['taxas']
-                    ).loc[:,taxa].str.lower()
-            self._preprocess_dataset = df_train
+        def convert_archaea_bacteria(df):
+            df.loc[df['domain'] == 'Archaea', 'domain'] = 'Bacteria'
+            return df
+        if self._classifier_binary == 'onesvm' and taxa == 'domain':
+            df_val_test = self._merge_database_host(self._database_data, self._host_data)
+            df_val_test = df_val_test.map_batches(convert_archaea_bacteria, batch_format = 'pandas')
+            df_val = self.split_sim_cv_ds(df_val_test,self._merged_database_host)
             self._merged_training_datasets = {'train': df_train, 'validation': df_val}
+            if self._cv:
+                df_test = self.split_sim_cv_ds(df_val_test,self._merged_database_host)
+                self._merged_training_datasets['test'] = df_test
+            df_train = ray.data.read_parquet(self._database_data['profile'])
+        else:
+            df_train = self._merge_database_host(self._database_data, self._host_data)
+            df_train = df_train.map_batches(convert_archaea_bacteria, batch_format = 'pandas')
+            df_val = self.split_sim_cv_ds(df_train,self._merged_database_host)
+            self._merged_training_datasets = {'train': df_train, 'validation': df_val}
+            if self._cv:
+                df_test = self.split_sim_cv_ds(df_train,self._merged_database_host)
+                self._merged_training_datasets['test'] = df_test
 
+    # Load db & simulate validation / test datasets
     def _load_training_data(self):
         print('_load_training_data')
-        self._X_train = ray.data.read_parquet(self._database_data['profile'])
-        self._y_train = pd.DataFrame(
-                self._database_data['classes'],
-                columns=self._database_data['taxas']
-            )
+        df_train = ray.data.read_parquet(self._database_data['profile'])
+        # self._y_train = pd.DataFrame(
+        #         self._database_data['classes'],
+        #         columns=self._database_data['taxas']
+        #     )
 
-        for col in self._y_train.columns:
-            self._y_train[col] = self._y_train[col].str.lower()
+        # for col in self._y_train.columns:
+        #     self._y_train[col] = self._y_train[col].str.lower()
 
-        if 'domain' in self._y_train.columns:
-            self._y_train.loc[self._y_train['domain'] == 'archaea','domain'] = 'bacteria'
+        # if 'domain' in self._y_train.columns:
+        #     self._y_train.loc[self._y_train['domain'] == 'archaea','domain'] = 'bacteria'
         
-        df_train = zip_X_y(self._X_train, self._y_train)
+        # df_train = zip_X_y(self._X_train, self._y_train)
 
         df_val = df_train.random_sample(0.1)
         if df_val.count() == 0:
             nb_smpl = round(df_val.count() * 0.1)
             df_val = df_val.limit(nb_smpl)
         df_val = self._sim_4_cv(df_val, self._database_data, f'{self._database}_val')
-
-        self._preprocess_dataset = df_train
         if self._cv:
             # df_train, df_test = df_train.train_test_split(0.2, shuffle=True)
             df_test = df_train.random_sample(0.1)
@@ -568,4 +541,12 @@ class ClassificationMethods():
         sim_data = cv_sim.simulation(self._k, kmers_ds['kmers'])
         df = ray.data.read_parquet(sim_data['profile'])
         return df
+    
+    def split_sim_cv_ds(self, ds, data):
+        cv_ds = ds.random_sample(0.1)
+        if cv_ds.count() == 0:
+            nb_smpl = round(ds.count() * 0.1)
+            cv_ds = ds.random_shuffle().limit(nb_smpl)
+        cv_ds = self._sim_4_cv(ds, data, 'validation')
+        return cv_ds
     
