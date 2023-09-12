@@ -8,8 +8,7 @@ from glob import glob
 from shutil import rmtree
 
 # Preprocessing
-# from models.ray_tensor_min_max import TensorMinMaxScaler
-from ray.data.preprocessors import MinMaxScaler
+from models.ray_tensor_min_max import TensorMinMaxScaler
 from ray.data.preprocessors import Chain, BatchMapper, LabelEncoder
 from models.sklearn.ray_sklearn_onesvm_encoder import OneClassSVMLabelEncoder
 
@@ -108,8 +107,7 @@ class SklearnModel(ModelsUtils):
             self._encoder = LabelEncoder(self.taxa)
         
         self._preprocessor = Chain(
-            MinMaxScaler(self.kmers),
-            # TensorMinMaxScaler(self.kmers),
+            TensorMinMaxScaler(self.kmers),
             self._encoder,
         )
         self._preprocessor.fit(df)
@@ -153,12 +151,6 @@ class SklearnModel(ModelsUtils):
         y_true = list(y_true)
         
         y_pred = self._predict_cv(df_test.drop_columns([self.taxa]))
-
-        for file in glob(os.path.join( os.path.dirname(kmers_ds['profile']), '*sim*')):
-            if os.path.isdir(file):
-                rmtree(file)
-            else:
-                os.remove(file)
 
         self._cv_score(y_true, y_pred)
 
@@ -205,7 +197,6 @@ class SklearnModel(ModelsUtils):
         for name, ds in datasets.items():
             ds = ds.drop_columns(['id'])
             ds = self._preprocessor.transform(ds)
-            print(ds.to_pandas())
             datasets[name] = ray.put(ds)
 
         try:

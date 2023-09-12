@@ -79,25 +79,28 @@ class readsSimulation():
         self._sequencing = sequencing
         self._path = outdir
         self._name = name
-        self._prefix = os.path.join(outdir,'sim_{}'.format(self._name))
+        self._prefix = os.path.join(outdir,f'sim_{self._name}')
         # Files paths
-        self._fasta_tmp = os.path.join(outdir, 'sim_{}_tmp.fasta'.format(self._name))
-        self._R1_fastq = os.path.join(outdir, 'sim_{}_R1.fastq'.format(self._name))
-        self._R2_fastq = os.path.join(outdir, 'sim_{}_R2.fastq'.format(self._name))
-        self._fasta_out = os.path.join(outdir, 'sim_{}_data.fna.gz'.format(self._name))
-        self._cls_out = os.path.join(outdir, 'sim_{}_class.csv'.format(self._name))
+        self._fasta_tmp = os.path.join(outdir, f'sim_{self._name}_tmp.fasta')
+        self._R1_fastq = os.path.join(outdir, f'sim_{self._name}_R1.fastq')
+        self._R2_fastq = os.path.join(outdir, f'sim_{self._name}_R2.fastq')
+        self._fasta_out = os.path.join(outdir, f'sim_{self._name}_data.fna.gz')
+        self._cls_out = os.path.join(outdir, f'sim_{self._name}_class.csv')
         # Dataset variables
         self.kmers_data = {}
 
     def simulation(self, k = None, kmers_list = None):
         k, kmers_list = self._verify_sim_arguments(k, kmers_list)
         self._make_tmp_fasta()
-        cmd = "iss generate -g {} -n {} --abundance halfnormal --model {} --output {} --cpus {}".format(self._fasta_tmp,self._nb_reads,self._sequencing,self._prefix,os.cpu_count())
+        cmd = f"iss generate -g {self._fasta_tmp} -n {self._nb_reads} --abundance halfnormal --model {self._sequencing} --output {self._prefix} --cpus {os.cpu_count()}"
         os.system(cmd)
         self._fastq2fasta()
         self._write_cls_file()
         if k is not None and kmers_list is not None:
             self._kmers_dataset(k, kmers_list)
+            generated_files = glob(f'{self._prefix}*')
+            for file in generated_files:
+                os.remove(file)
             return self.kmers_data
             
     def _make_tmp_fasta(self):

@@ -121,10 +121,15 @@ class ModelsUtils(ABC):
             'y_true': y_true,
             'y_pred': y_pred
         })
-        print(y_compare)
+        y_compare['y_true'] = y_compare['y_true'].str.lower()
+        y_compare['y_pred'] = y_compare['y_pred'].str.lower()
         y_compare.to_csv(os.path.join(self._workdir, f'y_compare_{self.dataset}_{self.classifier}.csv'))
 
-        support = precision_recall_fscore_support(y_true, y_pred, average = 'weighted')
+        support = precision_recall_fscore_support(
+            y_compare['y_true'],
+            y_compare['y_pred'],
+            average = 'weighted'
+        )
 
         scores = pd.DataFrame(
             {self.classifier : [support[0],support[1],support[2]]},

@@ -10,8 +10,7 @@ from shutil import rmtree
 
 # Preprocessing
 from ray.data.preprocessors import LabelEncoder, Chain
-# from models.ray_tensor_min_max import TensorMinMaxScaler
-from ray.data.preprocessors import MinMaxScaler
+from models.ray_tensor_min_max import TensorMinMaxScaler
 from models.kerasTF.ray_one_hot_tensor import OneHotTensorEncoder
 
 # Parent class / models
@@ -21,8 +20,10 @@ from models.kerasTF.build_neural_networks import *
 # Training
 import tensorflow as tf
 from ray.air import session
-from ray.air.integrations.keras import Callback
-from ray.air.config import ScalingConfig, DatasetConfig
+from ray.train import DataConfig
+# from ray.air.integrations.keras import Callback
+from ray.air.integrations.keras import ReportCheckpointCallback
+from ray.air.config import ScalingConfig #DatasetConfig
 from ray.train.tensorflow import TensorflowTrainer, TensorflowCheckpoint, prepare_dataset_shard
 
 # Tuning
@@ -138,8 +139,7 @@ class KerasTFModel(ModelsUtils):
             labels.append(row[self.taxa])
         self._nb_classes = len(np.unique(labels))
         self._preprocessor = Chain(
-            MinMaxScaler(self.kmers),
-            # TensorMinMaxScaler(self.kmers),
+            TensorMinMaxScaler(self.kmers),
             LabelEncoder(self.taxa),
             OneHotTensorEncoder(self.taxa),
         )
@@ -181,12 +181,6 @@ class KerasTFModel(ModelsUtils):
 
         y_pred = self.predict(df_test.drop_columns([self.taxa]), threshold = 0)
 
-        for file in glob(os.path.join(os.path.dirname(kmers_ds['profile']), '*sim*')):
-            if os.path.isdir(file):
-                rmtree(file)
-            else:
-                os.remove(file)
-
         self._cv_score(y_true, y_pred)
 
     def _fit_model(self, datasets):
@@ -220,20 +214,21 @@ class KerasTFModel(ModelsUtils):
                     'GPU': self._nb_GPU_per_worker
                 }
             ),
-            dataset_config={
-                'train': DatasetConfig(
-                    fit=False,
-                    transform=False,
-                    split=True,
-                    use_stream_api=True
-                ),
-                'validation': DatasetConfig(
-                    fit=False,
-                    transform=False,
-                    split=True,
-                    use_stream_api=False
-                )
-            },
+            # dataset_config={
+            #     DataConfig()
+                # 'train': DatasetConfig(
+                #     fit=False,
+                #     transform=False,
+                #     split=True,
+                #     use_stream_api=True
+                # ),
+                # 'validation': DatasetConfig(
+                #     fit=False,
+                #     transform=False,
+                #     split=True,
+                #     use_stream_api=False
+                # )
+            # },
             run_config=RunConfig(
                 name=self.classifier,
                 local_dir=self._workdir,
@@ -342,38 +337,51 @@ def train_func(config):
     train_data = session.get_dataset_shard('train')
     val_data = session.get_dataset_shard('validation')
 
-    def to_tf_dataset(data, batch_size):
-        def to_tensor_iterator():
-            for batch in data.iter_batches(
-                batch_size = batch_size,
-                batch_format = 'pandas'
-            ):
-                labels = batch.loc['labels']
-                batch = batch.drop(['id','labels'], axis = 1)
-                return batch.to_numpy(), labels.to_numpy()
-            # for batch in data.iter_tf_batches(
-            #     batch_size = batch_size
-            # ):
-            #     yield batch['__value__'], batch['labels']
+    # def to_tf_dataset(data, batch_size):
+    #     def to_tensor_iterator():
+    #         for batch in data.iter_batches(
+    #             batch_size = batch_size,
+    #             batch_format = 'pandas'
+    #         ):
+    #             labels = batch.loc['labels']
+    #             batch = batch.drop(['id','labels'], axis = 1)
+    #             return batch.to_numpy(), labels.to_numpy()
+    #         # for batch in data.iter_tf_batches(
+    #         #     batch_size = batch_size
+    #         # ):
+    #         #     yield batch['__value__'], batch['labels']
 
-        output_signature = (
-            tf.TensorSpec(shape=(None, size), dtype=tf.float32),
-            tf.TensorSpec(shape=(None, nb_cls), dtype=tf.int64),
+    #     output_signature = (
+    #         tf.TensorSpec(shape=(None, size), dtype=tf.float32),
+    #         tf.TensorSpec(shape=(None, nb_cls), dtype=tf.int64),
+    #     )
+    #     tf_data = tf.data.Dataset.from_generator(
+    #         to_tensor_iterator, output_signature=output_signature
+    #     )
+    #     return prepare_dataset_shard(tf_data)
+
+    # batch_val = to_tf_dataset(val_data, batch_size)
+
+    # # Fit the model on streaming data
+    # for epoch_train in train_data.iter_batches(epochs):
+    #     batch_train = to_tf_dataset(epoch_train, batch_size)
+
+    batch_val = val_data.to_tf(
+            feature_columns = '__value__',
+            label_columns = 'labels',
+            batch_size = batch_size
         )
-        tf_data = tf.data.Dataset.from_generator(
-            to_tensor_iterator, output_signature=output_signature
+
+    for _ in range(epochs):
+        batch_train = train_data.to_tf(
+            feature_columns = '__value__',
+            label_columns = 'labels',
+            batch_size = batch_size
         )
-        return prepare_dataset_shard(tf_data)
-
-    batch_val = to_tf_dataset(val_data, batch_size)
-
-    # Fit the model on streaming data
-    for epoch_train in train_data.iter_epochs(epochs):
-        batch_train = to_tf_dataset(epoch_train, batch_size)
         history = model.fit(
             x = batch_train,
             validation_data = batch_val,
-            callbacks = [Callback()],
+            callbacks = [ReportCheckpointCallback()],
             verbose = 0
         )
         session.report({

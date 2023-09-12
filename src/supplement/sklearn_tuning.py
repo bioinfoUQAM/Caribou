@@ -36,7 +36,7 @@ warnings.simplefilter(action='ignore')
 
 def merge_db_host(db_data, host_data):
     merged_db_host = {}
-    merged_db_host['profile'] = f"{os.path.splitext(db_data['profile'])[0]}_host_merged" # Kmers profile
+    merged_db_host['profile'] = f"{db_data['profile']}_host_merged" # Kmers profile
 
     if os.path.exists(merged_db_host['profile']):
         df_merged = ray.data.read_parquet(merged_db_host['profile'])
@@ -54,7 +54,6 @@ def merge_db_host(db_data, host_data):
             if col not in ['id','domain','__value__']:
                 col2drop.append(col)
         df_host = df_host.drop_columns(col2drop)
-
 
         df_merged = df_db.union(df_host)
         df_merged.write_parquet(merged_db_host['profile'])
@@ -114,7 +113,6 @@ def split_val_test_ds(ds, data):
             nb_smpl = round(ds.count() * 0.1)
             test_ds = ds.random_shuffle().limit(nb_smpl)
         test_ds = sim_4_cv(ds, data, 'test')
-
     return val_ds, test_ds
 
 # CLI argument
@@ -191,9 +189,9 @@ else:
     labels_map = zip(labels, encoded)
 
 datasets = {
-    'train' : ray.put(train_ds),
-    'test' : ray.put(test_ds),
-    'validation' : ray.put(val_ds)
+    'train' : ray.put(train_ds.materialize()),
+    'test' : ray.put(test_ds.materialize()),
+    'validation' : ray.put(val_ds.materialize())
 }
 
 # Model parameters

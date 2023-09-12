@@ -161,11 +161,6 @@ class ClassificationMethods():
             self._binary_training(taxa)
         else:
             self._multiclass_training(taxa)
-        for file in glob(os.path.join(self._outdirs['data_dir'], '*sim*')):
-            if os.path.isdir(file):
-                rmtree(file)
-            else:
-                os.remove(file)
 
     def _binary_training(self, taxa):
         print('_binary_training')
@@ -184,8 +179,6 @@ class ClassificationMethods():
                 self._database_data['kmers'],
                 self._verbose
             )
-            self.models[taxa].preprocess(self._training_datasets['train'])
-            self.models[taxa].train(self._training_datasets, self._database_data, self._cv)
         else:
             if self._classifier_binary == 'linearsvm':
                 self.models[taxa] = SklearnModel(
@@ -213,8 +206,8 @@ class ClassificationMethods():
                     self._merged_database_host['kmers'],
                     self._verbose
                 )
-            self.models[taxa].preprocess(self._merged_training_datasets['train'])
-            self.models[taxa].train(self._merged_training_datasets, self._merged_database_host, self._cv)
+        self.models[taxa].preprocess(self._merged_training_datasets['train'])
+        self.models[taxa].train(self._merged_training_datasets, self._merged_database_host, self._cv)
 
         self._save_model(self._model_file, taxa)            
 
@@ -441,29 +434,32 @@ class ClassificationMethods():
     def _merge_database_host(self, database_data, host_data):
         print('_merge_database_host')
         self._merged_database_host = {}
-        self._merged_database_host['profile'] = f"{os.path.splitext(database_data['profile'])}_host_merged" # Kmers profile
+        self._merged_database_host['profile'] = f"{database_data['profile']}_host_merged" # Kmers profile
 
-        df_db = ray.data.read_parquet(database_data['profile'])
-        df_host = ray.data.read_parquet(host_data['profile'])
+        if os.path.exists(self._merged_database_host['profile']):
+            df_merged = ray.data.read_parquet(self._merged_database_host['profile'])
+        else:
+            df_db = ray.data.read_parquet(database_data['profile'])
+            df_host = ray.data.read_parquet(host_data['profile'])
 
-        cols2drop = []
-        for col in df_db.schema().names:
-            if col not in ['id','domain','__value__']:
-                cols2drop.append(col)
-        df_db = df_db.drop_columns(cols2drop)
-        cols2drop = []
-        for col in df_host.schema().names:
-            if col not in ['id','domain','__value__']:
-                cols2drop.append(col)
-        df_host = df_host.drop_columns(cols2drop)
+            cols2drop = []
+            for col in df_db.schema().names:
+                if col not in ['id','domain','__value__']:
+                    cols2drop.append(col)
+            df_db = df_db.drop_columns(cols2drop)
+            cols2drop = []
+            for col in df_host.schema().names:
+                if col not in ['id','domain','__value__']:
+                    cols2drop.append(col)
+            df_host = df_host.drop_columns(cols2drop)
+
+            df_merged = df_db.union(df_host)
+            df_merged.write_parquet(self._merged_database_host['profile'])
 
         self._merged_database_host['ids'] = np.concatenate((database_data["ids"], host_data["ids"]))  # IDs
         self._merged_database_host['kmers'] = database_data["kmers"]  # Features
         self._merged_database_host['taxas'] = ['domain']  # Known taxas for classification
         self._merged_database_host['fasta'] = (database_data['fasta'], host_data['fasta'])  # Fasta file needed for reads simulation
-
-        df_merged = df_db.union(df_host)
-        df_merged.write_parquet(self._merged_database_host['profile'])
 
         return df_merged
 
@@ -474,55 +470,36 @@ class ClassificationMethods():
             df.loc[df['domain'] == 'Archaea', 'domain'] = 'Bacteria'
             return df
         if self._classifier_binary == 'onesvm' and taxa == 'domain':
+            df_train = ray.data.read_parquet(self._database_data['profile'])
             df_val_test = self._merge_database_host(self._database_data, self._host_data)
             df_val_test = df_val_test.map_batches(convert_archaea_bacteria, batch_format = 'pandas')
-            df_val = self.split_sim_cv_ds(df_val_test,self._merged_database_host)
+            df_val = self.split_sim_cv_ds(df_val_test,self._merged_database_host, 'merged_validation')
             self._merged_training_datasets = {'train': df_train, 'validation': df_val}
             if self._cv:
-                df_test = self.split_sim_cv_ds(df_val_test,self._merged_database_host)
+                df_test = self.split_sim_cv_ds(df_val_test,self._merged_database_host, 'merged_test')
                 self._merged_training_datasets['test'] = df_test
-            df_train = ray.data.read_parquet(self._database_data['profile'])
         else:
             df_train = self._merge_database_host(self._database_data, self._host_data)
             df_train = df_train.map_batches(convert_archaea_bacteria, batch_format = 'pandas')
-            df_val = self.split_sim_cv_ds(df_train,self._merged_database_host)
+            df_val = self.split_sim_cv_ds(df_train,self._merged_database_host, 'merged_validation')
             self._merged_training_datasets = {'train': df_train, 'validation': df_val}
             if self._cv:
-                df_test = self.split_sim_cv_ds(df_train,self._merged_database_host)
+                df_test = self.split_sim_cv_ds(df_train,self._merged_database_host, 'merged_test')
                 self._merged_training_datasets['test'] = df_test
 
     # Load db & simulate validation / test datasets
     def _load_training_data(self):
         print('_load_training_data')
+        def convert_archaea_bacteria(df):
+            df.loc[df['domain'] == 'Archaea', 'domain'] = 'Bacteria'
+            return df
         df_train = ray.data.read_parquet(self._database_data['profile'])
-        # self._y_train = pd.DataFrame(
-        #         self._database_data['classes'],
-        #         columns=self._database_data['taxas']
-        #     )
-
-        # for col in self._y_train.columns:
-        #     self._y_train[col] = self._y_train[col].str.lower()
-
-        # if 'domain' in self._y_train.columns:
-        #     self._y_train.loc[self._y_train['domain'] == 'archaea','domain'] = 'bacteria'
-        
-        # df_train = zip_X_y(self._X_train, self._y_train)
-
-        df_val = df_train.random_sample(0.1)
-        if df_val.count() == 0:
-            nb_smpl = round(df_val.count() * 0.1)
-            df_val = df_val.limit(nb_smpl)
-        df_val = self._sim_4_cv(df_val, self._database_data, f'{self._database}_val')
+        df_train = df_train.map_batches(convert_archaea_bacteria, batch_format = 'pandas')
+        df_val = self.split_sim_cv_ds(df_train,self._database_data, 'validation')
+        self._training_datasets = {'train': df_train, 'validation': df_val}
         if self._cv:
-            # df_train, df_test = df_train.train_test_split(0.2, shuffle=True)
-            df_test = df_train.random_sample(0.1)
-            if df_test.count() == 0:
-                nb_smpl = round(df_test.count() * 0.1)
-                df_test = df_test.limit(nb_smpl)
-            df_test = self._sim_4_cv(df_test, self._database_data, f'{self._database}_test')
-            self._training_datasets = {'train': df_train, 'validation': df_val, 'test': df_test}
-        else:
-            self._training_datasets = {'train': df_train, 'validation': df_val}
+            df_test = self.split_sim_cv_ds(df_train,self._database_data, 'test')
+            self._training_datasets['test'] = df_test
 
     def _sim_4_cv(self, df, kmers_ds, name):
         print('_sim_4_cv')
@@ -538,11 +515,18 @@ class ClassificationMethods():
         df = ray.data.read_parquet(sim_data['profile'])
         return df
     
-    def split_sim_cv_ds(self, ds, data):
-        cv_ds = ds.random_sample(0.1)
-        if cv_ds.count() == 0:
-            nb_smpl = round(ds.count() * 0.1)
-            cv_ds = ds.random_shuffle().limit(nb_smpl)
-        cv_ds = self._sim_4_cv(ds, data, 'validation')
+    def split_sim_cv_ds(self, ds, data, name):
+        ds_path = os.path.join(
+            os.path.dirname(data['profile']),
+            f'Xy_genome_simulation_{name}_data_K{len(data["kmers"][0])}'
+            )
+        if os.path.exists(ds_path):
+            cv_ds = ray.data.read_parquet(ds_path)
+        else:
+            cv_ds = ds.random_sample(0.1)
+            if cv_ds.count() == 0:
+                nb_smpl = round(ds.count() * 0.1)
+                cv_ds = ds.random_shuffle().limit(nb_smpl)
+            cv_ds = self._sim_4_cv(ds, data, name)
         return cv_ds
     
