@@ -12,8 +12,8 @@ from pathlib import Path
 # Package modules
 from utils import *
 from models.reads_simulation import readsSimulation
-# from models.ray_tensor_min_max import TensorMinMaxScaler
-from ray.data.preprocessors import MinMaxScaler
+from models.ray_tensor_min_max import TensorMinMaxScaler
+# from ray.data.preprocessors import MinMaxScaler
 from models.sklearn.ray_sklearn_partial_trainer import SklearnPartialTrainer
 from models.sklearn.ray_sklearn_onesvm_encoder import OneClassSVMLabelEncoder
 
@@ -28,8 +28,6 @@ from ray import tune
 from ray.tune import Tuner, TuneConfig
 from ray.tune.schedulers import ASHAScheduler
 from ray.air.config import RunConfig, ScalingConfig
-# Parent class
-from models.sklearn.ray_sklearn_partial_trainer import SklearnPartialTrainer
 
 warnings.simplefilter(action='ignore')
 
@@ -37,36 +35,32 @@ warnings.simplefilter(action='ignore')
 ################################################################################
 
 def merge_db_host(db_data, host_data):
-    merged_database_host = {}
-    merged_database_host['profile'] = "{}_host_merged".format(os.path.splitext(db_data["profile"])[0]) # Kmers profile
+    merged_db_host = {}
+    merged_db_host['profile'] = f"{os.path.splitext(db_data['profile'])[0]}_host_merged" # Kmers profile
 
-    df_classes = pd.DataFrame(db_data["classes"], columns=db_data["taxas"])
-    df_cls_host = pd.DataFrame(host_data["classes"], columns=host_data["taxas"])
-    if len(df_cls_host) > len(host_data['ids']):
-        to_remove = np.arange(len(df_cls_host) - len(host_data['ids']))
-        df_cls_host = df_cls_host.drop(to_remove, axis=0)
-    elif len(df_cls_host) < len(host_data['ids']):
-        diff = len(host_data['ids']) - len(df_cls_host)
-        row = df_cls_host.iloc[0]
-        for i in range(diff):
-            df_cls_host = pd.concat([df_cls_host, row.to_frame().T], ignore_index=True)
-    df_classes = pd.concat([df_classes, df_cls_host], ignore_index=True)
-    for col in df_classes.columns:
-        df_classes[col] = df_classes[col].str.lower()
-    if len(np.unique(df_classes['domain'])) > 1:
-        df_classes.loc[df_classes['domain'] == 'archaea','domain'] = 'bacteria'
-    merged_database_host['classes'] = np.array(df_classes)  # Class labels
-    merged_database_host['ids'] = np.concatenate((db_data["ids"], host_data["ids"]))  # IDs
-    merged_database_host['kmers'] = db_data["kmers"]  # Features
-    merged_database_host['taxas'] = db_data["taxas"]  # Known taxas for classification
-    merged_database_host['fasta'] = (db_data['fasta'], host_data['fasta'])  # Fasta file needed for reads simulation
-    
-    df_db = ray.data.read_parquet(db_data["profile"])
-    df_host = ray.data.read_parquet(host_data["profile"])
+    df_db = ray.data.read_parquet(db_data['profile'])
+    df_host = ray.data.read_parquet(host_data['profile'])
+
+    col2drop = []
+    for col in df_db.schema().names:
+        if col not in ['id','domain','__value__']:
+            col2drop.append(col)
+    df_db = df_db.drop_columns(col2drop)
+    col2drop = []
+    for col in df_host.schema().names:
+        if col not in ['id','domain','__value__']:
+            col2drop.append(col)
+    df_host = df_host.drop_columns(col2drop)
+
+    merged_db_host['ids'] = np.concatenate(ray.get(df_db.to_numpy_refs(column = 'id')))#np.concatenate((db_data["ids"], host_data["ids"]))  # IDs
+    merged_db_host['kmers'] = db_data['kmers']  # Features
+    merged_db_host['taxas'] = ['domain']  # Known taxas for classification
+    merged_db_host['fasta'] = (db_data['fasta'], host_data['fasta'])  # Fasta file needed for reads simulation
+
     df_merged = df_db.union(df_host)
-    df_merged.write_parquet(merged_database_host['profile'])
+    df_merged.write_parquet(merged_db_host['profile'])
     
-    return merged_database_host
+    return merged_db_host, df_merged
 
 def sim_4_cv(df, database_data, name):
     print('_sim_4_cv')
@@ -86,6 +80,29 @@ def sim_4_cv(df, database_data, name):
 def convert_archaea_bacteria(df):
     df.loc[df['domain'] == 'Archaea', 'domain'] = 'Bacteria'
     return df
+
+def verify_load_host_merge(db_data, host_data):
+    db_data = verify_load_data(db_data)
+    host_data = verify_load_data(host_data)
+    merged_data, merged_ds = merge_db_host(db_data, host_data)
+    merged_ds = merged_ds.map_batches(
+        convert_archaea_bacteria,
+        batch_format = 'pandas'
+    )
+    return merged_data, merged_ds
+
+def split_val_test_ds(ds):
+    val_ds = ds.random_sample(0.1)
+    test_ds = ds.random_sample(0.1)
+    if val_ds.count() == 0:
+        nb_smpl = round(ds.count() * 0.1)
+        val_ds = ds.random_shuffle().limit(nb_smpl)
+    if test_ds.count() == 0:
+        nb_smpl = round(ds.count() * 0.1)
+        test_ds = ds.random_shuffle().limit(nb_smpl)
+    # val_ds = sim_4_cv(ds, db_data, 'validation')
+    # test_ds = sim_4_cv(ds, db_data, 'test')
+    return val_ds, test_ds
 
 # CLI argument
 ################################################################################
@@ -110,36 +127,34 @@ init_ray_cluster(opt['workdir'])
 ################################################################################
 print('data loading')
 
-db_data = verify_load_data(opt['data'])
-if opt['host_name'] is not None and opt['taxa'] == 'domain':
-    host_data = verify_load_data(opt['data_host'])
-    db_data = merge_db_host(db_data, host_data)
-
-train_ds = ray.data.read_parquet(db_data['profile'])
-db_cls = pd.read_csv(db_data['csv'])
-
-if 'domain' in train_ds.schema().names:
-    train_ds = train_ds.map_batches(convert_archaea_bacteria)
+if opt['classifier'] == 'onesvm' and opt['taxa'] == 'domain':
+    if opt['data_host'] is None:
+        raise ValueError('To tune for a domain taxa, a host species is required.\
+                        It is used to confirm that the models can discern other sequences than bacteria.')
+    else:
+        test_val_data, test_val_ds = verify_load_host_merge(opt['data'], opt['data_host'])
+        val_ds, test_ds = split_val_test_ds(test_val_ds)
+        db_data = verify_load_data(opt['data'])
+        train_ds = ray.data.read_parquet(db_data['profile'])
+elif opt['classifier'] == 'linearsvm' and opt['taxa'] == 'domain':
+    if opt['data_host'] is None:
+        raise ValueError('To tune for a domain taxa, a host species is required.\
+                        It is used to confirm that the models can discern other sequences than bacteria.')
+    else:
+        db_data, train_ds = verify_load_host_merge(opt['data'], opt['data_host'])
+        val_ds, test_ds = split_val_test_ds(train_ds)
+else:
+    db_data = verify_load_data(opt['data'])
+    train_ds = ray.data.read_parquet(db_data['profile'])
+    val_ds, test_ds = split_val_test_ds(train_ds)
 
 # Preprocessing
 ################################################################################
 print('data preprocessing')
 
-val_ds = train_ds.random_sample(0.1)
-test_ds = train_ds.random_sample(0.1)
-if val_ds.count() == 0:
-    nb_smpl = round(val_ds.count() * 0.1)
-    val_ds = val_ds.limit(nb_smpl)
-if test_ds.count() == 0:
-    nb_smpl = round(test_ds.count() * 0.1)
-    test_ds = test_ds.limit(nb_smpl)
-# val_ds = sim_4_cv(train_ds, db_data, 'validation')
-# test_ds = sim_4_cv(train_ds, db_data, 'test')
-
-
 if opt['classifier'] == 'onesvm':
     preprocessor = Chain(
-        MinMaxScaler(db_data['kmers']),
+        TensorMinMaxScaler(db_data['kmers']),
         OneClassSVMLabelEncoder('domain')
     )
     train_ds = preprocessor.fit_transform(train_ds)
@@ -152,7 +167,7 @@ if opt['classifier'] == 'onesvm':
     )
 else:
     preprocessor = Chain(
-        MinMaxScaler(db_data['kmers']),
+        TensorMinMaxScaler(db_data['kmers']),
         LabelEncoder(opt['taxa'])
     )
     train_ds = preprocessor.fit_transform(train_ds)
@@ -274,19 +289,6 @@ tuner = Tuner(
     )
 )
 
-
-
-"""
-print('tuning')
-tune_search = TuneGridSearchCV(
-    clf,
-    tune_params,
-    scoring = 'accuracy',
-    n_jobs = -1,
-    early_stopping = True,
-    max_iters = 100
-)
-"""
 # Tuning results
 ################################################################################
 print('results output')

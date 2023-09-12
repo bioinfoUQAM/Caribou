@@ -26,7 +26,7 @@ from ray.train.batch_predictor import BatchPredictor
 
 # Parent class
 from models.ray_utils import ModelsUtils
-from src.models.sklearn.ray_sklearn_partial_trainer import SklearnPartialTrainer
+from models.sklearn.ray_sklearn_partial_trainer import SklearnPartialTrainer
 from models.sklearn.ray_sklearn_probability_predictor import SklearnProbaPredictor
 
 

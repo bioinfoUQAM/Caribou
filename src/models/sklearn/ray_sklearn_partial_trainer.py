@@ -205,30 +205,26 @@ class SklearnPartialTrainer(SklearnTrainer):
                 for batch_X, batch_y in zip(
                     epoch_X.iter_batches(
                         batch_size = self._batch_size,
-                        # batch_format = 'numpy'
-                        batch_format = 'pandas'
+                        batch_format = 'numpy'
                     ),
                     epoch_y.iter_batches(
                         batch_size = self._batch_size,
-                        # batch_format = 'numpy'
-                        batch_format = 'pandas'
+                        batch_format = 'numpy'
                     )
                 ):  
-                    # if isinstance(batch_X, dict):
-                    #     batch_X = batch_X['__value__']
+                    if isinstance(batch_X, dict):
+                        batch_X = batch_X['__value__']
                         
-                    # try:
-                    #     batch_X = pd.DataFrame(batch_X, columns = self._features_list)
-                    # except ValueError:
-                    #     for i in range(len(batch_X)):
-                    #         if len(batch_X[i]) != len(self._features_list):
-                    #             warn("The features list length for some reads are not the same as for other reads.\
-                    #                 Removing the last {} additionnal values, this may influence training.\
-                    #                     If this persists over multiple samples, please rerun the K-mers extraction".format(len(batch_X[i]) - len(self._features_list)))
-                    #             batch_X[i] = batch_X[i][:len(self._features_list)]
-                    # batch_y = np.ravel(batch_y)
-                    batch_X = batch_X[self._features_list]
-
+                    try:
+                        batch_X = pd.DataFrame(batch_X, columns = self._features_list)
+                    except ValueError:
+                        for i in range(len(batch_X)):
+                            if len(batch_X[i]) != len(self._features_list):
+                                warn("The features list length for some reads are not the same as for other reads.\
+                                    Removing the last {} additionnal values, this may influence training.\
+                                        If this persists over multiple samples, please rerun the K-mers extraction".format(len(batch_X[i]) - len(self._features_list)))
+                                batch_X[i] = batch_X[i][:len(self._features_list)]
+                    batch_y = np.ravel(batch_y[self.label_column])
                     try:
                         self.estimator.partial_fit(batch_X, batch_y, classes = self._labels, **self.fit_params)
                     except TypeError:
@@ -238,15 +234,13 @@ class SklearnPartialTrainer(SklearnTrainer):
         if len(self._labels) > 2:
             with parallel_backend("ray", n_jobs=num_cpus):
                 X_calib_df = np.empty((X_calib.count(), len(self._features_list)))
-                # for ind, batch in enumerate(X_calib.iter_batches(
-                #     batch_size = 1,
-                #     # batch_format = 'numpy'
-                #     batch_format = 'pandas'
-                # )):
-                    # X_calib_df[ind] = batch[0]
+                for ind, batch in enumerate(X_calib.iter_batches(
+                    batch_size = 1,
+                    batch_format = 'numpy'
+                )):
+                    X_calib_df[ind] = batch['__value__']
 
-                # X_calib = pd.DataFrame(X_calib_df, columns = self._features_list)
-                X_calib = X_calib.to_pandas()[self._features_list]
+                X_calib = pd.DataFrame(X_calib_df, columns = self._features_list)
                 y_calib = y_calib.to_pandas()
                 self.estimator = CalibratedClassifierCV(
                     estimator = self.estimator,
@@ -307,30 +301,26 @@ class SklearnPartialTrainer(SklearnTrainer):
             start_time = time()
             for batch, labels in zip(X_test.iter_batches(
                     batch_size = self._batch_size,
-                    # batch_format = 'numpy'
-                    batch_format = 'pandas'
+                    batch_format = 'numpy'
                 ), y_test.iter_batches(
                     batch_size=self._batch_size,
-                    # batch_format = 'numpy'
-                    batch_format = 'pandas'
+                    batch_format = 'numpy'
                 )
             ):
-                # if isinstance(batch, dict):
-                #     batch = batch['__value__']
+                if isinstance(batch, dict):
+                    batch = batch['__value__']
 
-                # try:
-                #     batch = pd.DataFrame(batch, columns = self._features_list)
-                # except ValueError:
-                #     for i in range(len(batch)):
-                #         if len(batch[i]) != len(self._features_list):
-                #             warn("The features list length for some reads are not the same as for other reads.\
-                #                 Removing the last {} additionnal values, this may influence training.\
-                #                     If this persists over multiple samples, please rerun the K-mers extraction".format(len(batch[i]) - len(self._features_list)))
-                #             batch[i] = batch[i][:len(self._features_list)]
-                # labels = np.ravel(labels)
+                try:
+                    batch = pd.DataFrame(batch, columns = self._features_list)
+                except ValueError:
+                    for i in range(len(batch)):
+                        if len(batch[i]) != len(self._features_list):
+                            warn("The features list length for some reads are not the same as for other reads.\
+                                Removing the last {} additionnal values, this may influence training.\
+                                    If this persists over multiple samples, please rerun the K-mers extraction".format(len(batch[i]) - len(self._features_list)))
+                            batch[i] = batch[i][:len(self._features_list)]
+                labels = np.ravel(labels[self.label_column])
 
-                # batch = pd.DataFrame(batch, columns = self._features_list)
-                batch = batch[self._features_list]
                 try:
                     test_scores.append(_score(estimator, batch, labels, scorers))
                 except Exception:
