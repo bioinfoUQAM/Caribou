@@ -170,7 +170,6 @@ class ClassificationMethods():
     def _binary_training(self, taxa):
         print('_binary_training')
         self._verify_classifier_binary()
-        # self._merge_database_host(self._database_data, self._host_data)
         self._load_training_data_merged(taxa)
         if self._classifier_binary == 'onesvm':
             self.models[taxa] = SklearnModel(
@@ -188,8 +187,6 @@ class ClassificationMethods():
             self.models[taxa].preprocess(self._training_datasets['train'])
             self.models[taxa].train(self._training_datasets, self._database_data, self._cv)
         else:
-            # self._merge_database_host(self._database_data, self._host_data)
-            # self._load_training_data_merged(taxa)
             if self._classifier_binary == 'linearsvm':
                 self.models[taxa] = SklearnModel(
                     self._classifier_binary,
@@ -225,7 +222,6 @@ class ClassificationMethods():
         print('_multiclass_training')
         self._verify_classifier_multiclass()
         self._load_training_data()
-        # self._get_taxa_ds_collection(taxa)
         if self._classifier_multiclass in ['sgd','mnb']:
             self.models[taxa] = SklearnModel(
                 self._classifier_multiclass,

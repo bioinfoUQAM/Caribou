@@ -186,7 +186,7 @@ class readsSimulation():
             (self._fasta_out,self._cls_out),
             self._path,
             None,
-            'simulation_{}'.format(self._name),
+            f'simulation_{self._name}',
             kmers_list = kmers_list,
             k = k
         )

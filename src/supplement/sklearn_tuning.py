@@ -38,27 +38,31 @@ def merge_db_host(db_data, host_data):
     merged_db_host = {}
     merged_db_host['profile'] = f"{os.path.splitext(db_data['profile'])[0]}_host_merged" # Kmers profile
 
-    df_db = ray.data.read_parquet(db_data['profile'])
-    df_host = ray.data.read_parquet(host_data['profile'])
+    if os.path.exists(merged_db_host['profile']):
+        df_merged = ray.data.read_parquet(merged_db_host['profile'])
+    else:
+        df_db = ray.data.read_parquet(db_data['profile'])
+        df_host = ray.data.read_parquet(host_data['profile'])
 
-    col2drop = []
-    for col in df_db.schema().names:
-        if col not in ['id','domain','__value__']:
-            col2drop.append(col)
-    df_db = df_db.drop_columns(col2drop)
-    col2drop = []
-    for col in df_host.schema().names:
-        if col not in ['id','domain','__value__']:
-            col2drop.append(col)
-    df_host = df_host.drop_columns(col2drop)
+        col2drop = []
+        for col in df_db.schema().names:
+            if col not in ['id','domain','__value__']:
+                col2drop.append(col)
+        df_db = df_db.drop_columns(col2drop)
+        col2drop = []
+        for col in df_host.schema().names:
+            if col not in ['id','domain','__value__']:
+                col2drop.append(col)
+        df_host = df_host.drop_columns(col2drop)
 
-    merged_db_host['ids'] = np.concatenate(ray.get(df_db.to_numpy_refs(column = 'id')))#np.concatenate((db_data["ids"], host_data["ids"]))  # IDs
+
+        df_merged = df_db.union(df_host)
+        df_merged.write_parquet(merged_db_host['profile'])
+    
+    merged_db_host['ids'] = np.concatenate((db_data["ids"], host_data["ids"]))  # IDs
     merged_db_host['kmers'] = db_data['kmers']  # Features
     merged_db_host['taxas'] = ['domain']  # Known taxas for classification
     merged_db_host['fasta'] = (db_data['fasta'], host_data['fasta'])  # Fasta file needed for reads simulation
-
-    df_merged = df_db.union(df_host)
-    df_merged.write_parquet(merged_db_host['profile'])
     
     return merged_db_host, df_merged
 
@@ -92,16 +96,25 @@ def verify_load_host_merge(db_data, host_data):
     return merged_data, merged_ds
 
 def split_val_test_ds(ds, data):
-    val_ds = ds.random_sample(0.1)
-    test_ds = ds.random_sample(0.1)
-    if val_ds.count() == 0:
-        nb_smpl = round(ds.count() * 0.1)
-        val_ds = ds.random_shuffle().limit(nb_smpl)
-    if test_ds.count() == 0:
-        nb_smpl = round(ds.count() * 0.1)
-        test_ds = ds.random_shuffle().limit(nb_smpl)
-    val_ds = sim_4_cv(ds, data, 'validation')
-    test_ds = sim_4_cv(ds, data, 'test')
+    val_path = os.path.join(os.path.dirname(data['profile']), f'Xy_genome_simulation_validation_data_K{len(data["kmers"][0])}')
+    test_path = os.path.join(os.path.dirname(data['profile']), f'Xy_genome_simulation_test_data_K{len(data["kmers"][0])}')
+    if os.path.exists(val_path):
+        val_ds = ray.data.read_parquet(val_path)
+    else:
+        val_ds = ds.random_sample(0.1)
+        if val_ds.count() == 0:
+            nb_smpl = round(ds.count() * 0.1)
+            val_ds = ds.random_shuffle().limit(nb_smpl)
+        val_ds = sim_4_cv(ds, data, 'validation')
+    if os.path.exists(test_path):
+        test_ds = ray.data.read_parquet(test_path)
+    else:
+        test_ds = ds.random_sample(0.1)
+        if test_ds.count() == 0:
+            nb_smpl = round(ds.count() * 0.1)
+            test_ds = ds.random_shuffle().limit(nb_smpl)
+        test_ds = sim_4_cv(ds, data, 'test')
+
     return val_ds, test_ds
 
 # CLI argument
