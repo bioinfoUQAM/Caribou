@@ -182,9 +182,6 @@ if opt['classifier'] == 'onesvm':
         batch_format = 'pandas'
     )
     train_ds = preprocessor.fit_transform(train_ds)
-    import sys
-    print(train_ds.to_pandas())
-    sys.exit()
     val_ds = preprocessor.transform(val_ds)
     test_ds = preprocessor.transform(test_ds)
     encoded = np.array([1,-1], dtype = np.int32)
