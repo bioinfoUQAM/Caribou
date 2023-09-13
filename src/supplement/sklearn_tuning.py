@@ -86,7 +86,7 @@ def sim_4_cv(df, database_data, name):
     return df
 
 def convert_archaea_bacteria(df):
-    df.loc[df['domain'] == 'Archaea', 'domain'] = 'Bacteria'
+    df.loc[df['domain'].str.lower() == 'archaea', 'domain'] = 'Bacteria'
     return df
 
 def verify_load_host_merge(db_data, host_data):
@@ -177,7 +177,14 @@ if opt['classifier'] == 'onesvm':
         TensorMinMaxScaler(db_data['kmers']),
         OneClassSVMLabelEncoder('domain')
     )
+    train_ds = train_ds.map_batches(
+        convert_archaea_bacteria,
+        batch_format = 'pandas'
+    )
     train_ds = preprocessor.fit_transform(train_ds)
+    import sys
+    print(train_ds.to_pandas())
+    sys.exit()
     val_ds = preprocessor.transform(val_ds)
     test_ds = preprocessor.transform(test_ds)
     encoded = np.array([1,-1], dtype = np.int32)

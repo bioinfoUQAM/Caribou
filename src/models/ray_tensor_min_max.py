@@ -4,6 +4,7 @@ import ray
 import numpy as np
 import pandas as pd
 
+from ray.data.dataset import Dataset
 from ray.data.preprocessor import Preprocessor
 from ray.data.extensions.tensor_extension import TensorArray
 
@@ -15,26 +16,36 @@ class TensorMinMaxScaler(Preprocessor):
     def __init__(self, features_list):
         # Parameters
         self._features_list = features_list
-        # Empty inits
-        self._min = None
-        self._max = None
-
-    def _fit(self, dataset:ray.data.dataset.Dataset):
+        
+    def _fit(self, ds: Dataset) -> Preprocessor:
         """
         Fit the MinMaxScaler to the given dataset.
         """
-        self._min = np.full((len(self._features_list)), 1000000, dtype = np.int32)
-        self._max = np.zeros(len(self._features_list), dtype = np.int32)
-        for batch in dataset.iter_batches(batch_format = 'numpy'):
-            for i in np.arange(len(self._features_list)):
-                local_min = min(batch['__value__'][:,i])
-                local_max = max(batch['__value__'][:,i])
-                if local_min < self._min[i]:
-                    self._min[i] = local_min
-                if local_max > self._max[i]:
-                    self._max[i] = local_max
-        
-        self.fitted_ = True
+        min = []
+        max = []
+        nb_features = len(self._features_list)
+
+        def Min(dct):
+            arr = dct['__value__']
+            min = np.array([arr[:,i].min() for i in range(nb_features)])
+            return min
+
+        def Max(dct):
+            arr = dct['__value__']
+            max = np.array([arr[:,i].max() for i in range(nb_features)])
+            return max
+
+        for batch in ds.iter_batches(batch_format = 'numpy'):
+            min.append(Min(batch))
+            max.append(Max(batch))
+
+        min = np.array(min)
+        max = np.array(max)
+
+        min = np.array([min[:,i].min() for i in range(nb_features)])
+        max = np.array([max[:,i].max() for i in range(nb_features)])
+                
+        self.stats_ = {'min' : min, 'max' : max}
 
         return self
 
@@ -42,12 +53,14 @@ class TensorMinMaxScaler(Preprocessor):
         """
         Transform the given dataset to pandas dataframe.
         """
-        df = pd.DataFrame(np.vstack(batch['__value__']), columns = self._features_list)
+        min = self.stats_['min']
+        max = self.stats_['max']
+        df = np.vstack(batch['__value__'].to_numpy())
 
-        for i, col in enumerate(self._features_list):
-            df[col] = df[col].apply(value_transform, args=(self._min[i], self._max[i]))
+        diff = max - min
+        diff[diff == 0] = 1
 
-        batch['__value__'] = TensorArray(np.array(df))
+        batch['__value__'] = pd.Series(list((df - min) / diff))
 
         return batch
 
@@ -55,12 +68,13 @@ class TensorMinMaxScaler(Preprocessor):
         """
         Transform the given dataset to numpy ndarray.
         """
-        df = np.array(batch['__value__'], dtype = np.float32)
-        vecfunc = np.vectorize(value_transform)
-        for i in np.arange(len(self._features_list)):
-            df[:,i] = vecfunc(df[:,i], self._min[i], self._max[i])
 
-        batch['__value__'] = df
+        min = self.stats_['min']
+        max = self.stats_['max']
+
+        diff = max - min
+
+        batch['__value__'] = (batch['__value__'] - min) / diff
 
         return batch
 

@@ -112,9 +112,8 @@ class ClassificationMethods():
     # Wrapper function for training and predicting over each known taxa
     def execute_training_prediction(self, data2classify):
         print('execute_training_prediction')
-        file2classify = data2classify['profile']
-        
-        df2classify = ray.data.read_parquet(file2classify)
+        files_lst = glob(os.path.join(data2classify['profile'],'*.parquet'))
+        df2classify = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
         ids2classify = data2classify['ids']
         for i, taxa in enumerate(self._taxas_order):
             if taxa in self._taxas:
@@ -249,8 +248,8 @@ class ClassificationMethods():
     # Execute classification using trained model(s) over a given taxa
     def execute_classification(self, data2classify):
         print('execute_classification')
-        df_file = data2classify['profile']
-        df = ray.data.read_parquet(df_file)
+        files_lst = glob(os.path.join(data2classify['profile'],'*.parquet'))
+        df = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
         ids = data2classify['ids']
         if len(self.classified_data['sequence']) == 0:
             raise ValueError('Please train a model before executing classification')
@@ -438,10 +437,13 @@ class ClassificationMethods():
         self._merged_database_host['profile'] = f"{database_data['profile']}_host_merged" # Kmers profile
 
         if os.path.exists(self._merged_database_host['profile']):
-            df_merged = ray.data.read_parquet(self._merged_database_host['profile'])
+            files_lst = glob(os.path.join(self._merged_database_host['profile'],'*.parquet'))
+            df_merged = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
         else:
-            df_db = ray.data.read_parquet(database_data['profile'])
-            df_host = ray.data.read_parquet(host_data['profile'])
+            files_lst = glob(os.path.join(database_data['profile'],'*.parquet'))
+            df_db = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
+            files_lst = glob(os.path.join(host_data['profile'],'*.parquet'))
+            df_host = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
 
             cols2drop = []
             for col in df_db.schema().names:
@@ -467,11 +469,10 @@ class ClassificationMethods():
     # Load, merge db + host & simulate validation / test datasets
     def _load_training_data_merged(self, taxa):
         print('_load_training_data_merged')
-        def convert_archaea_bacteria(df):
-            df.loc[df['domain'] == 'Archaea', 'domain'] = 'Bacteria'
-            return df
         if self._classifier_binary == 'onesvm' and taxa == 'domain':
-            df_train = ray.data.read_parquet(self._database_data['profile'])
+            files_lst = glob(os.path.join(self._database_data['profile'],'*.parquet'))
+            df_train = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
+            df_train = df_train.map_batches(convert_archaea_bacteria, batch_format = 'pandas')
             df_val_test = self._merge_database_host(self._database_data, self._host_data)
             df_val_test = df_val_test.map_batches(convert_archaea_bacteria, batch_format = 'pandas')
             df_val = self.split_sim_cv_ds(df_val_test,self._merged_database_host, 'merged_validation')
@@ -491,10 +492,8 @@ class ClassificationMethods():
     # Load db & simulate validation / test datasets
     def _load_training_data(self):
         print('_load_training_data')
-        def convert_archaea_bacteria(df):
-            df.loc[df['domain'] == 'Archaea', 'domain'] = 'Bacteria'
-            return df
-        df_train = ray.data.read_parquet(self._database_data['profile'])
+        files_lst = glob(os.path.join(self._database_data['profile'],'*.parquet'))
+        df_train = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
         df_train = df_train.map_batches(convert_archaea_bacteria, batch_format = 'pandas')
         df_val = self.split_sim_cv_ds(df_train,self._database_data, 'validation')
         self._training_datasets = {'train': df_train, 'validation': df_val}
@@ -513,7 +512,8 @@ class ClassificationMethods():
         sim_outdir = os.path.dirname(kmers_ds['profile'])
         cv_sim = readsSimulation(kmers_ds['fasta'], cls, list(cls['id']), 'miseq', sim_outdir, name)
         sim_data = cv_sim.simulation(self._k, kmers_ds['kmers'])
-        df = ray.data.read_parquet(sim_data['profile'])
+        files_lst = glob(os.path.join(sim_data['profile'],'*.parquet'))
+        df = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
         return df
     
     def split_sim_cv_ds(self, ds, data, name):
@@ -522,7 +522,8 @@ class ClassificationMethods():
             f'Xy_genome_simulation_{name}_data_K{len(data["kmers"][0])}'
             )
         if os.path.exists(ds_path):
-            cv_ds = ray.data.read_parquet(ds_path)
+            files_lst = glob(os.path.join(ds_path,'*.parquet'))
+            cv_ds = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
         else:
             cv_ds = ds.random_sample(0.1)
             if cv_ds.count() == 0:
@@ -530,4 +531,10 @@ class ClassificationMethods():
                 cv_ds = ds.random_shuffle().limit(nb_smpl)
             cv_ds = self._sim_4_cv(ds, data, name)
         return cv_ds
-    
+
+# Helper functions outside of class
+###############################################################################
+
+def convert_archaea_bacteria(df):
+            df.loc[df['domain'].str.lower() == 'archaea', 'domain'] = 'Bacteria'
+            return df
