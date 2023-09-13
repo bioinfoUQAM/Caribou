@@ -291,7 +291,7 @@ trainer = SklearnPartialTrainer(
     set_estimator_cpus=True,
     scaling_config=ScalingConfig(
         trainer_resources={
-            'CPU': int(os.cpu_count()*0.8)
+            'CPU': int(os.cpu_count()*0.2)
         }
     ),
     run_config=RunConfig(
