@@ -234,7 +234,8 @@ elif opt['classifier'] == 'linearsvm':
         'penalty' : 'l2',
         'alpha' : 4,
         'learning_rate' : 'constant',
-        'eta0' : 4
+        'eta0' : 4,
+        'n_jobs' : -1
     }
     tune_params = {
         'params' : {
@@ -252,7 +253,8 @@ elif opt['classifier'] == 'sgd':
         'penalty' : 'l2',
         'alpha' : 4,
         'learning_rate' : 'constant',
-        'eta0' : 4
+        'eta0' : 4,
+        'n_jobs' : -1
     }
     tune_params = {
         'params' : {
@@ -289,14 +291,14 @@ trainer = SklearnPartialTrainer(
     batch_size=4,
     training_epochs=10,
     set_estimator_cpus=True,
-    # scaling_config=ScalingConfig(
-    #     trainer_resources={
-    #         'CPU': 1
-    #     }
-    # ),
+    scaling_config=ScalingConfig(
+        trainer_resources={
+            'CPU': int((os.cpu_count() * 0.8))
+        }
+    ),
     run_config=RunConfig(
-        name=opt['classifier'],
-        local_dir=opt['workdir']
+        name = opt['classifier'],
+        local_dir = opt['workdir']
     ),
 )
 
@@ -305,11 +307,15 @@ tuner = Tuner(
     trainer,
     param_space=tune_params,
     tune_config=TuneConfig(
-        max_concurrent_trials=int((os.cpu_count() * 0.6)),
+        max_concurrent_trials=1,#int((os.cpu_count() * 0.8)),
         scheduler=ASHAScheduler(
             metric = 'test/test_score', # mean accuracy according to scikit-learn's doc
             mode='max'
         )
+    ),
+    run_config = RunConfig(
+        name = opt['classifier'],
+        storage_path = opt['workdir']
     )
 )
 

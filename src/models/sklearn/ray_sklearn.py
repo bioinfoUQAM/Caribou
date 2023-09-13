@@ -217,11 +217,11 @@ class SklearnModel(ModelsUtils):
             batch_size=self.batch_size,
             training_epochs=self._training_epochs,
             set_estimator_cpus=True,
-            scaling_config=ScalingConfig(
-                trainer_resources={
-                    'CPU': int(os.cpu_count()*0.6)
-                }
-            ),
+            # scaling_config=ScalingConfig(
+            #     trainer_resources={
+            #         'CPU': int(os.cpu_count()*0.6)
+            #     }
+            # ),
             run_config=RunConfig(
                 name=self.classifier,
                 local_dir=self._workdir

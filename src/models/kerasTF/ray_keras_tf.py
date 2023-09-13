@@ -101,7 +101,7 @@ class KerasTFModel(ModelsUtils):
         )
         # Parameters
         # Initialize hidden
-        self._nb_CPU_data = int(os.cpu_count() * 0.4)
+        self._nb_CPU_data = int(os.cpu_count() * 0.2)
         self._nb_CPU_training = int(os.cpu_count() - self._nb_CPU_data)
         self._nb_GPU = len(tf.config.list_physical_devices('GPU'))
         # Initialize empty
