@@ -302,22 +302,20 @@ trainer = SklearnPartialTrainer(
     ),
 )
 
-print('tuner')
-tuner = Tuner(
-    trainer,
-    param_space=tune_params,
-    tune_config=TuneConfig(
-        max_concurrent_trials=1,#int((os.cpu_count() * 0.8)),
-        scheduler=ASHAScheduler(
-            metric = 'test/test_score', # mean accuracy according to scikit-learn's doc
-            mode='max'
-        )
-    ),
-    run_config = RunConfig(
-        name = opt['classifier'],
-        storage_path = opt['workdir']
-    )
-)
+# print('tuner')
+# tuner = Tuner(
+#     trainer,
+#     param_space=tune_params,
+#     tune_config=TuneConfig(
+#         max_concurrent_trials=1,#int((os.cpu_count() * 0.8)),
+#         scheduler=ASHAScheduler(
+#             metric = 'test/test_score', # mean accuracy according to scikit-learn's doc
+#             mode='max'
+#         )
+#     )
+# )
+
+trainer.fit()
 
 # Tuning results
 ################################################################################
