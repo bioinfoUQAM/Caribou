@@ -7,6 +7,7 @@ import argparse
 import numpy as np
 import pandas as pd
 
+from glob import glob
 from pathlib import Path
 
 # Package modules
@@ -39,10 +40,13 @@ def merge_db_host(db_data, host_data):
     merged_db_host['profile'] = f"{db_data['profile']}_host_merged" # Kmers profile
 
     if os.path.exists(merged_db_host['profile']):
-        df_merged = ray.data.read_parquet(merged_db_host['profile'])
+        files_lst = glob(os.path.join(merged_db_host['profile'], '*.parquet'))
+        df_merged = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
     else:
-        df_db = ray.data.read_parquet(db_data['profile'])
-        df_host = ray.data.read_parquet(host_data['profile'])
+        files_lst = glob(os.path.join(db_data['profile'], '*.parquet'))
+        df_db = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
+        files_lst = glob(os.path.join(host_data['profile'], '*.parquet'))
+        df_host = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
 
         col2drop = []
         for col in df_db.schema().names:
@@ -77,7 +81,8 @@ def sim_4_cv(df, database_data, name):
     sim_outdir = os.path.dirname(database_data['profile'])
     cv_sim = readsSimulation(database_data['fasta'], cls, list(cls['id']), 'miseq', sim_outdir, name)
     sim_data = cv_sim.simulation(k, database_data['kmers'])
-    df = ray.data.read_parquet(sim_data['profile'])
+    files_lst = glob(os.path.join(sim_data['profile'], '*.parquet'))
+    df = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
     return df
 
 def convert_archaea_bacteria(df):
@@ -98,7 +103,8 @@ def split_val_test_ds(ds, data):
     val_path = os.path.join(os.path.dirname(data['profile']), f'Xy_genome_simulation_validation_data_K{len(data["kmers"][0])}')
     test_path = os.path.join(os.path.dirname(data['profile']), f'Xy_genome_simulation_test_data_K{len(data["kmers"][0])}')
     if os.path.exists(val_path):
-        val_ds = ray.data.read_parquet(val_path)
+        files_lst = glob(os.path.join(val_path, '*.parquet'))
+        val_ds = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
     else:
         val_ds = ds.random_sample(0.1)
         if val_ds.count() == 0:
@@ -106,7 +112,8 @@ def split_val_test_ds(ds, data):
             val_ds = ds.random_shuffle().limit(nb_smpl)
         val_ds = sim_4_cv(ds, data, 'validation')
     if os.path.exists(test_path):
-        test_ds = ray.data.read_parquet(test_path)
+        files_lst = glob(os.path.join(test_path, '*.parquet'))
+        test_ds = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
     else:
         test_ds = ds.random_sample(0.1)
         if test_ds.count() == 0:
@@ -146,7 +153,8 @@ if opt['classifier'] == 'onesvm' and opt['taxa'] == 'domain':
         test_val_data, test_val_ds = verify_load_host_merge(opt['data'], opt['data_host'])
         val_ds, test_ds = split_val_test_ds(test_val_ds,test_val_data)
         db_data = verify_load_data(opt['data'])
-        train_ds = ray.data.read_parquet(db_data['profile'])
+        files_lst = glob(os.path.join(db_data['profile'], '*.parquet'))
+        train_ds = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
 elif opt['classifier'] == 'linearsvm' and opt['taxa'] == 'domain':
     if opt['data_host'] is None:
         raise ValueError('To tune for a domain taxa, a host species is required.\
@@ -156,7 +164,8 @@ elif opt['classifier'] == 'linearsvm' and opt['taxa'] == 'domain':
         val_ds, test_ds = split_val_test_ds(train_ds, db_data)
 else:
     db_data = verify_load_data(opt['data'])
-    train_ds = ray.data.read_parquet(db_data['profile'])
+    files_lst = glob(os.path.join(db_data['profile'], '*.parquet'))
+    train_ds = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
     val_ds, test_ds = split_val_test_ds(train_ds, db_data)
 
 # Preprocessing

@@ -113,6 +113,7 @@ class ClassificationMethods():
     def execute_training_prediction(self, data2classify):
         print('execute_training_prediction')
         file2classify = data2classify['profile']
+        
         df2classify = ray.data.read_parquet(file2classify)
         ids2classify = data2classify['ids']
         for i, taxa in enumerate(self._taxas_order):
