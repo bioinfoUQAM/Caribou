@@ -291,7 +291,7 @@ trainer = SklearnPartialTrainer(
     set_estimator_cpus=True,
     scaling_config=ScalingConfig(
         trainer_resources={
-            'CPU': int(os.cpu_count()*0.2)
+            'CPU': 2
         }
     ),
     run_config=RunConfig(
@@ -305,7 +305,7 @@ tuner = Tuner(
     trainer,
     param_space=tune_params,
     tune_config=TuneConfig(
-        max_concurrent_trials=5,
+        max_concurrent_trials=int((os.cpu_count() * 0.6) / 2),
         scheduler=ASHAScheduler(
             metric = 'test/test_score', # mean accuracy according to scikit-learn's doc
             mode='max'
