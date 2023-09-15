@@ -28,7 +28,6 @@ from sklearn.linear_model import SGDClassifier
 from ray import tune
 from ray.tune import Tuner, TuneConfig
 from ray.tune.schedulers import ASHAScheduler
-from ray.tune.search.skopt import SkOptSearch
 from ray.air.config import RunConfig, ScalingConfig
 
 
@@ -215,73 +214,70 @@ print('model params')
 
 if opt['classifier'] == 'onesvm':
     clf = ScoringSGDOneClassSVM()
+    num_samples = 20
     train_params = {
         'nu' : 0.1,
         'learning_rate' : 'constant',
-        'eta0' : 4,
         'tol' : 1e-3
     }
     tune_params = {
         'params' : {
-            'nu' : tune.grid_search(np.linspace(0.1, 1, 10)),
+            'nu' : tune.uniform(0,1),
             'learning_rate' : tune.grid_search(['constant','optimal','invscaling','adaptive']),
-            'eta0' : tune.grid_search(np.logspace(-4,4,10)),
-            'tol' : tune.grid_search([1e-3])
         }
     }
 elif opt['classifier'] == 'linearsvm':
     clf = SGDClassifier()
+    num_samples = 60
     train_params = {
         'loss' : 'hinge',
         'penalty' : 'l2',
         'alpha' : 4,
         'learning_rate' : 'constant',
-        'eta0' : 4,
         'n_jobs' : -1
     }
     tune_params = {
         'params' : {
-            'loss' : tune.grid_search(['hinge']),
             'penalty' : tune.grid_search(['l2', 'l1', 'elasticnet']),
-            'alpha' : tune.grid_search(np.logspace(0,5,10)),
+            'alpha' : tune.loguniform(1e-4,1e4),
             'learning_rate' : tune.grid_search(['constant','optimal','invscaling','adaptive']),
-            'eta0' : tune.grid_search(np.logspace(-4,4,10))
         }
     }
 elif opt['classifier'] == 'sgd':
     clf = SGDClassifier()
+    num_samples = 300
     train_params = {
         'loss' : 'hinge',
         'penalty' : 'l2',
         'alpha' : 4,
         'learning_rate' : 'constant',
-        'eta0' : 4,
         'n_jobs' : -1
     }
     tune_params = {
         'params' : {
             'loss' : tune.grid_search(['hinge', 'log_loss', 'modified_huber', 'squared_hinge', 'perceptron']),
             'penalty' : tune.grid_search(['l2', 'l1', 'elasticnet']),
-            'alpha' : tune.grid_search(np.logspace(0,5,10)),
+            'alpha' : tune.loguniform(1e-4,1e4),
             'learning_rate' : tune.grid_search(['constant','optimal','invscaling','adaptive']),
-            'eta0' : tune.grid_search(np.logspace(-4,4,10))
         }
     }
 elif opt['classifier'] == 'mnb':
     clf = MultinomialNB()
+    num_samples = 10
     train_params = {
         'alpha' : 1.0e-10,
         'fit_prior' : True
     }
     tune_params = {
         'params' : {
-            'alpha' : tune.grid_search(np.linspace(1.0e-10,1,10)),
+            'alpha' : tune.uniform(0,1),
             'fit_prior' : tune.grid_search([True,False])
         }
     }
 
 # Trainer/Tuner definition
 ################################################################################
+# Basic Ray tuner using GridSearch algo
 print('trainer')
 trainer = SklearnPartialTrainer(
     estimator=clf,
@@ -293,44 +289,17 @@ trainer = SklearnPartialTrainer(
     batch_size=4,
     training_epochs=10,
     set_estimator_cpus=True,
-    # scaling_config=ScalingConfig(
-    #     trainer_resources={
-    #         'CPU': int((os.cpu_count() * 0.8))
-    #     }
-    # ),
     run_config=RunConfig(
         name = opt['classifier'],
         local_dir = opt['workdir']
     ),
 )
-
-# Ray + SkOpt
-# print('tuner')
-# tuner = Tuner(
-#     trainer,
-#     param_space = tune_params,
-#     tune_config = TuneConfig(
-#         num_samples = 5,
-#         max_concurrent_trials = int((os.cpu_count() * 0.8)),
-#         search_alg = SkOptSearch(
-#             metric = 'test/test_score', # mean accuracy according to scikit-learn's doc
-#             mode = 'max'
-#         ),
-#         scheduler = ASHAScheduler(
-#             metric = 'test/test_score', # mean accuracy according to scikit-learn's doc
-#             mode = 'max'
-#         )
-
-#     )
-# )
-
-# Basic Ray tuner using GridSearch algo
 print('tuner')
 tuner = Tuner(
     trainer,
     param_space = tune_params,
     tune_config = TuneConfig(
-        num_samples = 5,
+        num_samples = num_samples,
         max_concurrent_trials = int((os.cpu_count() * 0.8)),
         scheduler = ASHAScheduler(
             metric = 'test/test_score', # mean accuracy according to scikit-learn's doc
@@ -339,10 +308,8 @@ tuner = Tuner(
     )
 )
 
-
 # Tuning results
 ################################################################################
-print('results output')
 
 results = tuner.fit()
 

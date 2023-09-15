@@ -336,5 +336,5 @@ class SklearnPartialTrainer(SklearnTrainer):
                     )
             score_time = time() - start_time
             results[key]["score_time"] = score_time
-            results[key][f"test_score"] = np.mean(test_scores)
+            results[key]["test_score"] = np.mean(test_scores)
         return results
