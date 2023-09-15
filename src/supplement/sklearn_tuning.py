@@ -106,6 +106,10 @@ def split_val_test_ds(ds, data):
     if os.path.exists(val_path):
         files_lst = glob(os.path.join(val_path, '*.parquet'))
         val_ds = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
+        val_ds = val_ds.map_batches(
+            convert_archaea_bacteria,
+            batch_format = 'pandas'
+        )
     else:
         val_ds = ds.random_sample(0.1)
         if val_ds.count() == 0:
@@ -115,6 +119,10 @@ def split_val_test_ds(ds, data):
     if os.path.exists(test_path):
         files_lst = glob(os.path.join(test_path, '*.parquet'))
         test_ds = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
+        test_ds = test_ds.map_batches(
+            convert_archaea_bacteria,
+            batch_format = 'pandas'
+        )
     else:
         test_ds = ds.random_sample(0.1)
         if test_ds.count() == 0:
@@ -218,7 +226,8 @@ if opt['classifier'] == 'onesvm':
     train_params = {
         'nu' : 0.1,
         'learning_rate' : 'constant',
-        'tol' : 1e-3
+        'tol' : 1e-3,
+        'eta0' : 0.001
     }
     tune_params = {
         'params' : {
@@ -228,12 +237,13 @@ if opt['classifier'] == 'onesvm':
     }
 elif opt['classifier'] == 'linearsvm':
     clf = SGDClassifier()
-    num_samples = 60
+    # num_samples = 60
     train_params = {
         'loss' : 'hinge',
         'penalty' : 'l2',
         'alpha' : 4,
         'learning_rate' : 'constant',
+        'eta0' : 0.001,
         'n_jobs' : -1
     }
     tune_params = {
@@ -245,12 +255,13 @@ elif opt['classifier'] == 'linearsvm':
     }
 elif opt['classifier'] == 'sgd':
     clf = SGDClassifier()
-    num_samples = 300
+    # num_samples = 300
     train_params = {
         'loss' : 'hinge',
         'penalty' : 'l2',
         'alpha' : 4,
         'learning_rate' : 'constant',
+        'eta0' : 0.001,
         'n_jobs' : -1
     }
     tune_params = {
@@ -263,7 +274,7 @@ elif opt['classifier'] == 'sgd':
     }
 elif opt['classifier'] == 'mnb':
     clf = MultinomialNB()
-    num_samples = 10
+    # num_samples = 10
     train_params = {
         'alpha' : 1.0e-10,
         'fit_prior' : True
@@ -299,7 +310,7 @@ tuner = Tuner(
     trainer,
     param_space = tune_params,
     tune_config = TuneConfig(
-        num_samples = num_samples,
+        num_samples = 5,
         max_concurrent_trials = int((os.cpu_count() * 0.8)),
         scheduler = ASHAScheduler(
             metric = 'test/test_score', # mean accuracy according to scikit-learn's doc
