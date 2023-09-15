@@ -28,7 +28,9 @@ from sklearn.linear_model import SGDClassifier
 from ray import tune
 from ray.tune import Tuner, TuneConfig
 from ray.tune.schedulers import ASHAScheduler
+from ray.tune.search.skopt import SkOptSearch
 from ray.air.config import RunConfig, ScalingConfig
+
 
 warnings.simplefilter(action='ignore')
 
@@ -302,15 +304,37 @@ trainer = SklearnPartialTrainer(
     ),
 )
 
+# Ray + SkOpt
+# print('tuner')
+# tuner = Tuner(
+#     trainer,
+#     param_space = tune_params,
+#     tune_config = TuneConfig(
+#         num_samples = 5,
+#         max_concurrent_trials = int((os.cpu_count() * 0.8)),
+#         search_alg = SkOptSearch(
+#             metric = 'test/test_score', # mean accuracy according to scikit-learn's doc
+#             mode = 'max'
+#         ),
+#         scheduler = ASHAScheduler(
+#             metric = 'test/test_score', # mean accuracy according to scikit-learn's doc
+#             mode = 'max'
+#         )
+
+#     )
+# )
+
+# Basic Ray tuner using GridSearch algo
 print('tuner')
 tuner = Tuner(
     trainer,
-    param_space=tune_params,
-    tune_config=TuneConfig(
-        max_concurrent_trials=int((os.cpu_count() * 0.8)),
-        scheduler=ASHAScheduler(
+    param_space = tune_params,
+    tune_config = TuneConfig(
+        num_samples = 5,
+        max_concurrent_trials = int((os.cpu_count() * 0.8)),
+        scheduler = ASHAScheduler(
             metric = 'test/test_score', # mean accuracy according to scikit-learn's doc
-            mode='max'
+            mode = 'max'
         )
     )
 )
