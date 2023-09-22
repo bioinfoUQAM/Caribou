@@ -20,13 +20,14 @@ from sklearn.linear_model import SGDOneClassSVM, SGDClassifier
 from ray.air.config import RunConfig, ScalingConfig
 
 # Predicting
-from ray.train.sklearn import SklearnPredictor
 from ray.train.batch_predictor import BatchPredictor
+from ray.train.sklearn.sklearn_predictor import SklearnPredictor
 
 # Parent class
 from models.ray_utils import ModelsUtils
 from models.sklearn.ray_sklearn_partial_trainer import SklearnPartialTrainer
-from models.sklearn.ray_sklearn_probability_predictor import SklearnProbaPredictor
+from models.sklearn.ray_sklearn_tensor_predictor import SklearnTensorPredictor
+from models.sklearn.ray_sklearn_probability_predictor import SklearnTensorProbaPredictor
 
 
 __author__ = 'Nicolas de Montigny'
@@ -160,35 +161,36 @@ class SklearnModel(ModelsUtils):
             print('Training bacterial extractor with One Class SVM')
             self._clf = SGDOneClassSVM()
             self._train_params = {
-                'nu' : 0.1,
-                'learning_rate': 'invscaling',
-                'eta0' : 1000,
-                'tol' : 1e-4
+                'nu' : 0.026441491,
+                'learning_rate' : 'constant',
+                'tol' : 1e-3,
+                'eta0' : 0.001
             }
         elif self.classifier == 'linearsvm':
             print('Training bacterial / host classifier with SGD')
             self._clf = SGDClassifier()
             self._train_params = {
-                'alpha' : 0.045,
-                'eta0' : 1000,
-                'learning_rate': 'adaptive',
-                'loss' : 'modified_huber',
-                'penalty' : 'elasticnet'
+                'loss' : 'hinge',
+                'penalty' : 'elasticnet',
+                'alpha' : 141.6146176,
+                'learning_rate' : 'adaptive',
+                'eta0' : 0.001,
+                'n_jobs' : -1
             }
         elif self.classifier == 'sgd':
             print('Training multiclass SGD classifier')
             self._clf = SGDClassifier()
             self._train_params = {
-                'alpha' : 0.045,
+                'alpha' : 173.5667373,
                 'learning_rate' : 'optimal',
-                'loss': 'log_loss',
-                'penalty' : 'elasticnet'
+                'loss': 'modified_huber',
+                'penalty' : 'l2'
             }
         elif self.classifier == 'mnb':
             print('Training multiclass Multinomial Naive Bayes classifier')
             self._clf = MultinomialNB()
             self._train_params = {
-                'alpha' : 1.0,
+                'alpha' : 0.243340248,
                 'fit_prior' : True
             }
 
@@ -233,9 +235,11 @@ class SklearnModel(ModelsUtils):
         self._model_ckpt = training_result.checkpoint
 
     def _predict_cv(self, df):
+        print('_predict_cv')
         if df.count() > 0:
-            self._predictor = BatchPredictor.from_checkpoint(self._model_ckpt, SklearnPredictor)
-            predictions = self._predictor.predict(df, batch_size = self.batch_size)
+            predict_kwargs = {'features':self.kmers, 'num_estimator_cpus':-1}
+            self._predictor = BatchPredictor.from_checkpoint(self._model_ckpt, SklearnTensorPredictor)
+            predictions = self._predictor.predict(df, batch_size = self.batch_size, feature_columns = ['__value__'], **predict_kwargs)
             predictions = np.array(predictions.to_pandas()).reshape(-1)
 
             return self._label_decode(predictions)
@@ -247,11 +251,14 @@ class SklearnModel(ModelsUtils):
         if df.count() > 0:
             df = self._preprocessor.preprocessors[0].transform(df)
             if self.classifier == 'onesvm':
-                self._predictor = BatchPredictor.from_checkpoint(self._models_collection['domain'], SklearnPredictor)
-                predictions = self._predictor.predict(df, batch_size = self.batch_size)
+                predict_kwargs = {'features':self.kmers, 'num_estimator_cpus':-1}
+                self._predictor = BatchPredictor.from_checkpoint(self._models_collection['domain'], SklearnTensorPredictor)
+                predictions = self._predictor.predict(df, batch_size = self.batch_size, feature_columns = ['__value__'], **predict_kwargs)
                 predictions = np.array(predictions.to_pandas()).reshape(-1)
             else:
-                self._predictor = BatchPredictor.from_checkpoint(self._model_ckpt, SklearnProbaPredictor)
+                predict_kwargs = {'features':self.kmers, 'num_estimator_cpus':-1}
+                self._predictor = BatchPredictor.from_checkpoint(self._model_ckpt, SklearnTensorProbaPredictor)
+                predictions = self._predictor.predict(df, batch_size = self.batch_size, feature_columns = ['__value__'], **predict_kwargs)
                 predictions = self._prob_2_cls(predictions, len(self._encoded), threshold)
             return self._label_decode(predictions)    
         else:

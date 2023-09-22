@@ -321,6 +321,8 @@ class SklearnPartialTrainer(SklearnTrainer):
                             batch[i] = batch[i][:len(self._features_list)]
                 labels = np.ravel(labels[self.label_column])
 
+                print(batch)
+
                 try:
                     test_scores.append(_score(estimator, batch, labels, scorers))
                 except Exception:
