@@ -80,6 +80,7 @@ def sim_4_cv(df, database_data, name):
         cls = pd.concat([cls, batch[cols]], axis = 0, ignore_index = True)
     
     sim_outdir = os.path.dirname(database_data['profile'])
+    print(f'nb samples : {len(list(cls["id"]))}')
     cv_sim = readsSimulation(database_data['fasta'], cls, list(cls['id']), 'miseq', sim_outdir, name)
     sim_data = cv_sim.simulation(k, database_data['kmers'])
     files_lst = glob(os.path.join(sim_data['profile'], '*.parquet'))
@@ -115,7 +116,7 @@ def split_val_test_ds(ds, data):
         if val_ds.count() == 0:
             nb_smpl = round(ds.count() * 0.1)
             val_ds = ds.random_shuffle().limit(nb_smpl)
-        val_ds = sim_4_cv(ds, data, 'validation')
+        val_ds = sim_4_cv(val_ds, data, 'validation')
     if os.path.exists(test_path):
         files_lst = glob(os.path.join(test_path, '*.parquet'))
         test_ds = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
@@ -128,7 +129,7 @@ def split_val_test_ds(ds, data):
         if test_ds.count() == 0:
             nb_smpl = round(ds.count() * 0.1)
             test_ds = ds.random_shuffle().limit(nb_smpl)
-        test_ds = sim_4_cv(ds, data, 'test')
+        test_ds = sim_4_cv(test_ds, data, 'test')
     return val_ds, test_ds
 
 # CLI argument

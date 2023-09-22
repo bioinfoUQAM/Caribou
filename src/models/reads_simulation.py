@@ -75,19 +75,21 @@ class readsSimulation():
             self._fasta_host = None
         self._cls_in = cls
         self._genomes = genomes
-        self._nb_reads = len(genomes) * 2
+        self._nb_reads = len(genomes) * 5
         self._sequencing = sequencing
         self._path = outdir
+        self._tmp_path = os.path.join(outdir,'tmp')
         self._name = name
-        self._prefix = os.path.join(outdir,f'sim_{self._name}')
+        self._prefix = os.path.join(self._tmp_path,f'sim_{self._name}')
         # Files paths
-        self._fasta_tmp = os.path.join(outdir, f'sim_{self._name}_tmp.fasta')
-        self._R1_fastq = os.path.join(outdir, f'sim_{self._name}_R1.fastq')
-        self._R2_fastq = os.path.join(outdir, f'sim_{self._name}_R2.fastq')
+        self._fasta_tmp = os.path.join(self._tmp_path, f'sim_{self._name}_tmp.fasta')
+        self._R1_fastq = os.path.join(self._tmp_path, f'sim_{self._name}_R1.fastq')
+        self._R2_fastq = os.path.join(self._tmp_path, f'sim_{self._name}_R2.fastq')
         self._fasta_out = os.path.join(outdir, f'sim_{self._name}_data.fna.gz')
         self._cls_out = os.path.join(outdir, f'sim_{self._name}_class.csv')
         # Dataset variables
         self.kmers_data = {}
+        os.mkdir(self._tmp_path)
 
     def simulation(self, k = None, kmers_list = None):
         k, kmers_list = self._verify_sim_arguments(k, kmers_list)

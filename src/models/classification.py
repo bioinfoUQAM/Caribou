@@ -529,7 +529,7 @@ class ClassificationMethods():
             if cv_ds.count() == 0:
                 nb_smpl = round(ds.count() * 0.1)
                 cv_ds = ds.random_shuffle().limit(nb_smpl)
-            cv_ds = self._sim_4_cv(ds, data, name)
+            cv_ds = self._sim_4_cv(cv_ds, data, name)
         return cv_ds
 
 # Helper functions outside of class
