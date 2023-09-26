@@ -1,7 +1,5 @@
 #!/usr/bin python3
 
-import ray
-import json
 import argparse
 
 from utils import *
@@ -30,12 +28,7 @@ def bacteria_extraction_train_cv(opt):
     outdirs = define_create_outdirs(opt['outdir'])
     
     # Initialize cluster
-    ray.init(
-        _system_config = {
-            'object_spilling_config': json.dumps(
-                {'type': 'filesystem', 'params': {'directory_path': str(opt['workdir'])}})
-        }
-    )
+    init_ray_cluster(opt['workdir'])
 
 # Training and cross-validation of models for bacteria extraction / host removal
 ################################################################################

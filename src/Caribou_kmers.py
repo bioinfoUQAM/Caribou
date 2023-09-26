@@ -1,10 +1,7 @@
 #!/usr/bin python3
 
-import ray
-import json
 import os.path
 import argparse
-import numpy as np
 
 from utils import *
 from time import time
@@ -38,12 +35,7 @@ def kmers_dataset(opt):
     outdirs = define_create_outdirs(opt['outdir'])
     
     # Initialize cluster
-    ray.init(
-        _system_config = {
-            'object_spilling_config': json.dumps(
-                {'type': 'filesystem', 'params': {'directory_path': str(opt['workdir'])}})
-        }
-    )
+    init_ray_cluster(opt['workdir'])
 
 # K-mers profile extraction
 ################################################################################
@@ -52,6 +44,7 @@ def kmers_dataset(opt):
         t_start = time()
         # Reference Database Only
         if opt['seq_file'] is not None and opt['cls_file'] is not None and opt['seq_file_host'] is None and opt['cls_file_host'] is None:
+            print("DB")
             k_profile_database = build_load_save_data((opt['seq_file'],opt['cls_file']),
                 None,
                 outdirs["data_dir"],
@@ -59,8 +52,6 @@ def kmers_dataset(opt):
                 opt['host_name'],
                 k = opt['k_length'],
                 kmers_list = None,
-                features_threshold = opt['features_threshold'],
-                nb_features_keep = opt['nb_features']
             )
 
             # Save kmers list to file for further extractions
@@ -74,7 +65,7 @@ def kmers_dataset(opt):
 
         # Reference database and host
         elif opt['seq_file'] is not None and opt['cls_file'] is not None and opt['seq_file_host'] is not None and opt['cls_file_host'] is not None:
-
+            print("DB + Host")
             t_start = time()
             k_profile_database, k_profile_host  = build_load_save_data((opt['seq_file'],opt['cls_file']),
                 (opt['seq_file_host'],opt['cls_file_host']),
@@ -83,8 +74,6 @@ def kmers_dataset(opt):
                 opt['host_name'],
                 k = opt['k_length'],
                 kmers_list = None,
-                features_threshold = opt['features_threshold'],
-                nb_features_keep = opt['nb_features']
             )
 
             # Save kmers list to file for further extractions
@@ -97,11 +86,11 @@ def kmers_dataset(opt):
             print(f"Caribou finished extracting k-mers of {opt['dataset_name']} and {opt['host_name']} in {t_kmers} seconds.")
     else:
         # Reference Host only
-        if opt['seq_file'] is not None and opt['cls_file'] is not None:
-
+        if opt['seq_file_host'] is not None and opt['cls_file_host'] is not None:
+            print("Host")
             t_start = time()
             k_profile_host = build_load_save_data(None,
-            (opt['seq_file'],opt['cls_file']),
+            (opt['seq_file_host'],opt['cls_file_host']),
             outdirs["data_dir"],
             None,
             opt['host_name'],
@@ -114,9 +103,9 @@ def kmers_dataset(opt):
 
         # Dataset to analyse only
         elif opt['seq_file'] is not None and opt['cls_file'] is None:
-
+            print("Dataset")
             t_start = time()
-            k_profile_metagenome = build_load_save_data(opt['seq_file'],
+            k_profile_metagenome = build_load_save_data((opt['seq_file']),
             None,
             outdirs["data_dir"],
             opt['dataset_name'],
@@ -152,8 +141,6 @@ if __name__ == "__main__":
     # Parameters
     parser.add_argument('-k','--k_length', required=True, type=int, help='Length of k-mers to extract')
     parser.add_argument('-l','--kmers_list', default=None, type=Path, help='PATH to a file containing a list of k-mers to be extracted if the dataset is not a training database')
-    parser.add_argument('-t','--features_threshold', default=np.inf, type=float, help='Treshold of features varaicne to restric extraction to, will keep only features with higher variance')
-    parser.add_argument('-f','--nb_features', default=np.inf, type=int, help='Number of features to restric extraction to, will keep this number of features with higher variance')
     parser.add_argument('-o','--outdir', required=True, type=Path, help='PATH to a directory on file where outputs will be saved')
     parser.add_argument('-wd','--workdir', default='/tmp/spill', type=Path, help='Optional. Path to a working directory where tuning data will be spilled')
     args = parser.parse_args()

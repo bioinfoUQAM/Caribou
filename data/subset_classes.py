@@ -73,5 +73,6 @@ cls = pd.read_csv(opt['classes'])
 # Merge and save the classes subset file
 ################################################################################
 cls_out = pd.merge(cls,ids, on = 'id', how = 'inner')
+cls_out = cls_out.drop_duplicates(subset = 'id', keep = 'first')
 
 cls_out.to_csv(opt['output'], index = False)

@@ -224,7 +224,7 @@ class SklearnPartialTrainer(SklearnTrainer):
                                     Removing the last {} additionnal values, this may influence training.\
                                         If this persists over multiple samples, please rerun the K-mers extraction".format(len(batch_X[i]) - len(self._features_list)))
                                 batch_X[i] = batch_X[i][:len(self._features_list)]
-                    batch_y = np.ravel(batch_y)
+                    batch_y = np.ravel(batch_y[self.label_column])
                     try:
                         self.estimator.partial_fit(batch_X, batch_y, classes = self._labels, **self.fit_params)
                     except TypeError:
@@ -238,7 +238,7 @@ class SklearnPartialTrainer(SklearnTrainer):
                     batch_size = 1,
                     batch_format = 'numpy'
                 )):
-                    X_calib_df[ind] = batch[0]
+                    X_calib_df[ind] = batch['__value__']
 
                 X_calib = pd.DataFrame(X_calib_df, columns = self._features_list)
                 y_calib = y_calib.to_pandas()
@@ -319,9 +319,10 @@ class SklearnPartialTrainer(SklearnTrainer):
                                 Removing the last {} additionnal values, this may influence training.\
                                     If this persists over multiple samples, please rerun the K-mers extraction".format(len(batch[i]) - len(self._features_list)))
                             batch[i] = batch[i][:len(self._features_list)]
-                labels = np.ravel(labels)
+                labels = np.ravel(labels[self.label_column])
 
-                # batch = pd.DataFrame(batch, columns = self._features_list)
+                print(batch)
+
                 try:
                     test_scores.append(_score(estimator, batch, labels, scorers))
                 except Exception:
@@ -337,5 +338,5 @@ class SklearnPartialTrainer(SklearnTrainer):
                     )
             score_time = time() - start_time
             results[key]["score_time"] = score_time
-            results[key][f"test_score"] = np.mean(test_scores)
+            results[key]["test_score"] = np.mean(test_scores)
         return results
