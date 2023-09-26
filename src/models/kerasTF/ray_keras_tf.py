@@ -11,7 +11,6 @@ from shutil import rmtree
 # Preprocessing
 from ray.data.preprocessors import LabelEncoder, Chain
 from models.ray_tensor_min_max import TensorMinMaxScaler
-from models.ray_tensor_max_abs import TensorMaxAbsScaler
 from models.kerasTF.ray_one_hot_tensor import OneHotTensorEncoder
 
 # Parent class / models
@@ -21,8 +20,10 @@ from models.kerasTF.build_neural_networks import *
 # Training
 import tensorflow as tf
 from ray.air import session
-from ray.air.integrations.keras import Callback
-from ray.air.config import ScalingConfig, DatasetConfig
+from ray.train import DataConfig
+# from ray.air.integrations.keras import Callback
+from ray.air.integrations.keras import ReportCheckpointCallback
+from ray.air.config import ScalingConfig #DatasetConfig
 from ray.train.tensorflow import TensorflowTrainer, TensorflowCheckpoint, prepare_dataset_shard
 
 # Tuning
@@ -31,7 +32,6 @@ from ray.air.config import RunConfig
 # Predicting
 from ray.train.tensorflow import TensorflowPredictor
 from ray.train.batch_predictor import BatchPredictor
-from joblib import Parallel, delayed, parallel_backend
 
 __author__ = 'Nicolas de Montigny'
 
@@ -181,12 +181,6 @@ class KerasTFModel(ModelsUtils):
 
         y_pred = self.predict(df_test.drop_columns([self.taxa]), threshold = 0)
 
-        for file in glob(os.path.join(os.path.dirname(kmers_ds['profile']), '*sim*')):
-            if os.path.isdir(file):
-                rmtree(file)
-            else:
-                os.remove(file)
-
         self._cv_score(y_true, y_pred)
 
     def _fit_model(self, datasets):
@@ -220,20 +214,21 @@ class KerasTFModel(ModelsUtils):
                     'GPU': self._nb_GPU_per_worker
                 }
             ),
-            dataset_config={
-                'train': DatasetConfig(
-                    fit=False,
-                    transform=False,
-                    split=True,
-                    use_stream_api=True
-                ),
-                'validation': DatasetConfig(
-                    fit=False,
-                    transform=False,
-                    split=True,
-                    use_stream_api=False
-                )
-            },
+            # dataset_config={
+            #     DataConfig()
+                # 'train': DatasetConfig(
+                #     fit=False,
+                #     transform=False,
+                #     split=True,
+                #     use_stream_api=True
+                # ),
+                # 'validation': DatasetConfig(
+                #     fit=False,
+                #     transform=False,
+                #     split=True,
+                #     use_stream_api=False
+                # )
+            # },
             run_config=RunConfig(
                 name=self.classifier,
                 local_dir=self._workdir,
@@ -243,68 +238,6 @@ class KerasTFModel(ModelsUtils):
         training_result = self._trainer.fit()
         self._model_ckpt = training_result.best_checkpoints[0][0]
 
-    """
-    # This is a function for using with parent class training data decomposition that may be implemented later on
-    def _fit_model_multiclass(self, datasets):
-        print('_fit_model')
-        training_collection = datasets.pop('train')
-        for name, ds in datasets.items():
-            print(f'dataset preprocessing : {name}')
-            ds = ds.drop_columns(['id'])
-            ds = self._preprocessor.transform(ds)
-            datasets[name] = ds.fully_executed()
-
-        # Training parameters
-        self._train_params = {
-            'batch_size': self.batch_size,
-            'epochs': self._training_epochs,
-            'size': self._nb_kmers,
-            'nb_cls': self._nb_classes,
-            'model': self.classifier
-        }
-
-        for tax, ds in training_collection.items():
-            ds = ds.drop_columns(['id'])
-            ds = self._preprocessor.transform(ds)
-            training_ds = {**{'train' : ds.fully_executed()}, **datasets}
-
-            # Define trainer / tuner
-            self._trainer = TensorflowTrainer(
-                train_loop_per_worker = train_func,
-                train_loop_config = self._train_params,
-                scaling_config = ScalingConfig(
-                    trainer_resources={'CPU': self._nb_CPU_data},
-                    num_workers = self._n_workers,
-                    use_gpu = self._use_gpu,
-                    resources_per_worker={
-                        'CPU': self._nb_CPU_per_worker,
-                        'GPU': self._nb_GPU_per_worker
-                    }
-                ),
-                dataset_config = {
-                    'train': DatasetConfig(
-                        fit = False,
-                        transform = False,
-                        split = True,
-                        use_stream_api = True
-                    ),
-                    'validation': DatasetConfig(
-                        fit = False,
-                        transform = False,
-                        split = True,
-                        use_stream_api = False
-                    )
-                },
-                run_config = RunConfig(
-                    name = self.classifier,
-                    local_dir = self._workdir,
-                ),
-                datasets = training_ds,
-            )
-            training_result = self._trainer.fit()
-            self._models_collection[tax] = training_result.best_checkpoints[0][0]
-    """
-    
     def predict(self, df, threshold=0.8):
         print('predict')
         if df.count() > 0:
@@ -376,34 +309,6 @@ class KerasTFModel(ModelsUtils):
         return np.concatenate(predict)
 
 
-
-    """
-    # This is a function for using with parent class training data decomposition that may be implemented later on
-    def _prob_2_cls_multiclass(self, pred_dct, nb_records, threshold):
-        print('_prob_2_cls_multiclass')
-        def map_predicted_label(df):
-            predict = pd.DataFrame({
-                'best_proba': [df['predictions'][i][np.argmax(df['predictions'][i])] for i in range(len(df))],
-                'predicted_label': df["predictions"].map(lambda x: np.array(x).argmax())
-            })
-            return predict
-
-        global_predict = pd.DataFrame({
-            'predict_proba': np.zeros(nb_records, dtype=np.float32),
-            'predict_cls': np.zeros(nb_records, dtype=np.int32),
-        })
-
-        for tax, local_predict in pred_dct.items():
-            with parallel_backend('threading'):
-                local_predict = Parallel(n_jobs=-1, prefer='threads', verbose=1)(
-                    delayed(map_predicted_label)(batch) for batch in local_predict.iter_batches(batch_size = self.batch_size))
-            local_predict = pd.concat(local_predict, ignore_index=True)
-            global_predict.loc[global_predict['predict_proba'] < local_predict['best_proba'],'predict_cls'] = np.array(local_predict.loc[local_predict['best_proba'] > global_predict['predict_proba'], 'predicted_label'])
-            global_predict.loc[global_predict['predict_proba'] < local_predict['best_proba'],'predict_proba'] = np.array(local_predict.loc[local_predict['best_proba'] > global_predict['predict_proba'], 'best_proba'])
-        # global_predict.loc[global_predict['predict_proba'] < threshold, 'predict_cls'] = -1
-    
-        return np.array(global_predict['predict_cls'])
-    """            
 # Training/building function outside of the class as mentioned on the Ray discussion
 # https://discuss.ray.io/t/statuscode-resource-exhausted/4379/16
 ################################################################################
@@ -421,6 +326,7 @@ def train_func(config):
     size = config.get('size')
     nb_cls = config.get('nb_cls')
     model = config.get('model')
+    kmers = config.get('kmers')
 
     # Model setup 
     strategy = tf.distribute.MultiWorkerMirroredStrategy()
@@ -431,31 +337,51 @@ def train_func(config):
     train_data = session.get_dataset_shard('train')
     val_data = session.get_dataset_shard('validation')
 
-    def to_tf_dataset(data, batch_size):
-        def to_tensor_iterator():
-            for batch in data.iter_tf_batches(
-                batch_size=batch_size
-            ):
-                yield batch['__value__'], batch['labels']
+    # def to_tf_dataset(data, batch_size):
+    #     def to_tensor_iterator():
+    #         for batch in data.iter_batches(
+    #             batch_size = batch_size,
+    #             batch_format = 'pandas'
+    #         ):
+    #             labels = batch.loc['labels']
+    #             batch = batch.drop(['id','labels'], axis = 1)
+    #             return batch.to_numpy(), labels.to_numpy()
+    #         # for batch in data.iter_tf_batches(
+    #         #     batch_size = batch_size
+    #         # ):
+    #         #     yield batch['__value__'], batch['labels']
 
-        output_signature = (
-            tf.TensorSpec(shape=(None, size), dtype=tf.float32),
-            tf.TensorSpec(shape=(None, nb_cls), dtype=tf.int64),
+    #     output_signature = (
+    #         tf.TensorSpec(shape=(None, size), dtype=tf.float32),
+    #         tf.TensorSpec(shape=(None, nb_cls), dtype=tf.int64),
+    #     )
+    #     tf_data = tf.data.Dataset.from_generator(
+    #         to_tensor_iterator, output_signature=output_signature
+    #     )
+    #     return prepare_dataset_shard(tf_data)
+
+    # batch_val = to_tf_dataset(val_data, batch_size)
+
+    # # Fit the model on streaming data
+    # for epoch_train in train_data.iter_batches(epochs):
+    #     batch_train = to_tf_dataset(epoch_train, batch_size)
+
+    batch_val = val_data.to_tf(
+            feature_columns = '__value__',
+            label_columns = 'labels',
+            batch_size = batch_size
         )
-        tf_data = tf.data.Dataset.from_generator(
-            to_tensor_iterator, output_signature=output_signature
+
+    for _ in range(epochs):
+        batch_train = train_data.to_tf(
+            feature_columns = '__value__',
+            label_columns = 'labels',
+            batch_size = batch_size
         )
-        return prepare_dataset_shard(tf_data)
-
-    batch_val = to_tf_dataset(val_data, batch_size)
-
-    # Fit the model on streaming data
-    for epoch_train in train_data.iter_epochs(epochs):
-        batch_train = to_tf_dataset(epoch_train, batch_size)
         history = model.fit(
             x = batch_train,
             validation_data = batch_val,
-            callbacks = [Callback()],
+            callbacks = [ReportCheckpointCallback()],
             verbose = 0
         )
         session.report({

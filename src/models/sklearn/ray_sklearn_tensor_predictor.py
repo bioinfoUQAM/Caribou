@@ -13,9 +13,9 @@ from ray.train.sklearn import SklearnPredictor
 
 TENSOR_COLUMN_NAME = '__value__'
 
-class SklearnTensorProbaPredictor(SklearnPredictor):
+class SklearnTensorPredictor(SklearnPredictor):
     """
-    Class adapted from Ray's SklearnPredictor class to allow for probability predictions.
+    Class adapted from Ray's SklearnPredictor class to allow for use with tensor column.
     """
 
     def __init__(
@@ -38,13 +38,12 @@ class SklearnTensorProbaPredictor(SklearnPredictor):
         if num_estimator_cpus:
             _set_cpu_params(self.estimator, num_estimator_cpus)
 
-        if TENSOR_COLUMN_NAME in data:
-            data = data[TENSOR_COLUMN_NAME].to_numpy()
-            data = _unwrap_ndarray_object_type_if_needed(data)
-            data = pd.DataFrame(data, columns = features)
+        data = data[TENSOR_COLUMN_NAME].to_numpy()
+        data = _unwrap_ndarray_object_type_if_needed(data)
+        data = pd.DataFrame(data, columns = features)
 
         with parallel_backend("ray", n_jobs=num_estimator_cpus):
-            df = pd.DataFrame(self.estimator.predict_proba(data, **predict_kwargs))
+            df = pd.DataFrame(self.estimator.predict(data, **predict_kwargs))
         df.columns = (
             ["predictions"]
             if len(df.columns) == 1

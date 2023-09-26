@@ -18,7 +18,7 @@ class OneClassSVMLabelEncoder(LabelEncoder):
     def _fit(self, dataset : Dataset) -> Preprocessor:
         self.stats_ = OrderedDict()
         self.stats_[f"unique_values({self.label_column})"] = {
-            'bacteria' : 1
+            'bacteria' : 1,
         }
         return self
 
@@ -27,6 +27,7 @@ class OneClassSVMLabelEncoder(LabelEncoder):
 
         def column_label_encoder(s: pd.Series):
             s_values = self.stats_[f"unique_values({s.name})"]
+            s = s.str.lower()
             s = s.map(s_values)
             s = s.fillna(-1)
             return s

@@ -1,8 +1,9 @@
 
 from keras import initializers
 from keras import backend as K
-from keras.utils import tf_inspect
-from keras.mixed_precision import policy
+# from keras.utils import tf_inspect
+import inspect
+# from keras.mixed_precision import policy
 from tensorflow.keras.layers import InputSpec, Layer
 
 __author__ = "Abdelkareem et al. 2018"
@@ -29,7 +30,8 @@ class AttentionWeightedAverage(Layer):
         Method adapted from module keras/keras/engine/base_layer.py of
         Keras API to work with custom layer cloning
         """
-        all_args = tf_inspect.getfullargspec(self.__init__).args
+        # all_args = tf_inspect.getfullargspec(self.__init__).args
+        all_args = inspect.getfullargspec(self.__init__).args
         config = {
             'name': self.name,
             'trainable': self.trainable,
@@ -39,7 +41,8 @@ class AttentionWeightedAverage(Layer):
         }
         if hasattr(self, '_batch_input_shape'):
           config['batch_input_shape'] = self._batch_input_shape
-        config['dtype'] = policy.serialize(self._dtype_policy)
+        # config['dtype'] = policy.serialize(self._dtype_policy)
+        config['dtype'] = None
         if hasattr(self, 'dynamic'):
           # Only include `dynamic` in the `config` if it is `True`
           if self.dynamic:

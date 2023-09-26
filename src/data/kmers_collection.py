@@ -1,28 +1,29 @@
 import os
-import gc
 import ray
+import gzip
 import warnings
 
 import numpy as np
 import pandas as pd
 
+from Bio import SeqIO
 from glob import glob
 from shutil import rmtree
-from subprocess import run
-from itertools import chain
-from joblib import Parallel, delayed, parallel_backend
+from os.path import splitext
+from ray.data.preprocessors import BatchMapper
 
-from data.ray_tensor_lowvar_selection import TensorLowVarSelection
+from data.ray_kmers_vectorizer import SeenKmersVectorizer, GivenKmersVectorizer
 
 __author__ = ['Amine Remita', 'Nicolas de Montigny']
 
 __all__ = ['KmersCollection']
 
 """
-Module adapted from module kmer_collections.py of
+Module inspired from module kmer_collections.py of
 mlr_kgenomvir package [Remita et al. 2022]
 
-Save kmers profiles into tensors then directly to drive and adapted / added functions to do so.
+Load sequences to pandas dataframe by batch then saved to parquet files.
+Read parquet files into a unified ray dataset, before tokenizing kmers from sequence into count matrix and concatenating into a tensor.
 Using Ray datasets for I/O and to scale cluster to available computing ressources.
 """
 
@@ -48,6 +49,9 @@ class KmersCollection():
 
     fasta : string
         A fasta file containing all sequences from which K-mers were extracted
+
+    csv : string
+        A csv file containing all classes in the database associated to each ID
 
     df : ray.data.Dataset
         A Ray dataset containing the K-mers abundance profiles of each sequences
@@ -75,40 +79,29 @@ class KmersCollection():
     """
     def __init__(
         self,
-        seq_data,
+        fasta_file,
         Xy_file,
         k,
-        dataset,
+        cls_file = None,
         kmers_list = None,
-        features_threshold = np.inf,
-        nb_features_keep = np.inf
     ):
         ## Public attributes
         # Parameters
         self.k = k
-        self.dataset = dataset
         self.Xy_file = Xy_file
-        self.fasta = seq_data.data
-        self._features_threshold = features_threshold
-        self._nb_features_keep = nb_features_keep
-        # Initialize empty
+        self.fasta = fasta_file
+        self.csv = cls_file
+        # Initialize variables
         self.df = None
         self.ids = []
         self.taxas = []
-        self.classes = []
         self.method = None
         self.kmers_list = None
         self._nb_kmers = 0
-        self._index = {}
         self._labels = None
-        self._transformed = False
-        # Get labels from seq_data
-        if len(seq_data.labels) > 0:
-            self._labels = pd.DataFrame(seq_data.labels, columns = seq_data.taxas, index = seq_data.ids)
-            self._labels = self._labels.reset_index(names = ['id'])
-        # Get taxas from seq_data if not empty
-        if len(seq_data.taxas) > 0:
-            self.taxas = seq_data.taxas
+        self._files_list = []
+        self.memory_parsing = False
+        
         # Infer method from presence of already extracted kmers or not
         if isinstance(kmers_list, list):
             self.method = 'given'
@@ -116,177 +109,235 @@ class KmersCollection():
             self._nb_kmers = len(self.kmers_list)
         else:
             self.method = 'seen'
-
-        ## Internal attributes
+        
         # Global tmp dir path
         self._tmp_dir = os.path.join(os.path.split(Xy_file)[0],"tmp","")
         # Make global tmp dir if it doesn't exist
         if not os.path.isdir(self._tmp_dir):
             os.mkdir(self._tmp_dir)
-        # Path to third-party utilities
-        self._kmc_path = os.path.join(os.path.dirname(os.path.realpath(__file__)),"KMC","bin")
-        self._faSplit = os.path.join(os.path.dirname(os.path.realpath(__file__)),"faSplit")
-        # Initialize empty
-        self._files_list = []
-        self._fasta_list = []
 
-        ## Extraction
-        # Execute
-        self._compute_kmers()
-        # Get informations from extracted data
-        if self.kmers_list is None:
-            self.kmers_list = list(self.kmers_list)
-        if 'id' in self.kmers_list:
-            self.kmers_list.remove('id')
-        # Delete global tmp dir
-        rmtree(self._tmp_dir)
+        # Read classes files if present
+        if self.csv is not None:
+            self._read_cls_file()
 
-    def _compute_kmers(self):
-        self._get_fasta_list()
-        # Extract kmers in parallel using KMC3
-        self._kmers_extraction()
-        # Build kmers matrix
-        self._build_dataset()
+    def _read_cls_file(self):
+        self._labels = pd.read_csv(self.csv)
+        # Get taxas from csv file
+        if len(self._labels.columns) > 0:
+            self.taxas = list(self._labels.columns)
+            self.taxas.remove('id')
+        else:
+            raise ValueError(f'No information found in the classes csv file : {self.csv}')
 
-    def _get_fasta_list(self):
-        if isinstance(self.fasta, list):
-            self._fasta_list = self.fasta
-        elif os.path.isfile(self.fasta):
-            self._split_fasta()
+    # Execute k-mers extraction
+    def compute_kmers(self):
+        print('compute_kmers')
+        self._verif_mem_vs_disk()
+        self._parse_fasta()
+        self._make_ray_ds()
+        self._kmers_tokenization()
+        self._write_dataset()
 
-    def _split_fasta(self):
-        # Split files using faSplit
-        cmd_split = f'{self._faSplit} byname {self.fasta} {self._tmp_dir}'
-        os.system(cmd_split)
-        # Get list of fasta files
-        self._fasta_list = glob(os.path.join(self._tmp_dir, '*.fa'))
+    def _verif_mem_vs_disk(self):
+        mem = ray.cluster_resources()['memory']
+        fasta_size = os.path.getsize(os.path.expanduser(self.fasta))
+        if mem > fasta_size:
+            self.memory_parsing = True
 
-    def _kmers_extraction(self):
-        print('extract_kmers in parallel')
-        # Only extract k-mers using KMC in parallel
-        with parallel_backend('threading'):
-            print('_parallel_KMC_kmers')
-            Parallel(n_jobs = -1, prefer = 'threads', verbose = 1)(
-                delayed(self._parallel_KMC_kmers)
-                (file) for file in self._fasta_list)
-        # List profile files
-        self._files_list = glob(os.path.join(self._tmp_dir,'*.txt'))
-
-        if self.method == 'seen':
-            self._reduce_features()
-
-    def _parallel_KMC_kmers(self, file):
-        # Make tmp folder per sequence
-        id = os.path.splitext(os.path.basename(file))[0]
-        tmp_folder = os.path.join(self._tmp_dir,f"tmp_{id}")
-        os.mkdir(tmp_folder)
-        # Count k-mers with KMC
-        cmd_count = os.path.join(self._kmc_path,f"kmc -k{self.k} -fm -ci0 -cs1000000000 -hp {file} {os.path.join(tmp_folder, id)} {tmp_folder}")
-        run(cmd_count, shell = True, capture_output=True)
-        # Transform k-mers db with KMC
-        cmd_transform = os.path.join(self._kmc_path,f"kmc_tools transform {os.path.join(tmp_folder, id)} dump {os.path.join(self._tmp_dir, f'{id}.txt')}")
-        run(cmd_transform, shell = True, capture_output=True)
-        rmtree(tmp_folder)
-
-    # Diminish nb of features
-    def _reduce_features(self):
-        print('_reduce_features')
-        with parallel_backend('threading'):
-            print('parallel _get_kmers_list')
-            lst_col = Parallel(n_jobs = -1, prefer = 'threads', verbose = 1)(
-                delayed(self._get_kmers_list)
-                (file) for file in self._files_list)
-        self._flatten_kmers_array(lst_col)
-        self._kmers_indexing()
-        index_var = self._index_variation()
-        self._features_choice(index_var)
-
-    # Parallel extract k-mers from profiles
-    def _get_kmers_list(self, file):
-        lst_col = []
-        id = os.path.splitext(os.path.basename(file))[0]
-        profile = pd.read_table(file, sep = '\t', index_col = 0, header = None, names = ['id', str(id)])
-        if len(profile.index) > 0:
-            lst_col = profile.index
-        return np.array(lst_col)
-
-    # Flatten list of arrays
-    def _flatten_kmers_array(self, lst_col):
-        self.kmers_list = list(set(chain.from_iterable(lst_col)))
-        self._nb_kmers = len(self.kmers_list)
-
-    # Index k-mers abundances
-    def _kmers_indexing(self):
-        print('_kmers_index')
-        for kmer in self.kmers_list:
-            self._index[kmer] = np.zeros(len(self._files_list))
-        for i, file in enumerate(self._files_list):
-            id = os.path.splitext(os.path.basename(file))[0]
-            profile = pd.read_table(file, sep = '\t', index_col = 0, header = None, names = ['id', str(id)])
-            for kmer in self.kmers_list:
-                if kmer in profile.index:
-                    self._index[kmer][i] = profile.loc[kmer,id]
+    def _parse_fasta(self):
+        print('_parse_fasta')
+        if os.path.isfile(self.fasta):
+            if self.memory_parsing:
+                self._single_fasta_ds_mem()
+            else:
+                self._single_fasta_ds_disk()
+        elif os.path.isdir(self.fasta):
+            if self.memory_parsing:
+                self._multi_fasta_ds_mem()
+            else:
+                self.fasta = glob(os.path.join(self.fasta, '*.fa'))
+                self._multi_fasta_ds_disk()
+        else:
+            raise ValueError('Fasta must be an interleaved fasta file or a directory containing fasta files.')
     
-    # Compute variance for each k-mers indexed
-    def _index_variation(self):
-        print('_index_variation')
-        index_var = {}
-        for kmer in self.kmers_list:
-            arr = self._index[kmer]
-            index_var[kmer] = np.var(arr)
-        return index_var
-    
-    # Exclude k-mers features when variance is lower than 25% or higher than 75% of variance distribution
-    def _features_choice(self, index_var):
-        print('_features_choice')
-        s_var = pd.Series(index_var)
-        quartiles = s_var.quantile([0.25,0.75])
-        s_var = s_var[s_var>quartiles[0.25]]
-        s_var = s_var[s_var<quartiles[0.75]] # 867
-        self.kmers_list = list(s_var.index)
-        self._nb_kmers = len(self.kmers_list)
-
-    # Map csv files to numpy array then write to parquet file with ray
-    def _build_dataset(self):
-        print('_construct_dataset')
-        with parallel_backend('threading'):
-            print('parallel _get_kmers_list')
-            Parallel(n_jobs = -1, prefer = 'threads', verbose = 1)(
-                delayed(self._map_profile_to_tensor)
-                (file) for file in self._files_list)
-        lst_tensor_files = glob(os.path.join(self._tmp_dir,'*.parquet'))
-        self._convert_tensors_ray_ds(lst_tensor_files)
-        # if self.method == 'seen' and (self._features_threshold != np.inf or self._nb_features_keep != np.inf) :
-        #     self._reduce_features()
-
-    def _read_kmers_profile(self, file):
-        id = os.path.splitext(os.path.basename(file))[0]
-        profile = pd.read_table(file, sep = '\t', index_col = 0, header = None, names = ['id', id])
-        profile_kmers = profile.index
-        return(profile, profile_kmers, id)
-
-    def _map_profile_to_tensor(self, file):
-        profile, profile_kmers, id = self._read_kmers_profile(file)
-        tensor = np.zeros((1, self._nb_kmers))
-        for kmer in profile_kmers:
-            if kmer in self.kmers_list:
-                tensor[0, self.kmers_list.index(kmer)] = profile.at[kmer, id]
-        tensor = ray.data.from_numpy(tensor)
-        tensor = tensor.add_column('id', lambda x : id)
-        tensor.write_parquet(self._tmp_dir)
-
-    def _convert_tensors_ray_ds(self, lst_arr):
-        print('_convert_tensors_ray_ds')
-        self.df = ray.data.read_parquet_bulk(lst_arr)
-        for row in self.df.iter_rows():
-            self.ids.append(row['id'])
+    def _single_fasta_ds_mem(self):
+        print('_single_fasta_ds_mem')
+        data = {
+            'id':[],
+            'sequence':[]
+        }
+        path, ext = splitext(self.fasta)
+        ext = ext.lstrip(".")
+        if ext in ["fa","fna","fasta"]:
+            with open(self.fasta, 'rt') as handle:
+                for i, record in enumerate(SeqIO.parse(handle, 'fasta')):
+                    data['id'].append(record.id)
+                    data['sequence'].append(str(record.seq).upper())
+        elif ext == "gz":
+            with gzip.open(self.fasta, 'rt') as handle:
+                for i, record in enumerate(SeqIO.parse(handle, 'fasta')):
+                    data['id'].append(record.id)
+                    data['sequence'].append(str(record.seq).upper())
+        else:
+            raise ValueError(f'Unknown file extension : {ext}')
+        
+        self.ids = data['id']
+        self.df = pd.DataFrame(data)
         if self._labels is not None:
-            self._get_classes_labels()
-        self.df.write_parquet(self.Xy_file)
+            self.df = pd.merge(self.df, self._labels, on = 'id', how = 'left')
 
-    def _get_classes_labels(self):
-        print('_get_classes_labels')
-        self.classes = pd.DataFrame({'id' : self.ids})
-        self.classes = self.classes.merge(self._labels, on = 'id', how = 'left')
-        self.classes = self.classes.drop('id', axis = 1)
-        self.classes = np.array(self.classes)
+    def _single_fasta_ds_disk(self):
+        print('_single_fasta_ds_disk')
+        data = {
+            'id':[],
+            'sequence':[]
+        }
+        path, ext = splitext(self.fasta)
+        ext = ext.lstrip(".")
+        if ext in ["fa","fna","fasta"]:
+            with open(self.fasta, 'rt') as handle:
+                for i, record in enumerate(SeqIO.parse(handle, 'fasta')):
+                    data['id'].append(record.id)
+                    data['sequence'].append(str(record.seq).upper())
+                    if i % 100 == 0 :
+                        df = pd.DataFrame(data)
+                        if self._labels is not None:
+                            cls = self._labels[self._labels['id'].isin(data['id'])]
+                            df = pd.merge(df, cls, on = 'id', how = 'left')
+                        df.to_parquet(os.path.join(self._tmp_dir, f'batch_{int(i/100)}.parquet'))
+                        self.ids.extend(data['id'])
+                        data = {
+                            'id':[],
+                            'sequence':[]
+                        }
+                if len(data['id']) != 0:
+                    df = pd.DataFrame(data)
+                    if self._labels is not None:
+                        cls = self._labels[self._labels['id'].isin(data['id'])]
+                        df = pd.merge(df, cls, on = 'id', how = 'left')
+                    df.to_parquet(os.path.join(self._tmp_dir, f'batch_end.parquet'))
+                    self.ids.extend(data['id'])
+        elif ext == "gz":
+            with gzip.open(self.fasta, 'rt') as handle:
+                for i, record in enumerate(SeqIO.parse(handle, 'fasta')):
+                    data['id'].append(record.id)
+                    data['sequence'].append(str(record.seq).upper())
+                    if i % 100 == 0 :
+                        df = pd.DataFrame(data)
+                        if self._labels is not None:
+                            cls = self._labels[self._labels['id'].isin(data['id'])]
+                            df = pd.merge(df, cls, on = 'id', how = 'left')
+                        df.to_parquet(os.path.join(self._tmp_dir, f'batch_{int(i/100)}.parquet'))
+                        self.ids.extend(data['id'])
+                        data = {
+                            'id':[],
+                            'sequence':[]
+                        }
+                if len(data['id']) != 0:
+                    df = pd.DataFrame(data)
+                    if self._labels is not None:
+                        cls = self._labels[self._labels['id'].isin(data['id'])]
+                        df = pd.merge(df, cls, on = 'id', how = 'left')
+                    df.to_parquet(os.path.join(self._tmp_dir, f'batch_end.parquet'))
+                    self.ids.extend(data['id'])
+        else:
+            raise ValueError(f'Unknown file extension : {ext}')
+
+    def _multi_fasta_ds_mem(self):
+        print('_multi_fasta_ds_mem')
+        data = {
+            'id':[],
+            'sequence':[]
+        }
+        for i, file in enumerate(self.fasta):
+            path, ext = splitext(file)
+            ext = ext.lstrip(".")
+            if ext in ["fa","fna","fasta"]:
+                with open(file, 'rt') as handle:
+                    for record in SeqIO.parse(handle, 'fasta'):
+                        data['id'].append(record.id)
+                        data['sequence'].append(str(record.seq).upper())
+            elif ext == "gz":
+                with gzip.open(file, 'rt') as handle:
+                    for record in SeqIO.parse(handle, 'fasta'):
+                        data['id'].append(record.id)
+                        data['sequence'].append(str(record.seq).upper())
+            else:
+                raise ValueError(f'Unknown file extension : {ext}')
+        
+        self.ids = data['id']
+        self.df = pd.DataFrame(data)
+        if self._labels is not None:
+            self.df = pd.merge(self.df, self._labels, on = 'id', how = 'left')
+        
+    def _multi_fasta_ds_disk(self):
+        print('_multi_fasta_ds_disk')
+        data = {
+            'id':[],
+            'sequence':[]
+        }
+        for i, file in enumerate(self.fasta):
+            path, ext = splitext(file)
+            ext = ext.lstrip(".")
+            if ext in ["fa","fna","fasta"]:
+                with open(file, 'rt') as handle:
+                    for record in SeqIO.parse(handle, 'fasta'):
+                        data['id'].append(record.id)
+                        data['sequence'].append(str(record.seq).upper())
+            elif ext == "gz":
+                with gzip.open(file, 'rt') as handle:
+                    for record in SeqIO.parse(handle, 'fasta'):
+                        data['id'].append(record.id)
+                        data['sequence'].append(str(record.seq).upper())
+            else:
+                raise ValueError(f'Unknown file extension : {ext}')
+            if i % 100 == 0 :
+                df = pd.DataFrame(data)
+                if self._labels is not None:
+                    cls = self._labels[self._labels['id'].isin(data['id'])]
+                    df = pd.merge(df, cls, on = 'id', how = 'left')
+                df.to_parquet(os.path.join(self._tmp_dir, f'batch_{int(i/100)}.parquet'))
+                self.ids.extend(data['id'])
+                data = {
+                    'id':[],
+                    'sequence':[]
+                }
+        if len(data['id']) != 0:
+            df = pd.DataFrame(data)
+            if self._labels is not None:
+                cls = self._labels[self._labels['id'].isin(data['id'])]
+                df = pd.merge(df, cls, on = 'id', how = 'left')
+            df.to_parquet(os.path.join(self._tmp_dir, f'batch_end.parquet'))
+            self.ids.extend(data['id'])
+
+    def _make_ray_ds(self):
+        print('_make_ray_ds')
+        if self.memory_parsing:
+            self.df = ray.data.from_pandas(self.df)
+            if self.df.count() > 10:
+                self.df = self.df.repartition(int(self.df.count()/10))
+        else:
+            self._files_list = glob(os.path.join(self._tmp_dir, '*.parquet'))
+            self.df = ray.data.read_parquet_bulk(self._files_list, parallelism = len(self._files_list))
+
+    def _kmers_tokenization(self):
+        print('_kmers_tokenization')
+        if self.method == 'seen':
+            tokenizer = SeenKmersVectorizer(
+                k = self.k,
+                column = 'sequence'
+            )
+        elif self.method == 'given':
+            tokenizer = GivenKmersVectorizer(
+                k = self.k,
+                column = 'sequence',
+                tokens = self.kmers_list
+            )
+        tokenizer.fit(self.df)
+        self.df = tokenizer.transform(self.df)
+        if self.kmers_list is None:
+            self.kmers_list = tokenizer.stats_['tokens(sequence)']
+
+    def _write_dataset(self):
+        self.df.write_parquet(self.Xy_file)
+        rmtree(self._tmp_dir)

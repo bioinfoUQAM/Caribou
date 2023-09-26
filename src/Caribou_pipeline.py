@@ -1,7 +1,5 @@
 #!/usr/bin python3
 
-import ray
-import json
 import argparse
 import numpy as np
 import configparser
@@ -50,9 +48,7 @@ def caribou(opt):
     training_epochs = config.getint('settings','neural_network_training_iterations', fallback = 100)
     classif_threshold = config.getfloat('settings', 'classification_threshold', fallback = 0.8)
     verbose = config.getboolean('settings', 'verbose', fallback = True)
-    features_threshold = config.getfloat('settings', 'features_threshold', fallback = np.inf)
-    nb_features = config.getint('settings', 'nb_features', fallback = np.inf)
-
+    
     # outputs
     mpa_style = config.getboolean('outputs', 'mpa-style', fallback = True)
     kronagram = config.getboolean('outputs', 'kronagram', fallback = True)
@@ -97,13 +93,7 @@ def caribou(opt):
     outdirs = define_create_outdirs(outdir)
     
     # Initialize cluster
-    ray.init(
-        
-        _system_config = {
-            'object_spilling_config': json.dumps(
-                {'type': 'filesystem', 'params': {'directory_path': str(workdir)}})
-        }
-    )
+    init_ray_cluster(workdir)
 
 # Part 1 - K-mers profile extraction
 ################################################################################
@@ -117,8 +107,6 @@ def caribou(opt):
             database,
             host,
             k = k_length,
-            features_threshold = features_threshold,
-            nb_features_keep = nb_features
         )
     else:
         # Reference Database Only
@@ -128,14 +116,12 @@ def caribou(opt):
             outdirs['data_dir'],
             database,
             host,
-            k = k_length,
-            features_threshold = features_threshold,
-            nb_features_keep = nb_features
+            k = k_length
         )
 
     # Metagenome to analyse
     k_profile_metagenome = build_load_save_data(
-        metagenome_seq_file,
+        (metagenome_seq_file),
         None,
         outdirs['data_dir'],
         metagenome,
