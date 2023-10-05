@@ -19,23 +19,18 @@ from ray.air._internal.checkpointing import (
     save_preprocessor_to_dir,
 )
 from ray.util.joblib import register_ray
-from sklearn.ensemble import BaggingClassifier
 from ray.air.config import RunConfig, ScalingConfig
 from sklearn.calibration import CalibratedClassifierCV
 from ray.train.constants import MODEL_KEY, TRAIN_DATASET_KEY
 from ray.train.sklearn._sklearn_utils import _set_cpu_params
-from ray.air.util.data_batch_conversion import _unwrap_ndarray_object_type_if_needed
 
 from ray.train.sklearn import SklearnTrainer
 
 simplefilter(action='ignore', category=FutureWarning)
 
-TENSOR_COLUMN_NAME = '__value__'
-
 class SklearnPartialTrainer(SklearnTrainer):
     """
-    Class adapted from Ray's SklearnTrainer class.
-    It allows tensors as input and distributes training via a bagging meta-classifier where each sub-classifier receives a different subset of columns from the full dataset.
+    Class adapted from Ray's SklearnTrainer class to allow for partial_fit and usage of tensors as inputs.
     """
 
     def __init__(
@@ -179,28 +174,15 @@ class SklearnPartialTrainer(SklearnTrainer):
     def training_loop(self):
         register_ray()
 
+        # self.preprocess_datasets()
+        self.estimator.set_params(**self.params)
+
         datasets = self._get_datasets()
 
         X_train, y_train = datasets.pop(TRAIN_DATASET_KEY)
-        # X_train = X_train.repeat(self._training_epochs)
-        # y_train = y_train.repeat(self._training_epochs)
+        X_train = X_train.repeat(self._training_epochs)
+        y_train = y_train.repeat(self._training_epochs)
         X_calib, y_calib = datasets.pop('validation')
-
-        self.estimator.set_params(**self.params)
-
-        nb_samples = X_train.count()
-        nb_features = len(self._features_list)
-        max_samples = nb_samples if nb_samples < 1000 else 1000
-        max_features = nb_features if nb_features < 1000 else 1000
-        frac_estimators = ((nb_samples * nb_features) / (max_samples * max_features))
-        n_estimators = frac_estimators if frac_estimators > 10 else 10
-        self.estimator = BaggingClassifier(
-            estimator = self.estimator,
-            n_estimators = n_estimators,
-            max_samples = max_samples,
-            max_features = max_features,
-            n_jobs = -1
-        )
 
         scaling_config = self._validate_scaling_config(self.scaling_config)
 
@@ -217,29 +199,49 @@ class SklearnPartialTrainer(SklearnTrainer):
 
         _set_cpu_params(self.estimator, num_cpus)
 
-        X_train = X_train.to_pandas()[TENSOR_COLUMN_NAME]
-        # X_train = X_train.to_pandas()[TENSOR_COLUMN_NAME].to_numpy()
-        X_train = _unwrap_ndarray_object_type_if_needed(X_train)
-        X_train = pd.DataFrame(X_train, columns = self._features_list)
-        y_train = y_train.to_pandas()[self.label_column]
-
-        with parallel_backend("ray", n_jobs=num_cpus):
-            try:
+        for epoch_X, epoch_y in zip(X_train.iter_epochs(), y_train.iter_epochs()):
+            with parallel_backend("ray", n_jobs=num_cpus):
                 start_time = time()
-                self.estimator.fit(X_train, y_train, classes = self._labels, **self.fit_params)
-            except TypeError:
-                self.estimator.fit(X_train, y_train, **self.fit_params)
-            fit_time = time() - start_time
+                for batch_X, batch_y in zip(
+                    epoch_X.iter_batches(
+                        batch_size = self._batch_size,
+                        batch_format = 'numpy'
+                    ),
+                    epoch_y.iter_batches(
+                        batch_size = self._batch_size,
+                        batch_format = 'numpy'
+                    )
+                ):  
+                    if isinstance(batch_X, dict):
+                        batch_X = batch_X['__value__']
+                        
+                    try:
+                        batch_X = pd.DataFrame(batch_X, columns = self._features_list)
+                    except ValueError:
+                        for i in range(len(batch_X)):
+                            if len(batch_X[i]) != len(self._features_list):
+                                warn("The features list length for some reads are not the same as for other reads.\
+                                    Removing the last {} additionnal values, this may influence training.\
+                                        If this persists over multiple samples, please rerun the K-mers extraction".format(len(batch_X[i]) - len(self._features_list)))
+                                batch_X[i] = batch_X[i][:len(self._features_list)]
+                    batch_y = np.ravel(batch_y[self.label_column])
+                    try:
+                        self.estimator.partial_fit(batch_X, batch_y, classes = self._labels, **self.fit_params)
+                    except TypeError:
+                        self.estimator.partial_fit(batch_X, batch_y, **self.fit_params)
+                fit_time = time() - start_time
 
         if len(self._labels) > 2:
-
-            X_calib = X_calib.to_pandas()[TENSOR_COLUMN_NAME]
-            # X_calib = X_calib.to_pandas()[TENSOR_COLUMN_NAME].to_numpy()
-            X_calib = _unwrap_ndarray_object_type_if_needed(X_calib)
-            X_calib = pd.DataFrame(X_calib, columns = self._features_list)
-            y_calib = y_calib.to_pandas()[self.label_column]
-
             with parallel_backend("ray", n_jobs=num_cpus):
+                X_calib_df = np.empty((X_calib.count(), len(self._features_list)))
+                for ind, batch in enumerate(X_calib.iter_batches(
+                    batch_size = 1,
+                    batch_format = 'numpy'
+                )):
+                    X_calib_df[ind] = batch['__value__']
+
+                X_calib = pd.DataFrame(X_calib_df, columns = self._features_list)
+                y_calib = y_calib.to_pandas()
                 self.estimator = CalibratedClassifierCV(
                     estimator = self.estimator,
                     method = 'sigmoid',
@@ -247,7 +249,7 @@ class SklearnPartialTrainer(SklearnTrainer):
                 )
                 self.estimator.fit(
                     X_calib,
-                     y_calib,
+                    y_calib,
                 )
         
         with tune.checkpoint_dir(step=1) as checkpoint_dir:
@@ -297,25 +299,43 @@ class SklearnPartialTrainer(SklearnTrainer):
             test_scores = []
 
             start_time = time()
-            X_test = X_test.to_pandas()[TENSOR_COLUMN_NAME]
-            # X_test = X_test.to_pandas()[TENSOR_COLUMN_NAME].to_numpy()
-            X_test = _unwrap_ndarray_object_type_if_needed(X_test)
-            X_test = pd.DataFrame(X_test, columns = self._features_list)
-            y_test = y_test.to_pandas()[self.label_column]
-
-            try:
-                test_scores.append(_score(estimator, X_test, y_test, scorers))
-            except Exception:
-                if isinstance(scorers, dict):
-                    test_scores = {k: np.nan for k in scorers}
-                else:
-                    test_scores.append(np.nan)
-                warn(
-                    f"Scoring on validation set {key} failed. The score(s) for "
-                    f"this set will be set to nan. Details: \n"
-                    f"{format_exc()}",
-                    UserWarning,
+            for batch, labels in zip(X_test.iter_batches(
+                    batch_size = self._batch_size,
+                    batch_format = 'numpy'
+                ), y_test.iter_batches(
+                    batch_size=self._batch_size,
+                    batch_format = 'numpy'
                 )
+            ):
+                if isinstance(batch, dict):
+                    batch = batch['__value__']
+
+                try:
+                    batch = pd.DataFrame(batch, columns = self._features_list)
+                except ValueError:
+                    for i in range(len(batch)):
+                        if len(batch[i]) != len(self._features_list):
+                            warn("The features list length for some reads are not the same as for other reads.\
+                                Removing the last {} additionnal values, this may influence training.\
+                                    If this persists over multiple samples, please rerun the K-mers extraction".format(len(batch[i]) - len(self._features_list)))
+                            batch[i] = batch[i][:len(self._features_list)]
+                labels = np.ravel(labels[self.label_column])
+
+                print(batch)
+
+                try:
+                    test_scores.append(_score(estimator, batch, labels, scorers))
+                except Exception:
+                    if isinstance(scorers, dict):
+                        test_scores = {k: np.nan for k in scorers}
+                    else:
+                        test_scores.append(np.nan)
+                    warn(
+                        f"Scoring on validation set {key} failed. The score(s) for "
+                        f"this set will be set to nan. Details: \n"
+                        f"{format_exc()}",
+                        UserWarning,
+                    )
             score_time = time() - start_time
             results[key]["score_time"] = score_time
             results[key]["test_score"] = np.mean(test_scores)
