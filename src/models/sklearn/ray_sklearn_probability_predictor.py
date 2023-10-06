@@ -39,7 +39,8 @@ class SklearnTensorProbaPredictor(SklearnPredictor):
             _set_cpu_params(self.estimator, num_estimator_cpus)
 
         if TENSOR_COLUMN_NAME in data:
-            data = data[TENSOR_COLUMN_NAME].to_numpy()
+            data = data[TENSOR_COLUMN_NAME]
+            # data = data[TENSOR_COLUMN_NAME].to_numpy()
             data = _unwrap_ndarray_object_type_if_needed(data)
             data = pd.DataFrame(data, columns = features)
 

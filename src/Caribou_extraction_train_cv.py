@@ -3,6 +3,7 @@
 import argparse
 
 from utils import *
+from time import time
 from pathlib import Path
 from models.classification import ClassificationMethods
 
@@ -33,6 +34,8 @@ def bacteria_extraction_train_cv(opt):
 # Training and cross-validation of models for bacteria extraction / host removal
 ################################################################################
     
+    t_start = time()
+
     if opt['host_name'] is None:
         ClassificationMethods(
             database_k_mers = data_bacteria,
@@ -60,8 +63,10 @@ def bacteria_extraction_train_cv(opt):
             cv = True
         ).execute_training()
 
+    t_end = time()
+    t_classify = t_end - t_start
     print(
-        f"Caribou finished training and cross-validating the {opt['model_type']} model")
+        f"Caribou finished training and cross-validating the {opt['model_type']} model in {t_classify} seconds")
 
 
 # Argument parsing from CLI

@@ -238,6 +238,8 @@ class SklearnModel(ModelsUtils):
         print('_predict_cv')
         if df.count() > 0:
             predict_kwargs = {'features':self.kmers, 'num_estimator_cpus':-1}
+# BATCHPREDICTOR DEPRECATED : https://docs.ray.io/en/releases-2.6.3/ray-air/api/doc/ray.train.batch_predictor.BatchPredictor.html#ray.train.batch_predictor.BatchPredictor
+# MUST BE CHANGED TO MAP_BATCHES
             self._predictor = BatchPredictor.from_checkpoint(self._model_ckpt, SklearnTensorPredictor)
             predictions = self._predictor.predict(df, batch_size = self.batch_size, feature_columns = ['__value__'], **predict_kwargs)
             predictions = np.array(predictions.to_pandas()).reshape(-1)

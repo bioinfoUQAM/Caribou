@@ -190,7 +190,7 @@ class KerasTFModel(ModelsUtils):
             print(f'dataset preprocessing : {name}')
             ds = ds.drop_columns(['id'])
             ds = self._preprocessor.transform(ds)
-            datasets[name] = ds.fully_executed()
+            datasets[name] = ds
 
         # Training parameters
         self._train_params = {
@@ -214,21 +214,6 @@ class KerasTFModel(ModelsUtils):
                     'GPU': self._nb_GPU_per_worker
                 }
             ),
-            # dataset_config={
-            #     DataConfig()
-                # 'train': DatasetConfig(
-                #     fit=False,
-                #     transform=False,
-                #     split=True,
-                #     use_stream_api=True
-                # ),
-                # 'validation': DatasetConfig(
-                #     fit=False,
-                #     transform=False,
-                #     split=True,
-                #     use_stream_api=False
-                # )
-            # },
             run_config=RunConfig(
                 name=self.classifier,
                 local_dir=self._workdir,
@@ -275,27 +260,28 @@ class KerasTFModel(ModelsUtils):
         def map_predicted_label_binary(df, threshold):
             # lower_threshold = 0.5 - (threshold * 0.5)
             # upper_threshold = 0.5 + (threshold * 0.5)
-            predict = pd.DataFrame({
+            predictions = pd.DataFrame({
                 'best_proba': [df['predictions'][i][np.argmax(df['predictions'][i])] for i in range(len(df))],
-                'predicted_label': df["predictions"].map(lambda x: np.array(x).argmax())
+                'predicted_label': df["predictions"].map(lambda x: np.array(x).argmax()) # GET POSITION OF ARGMAX
             })
+            print('map_predicted_label_binary')
+            print(predictions)
             # predict = pd.DataFrame({
             #     'proba': df['predictions'],
             #     'predicted_label': np.zeros(len(df), dtype = np.float32)
             # })
-            print(predict)
             # predict['predicted_label'] = np.round(predict['proba'])
             # predict.loc[predict['proba'] >= upper_threshold, 'predicted_label'] = 1
             # predict.loc[predict['proba'] <= lower_threshold, 'predicted_label'] = 0
-            return predict['predicted_label'].to_numpy(dtype = np.int32)
+            return predictions['predicted_label'].to_numpy(dtype = np.int32)
         
         def map_predicted_label_multiclass(df, threshold):
-            predict = pd.DataFrame({
+            predictions = pd.DataFrame({
                 'best_proba': [df['predictions'][i][np.argmax(df['predictions'][i])] for i in range(len(df))],
                 'predicted_label': df["predictions"].map(lambda x: np.array(x).argmax())
             })
-            predict.loc[predict['best_proba'] < threshold, 'predicted_label'] = -1
-            return predict['predicted_label'].to_numpy(dtype = np.int32)
+            predictions.loc[predictions['best_proba'] < threshold, 'predicted_label'] = -1
+            return predictions['predicted_label'].to_numpy(dtype = np.int32)
         
         if self._nb_classes == 2:
             fn = map_predicted_label_binary
@@ -305,6 +291,11 @@ class KerasTFModel(ModelsUtils):
         predict = []
         for batch in predictions.iter_batches(batch_size = self.batch_size):
             predict.append(lambda : fn(batch, threshold))
+
+        import sys
+        predictions.materialize()
+        print(predict)
+        sys.exit()
 
         return np.concatenate(predict)
 
@@ -318,7 +309,6 @@ class KerasTFModel(ModelsUtils):
 # Smaller nb of workers + bigger nb CPU_per_worker + smaller batch_size to avoid memory overload
 # https://discuss.ray.io/t/ray-sgd-distributed-tensorflow/261/8
 
-# train_func with DatasetPipeline for Training data only
 def train_func(config):
     # Parameters
     batch_size = config.get('batch_size', 128)
@@ -326,57 +316,28 @@ def train_func(config):
     size = config.get('size')
     nb_cls = config.get('nb_cls')
     model = config.get('model')
-    kmers = config.get('kmers')
 
-    # Model setup 
-    strategy = tf.distribute.MultiWorkerMirroredStrategy()
-    with strategy.scope():
-        model = build_model(model, nb_cls, size)
+    # Model construction 
+    model = build_model(model, nb_cls, size)
 
-    # Load data directly to workers instead of serializing it?
     train_data = session.get_dataset_shard('train')
     val_data = session.get_dataset_shard('validation')
 
-    # def to_tf_dataset(data, batch_size):
-    #     def to_tensor_iterator():
-    #         for batch in data.iter_batches(
-    #             batch_size = batch_size,
-    #             batch_format = 'pandas'
-    #         ):
-    #             labels = batch.loc['labels']
-    #             batch = batch.drop(['id','labels'], axis = 1)
-    #             return batch.to_numpy(), labels.to_numpy()
-    #         # for batch in data.iter_tf_batches(
-    #         #     batch_size = batch_size
-    #         # ):
-    #         #     yield batch['__value__'], batch['labels']
-
-    #     output_signature = (
-    #         tf.TensorSpec(shape=(None, size), dtype=tf.float32),
-    #         tf.TensorSpec(shape=(None, nb_cls), dtype=tf.int64),
-    #     )
-    #     tf_data = tf.data.Dataset.from_generator(
-    #         to_tensor_iterator, output_signature=output_signature
-    #     )
-    #     return prepare_dataset_shard(tf_data)
-
-    # batch_val = to_tf_dataset(val_data, batch_size)
-
-    # # Fit the model on streaming data
-    # for epoch_train in train_data.iter_batches(epochs):
-    #     batch_train = to_tf_dataset(epoch_train, batch_size)
-
-    batch_val = val_data.to_tf(
-            feature_columns = '__value__',
-            label_columns = 'labels',
-            batch_size = batch_size
-        )
 
     for _ in range(epochs):
         batch_train = train_data.to_tf(
             feature_columns = '__value__',
             label_columns = 'labels',
-            batch_size = batch_size
+            batch_size = batch_size,
+            local_shuffle_buffer_size = batch_size,
+            local_shuffle_seed = int(np.random.randint(1,10000, size = 1))
+        )
+        batch_val = val_data.to_tf(
+            feature_columns = '__value__',
+            label_columns = 'labels',
+            batch_size = batch_size,
+            local_shuffle_buffer_size = batch_size,
+            local_shuffle_seed = int(np.random.randint(1,10000, size = 1))
         )
         history = model.fit(
             x = batch_train,

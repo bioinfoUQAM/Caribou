@@ -4,6 +4,7 @@ import warnings
 import argparse
 
 from utils import *
+from time import time
 from pathlib import Path
 from logging import ERROR
 from models.classification import ClassificationMethods
@@ -45,6 +46,8 @@ def bacteria_classification_train_cv(opt):
 
 # Training and cross-validation of models for classification of bacterias
 ################################################################################
+
+    t_start = time()
     ClassificationMethods(
         database_k_mers = data_bacteria,
         k = k_length,
@@ -58,9 +61,10 @@ def bacteria_classification_train_cv(opt):
         verbose = opt['verbose'],
         cv = True
     ).execute_training()
-
+    t_end = time()
+    t_classify = t_end - t_start
     print(
-        f"Caribou finished training and cross-validating the {opt['model_type']} model")
+        f"Caribou finished training and cross-validating the {opt['model_type']} model in {t_classify} seconds")
 
 # Argument parsing from CLI
 ################################################################################
