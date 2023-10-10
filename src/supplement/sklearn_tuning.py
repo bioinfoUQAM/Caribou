@@ -15,8 +15,8 @@ from utils import *
 from models.reads_simulation import readsSimulation
 from models.ray_tensor_min_max import TensorMinMaxScaler
 # from ray.data.preprocessors import MinMaxScaler
-from models.sklearn.ray_sklearn_partial_trainer import SklearnPartialTrainer
-from models.sklearn.ray_sklearn_onesvm_encoder import OneClassSVMLabelEncoder
+from src.models.sklearn.partial_trainer import SklearnPartialTrainer
+from src.models.encoders.onesvm_label_encoder import OneClassSVMLabelEncoder
 
 # Preprocessing
 from ray.data.preprocessors import Chain, LabelEncoder

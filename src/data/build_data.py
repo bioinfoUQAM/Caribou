@@ -2,7 +2,7 @@
 import os
 
 from utils import load_Xy_data, save_Xy_data
-from data.kmers_collection import KmersCollection
+from data.kmers import KmersCollection
 
 __author__ = 'Nicolas de Montigny'
 
