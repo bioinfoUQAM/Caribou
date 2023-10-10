@@ -5,12 +5,11 @@ import cloudpickle
 import numpy as np
 import pandas as pd
 
-from utils import zip_X_y
 from glob import glob
 from shutil import rmtree
 from utils import load_Xy_data
-from models.sklearn.ray_sklearn import SklearnModel
-from models.kerasTF.ray_keras_tf import KerasTFModel
+from src.models.sklearn.models import SklearnModel
+from src.models.kerasTF.models import KerasTFModel
 
 # Simulation class
 from models.reads_simulation import readsSimulation

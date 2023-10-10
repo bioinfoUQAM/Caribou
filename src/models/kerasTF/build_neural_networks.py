@@ -28,7 +28,7 @@ def build_attention(nb_kmers):
     x = Dense(2, activation = "tanh")(x)
 
     model = Model(inputs = inputs, outputs = x)
-    model.compile(loss = BinaryCrossentropy(from_logits = True), optimizer = 'adam', metrics = ['accuracy'])
+    model.compile(loss = BinaryCrossentropy(from_logits = False), optimizer = 'adam', metrics = ['accuracy'])
 
     return model
 
@@ -48,7 +48,7 @@ def build_LSTM(nb_kmers):
     x = Dense(2, activation = 'tanh')(x)
     
     model = Model(inputs = inputs, outputs = x)
-    model.compile(loss=BinaryCrossentropy(from_logits = True), optimizer='adam', metrics=['accuracy'])
+    model.compile(loss=BinaryCrossentropy(from_logits = False), optimizer='adam', metrics=['accuracy'])
 
     return model
 
