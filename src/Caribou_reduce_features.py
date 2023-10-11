@@ -38,11 +38,6 @@ def features_reduction(opt):
     if opt['model_type'] is None:
         opt['model_type'] = 'cnn'
     """
-
-    # Validate training parameters
-    verify_positive_int(opt['batch_size'], 'batch_size')
-    verify_positive_int(opt['training_epochs'], 'number of training iterations')
-    
     outdirs = define_create_outdirs(opt['outdir'])
     
     # Initialize cluster
@@ -70,6 +65,9 @@ def features_reduction(opt):
     # Save reduced dataset
     data['profile'] = f"{data['profile']}_reduced"
     ds.write_parquet(data['profile'])
+    # Save reduced K-mers
+    with open(os.path.join(outdirs["data_dir"],'kmers_list.txt'),'w') as handle:
+        handle.writelines("%s\n" % item for item in data['kmers'])
     # Save reduced data
     path, ext = os.path.splitext(opt['dataset'])
     data_file = f'{path}_reduced{ext}'
@@ -111,8 +109,6 @@ if __name__ == "__main__":
     parser.add_argument('-dt','--dataset_name', default='dataset', help='Name of the dataset used to name files')
     parser.add_argument('-l','--kmers_list', default=None, type=Path, help='PATH to a file containing a list of k-mers that will be reduced')
     # Parameters
-    parser.add_argument('-bs','--batch_size', default=32, type=int, help='Size of the batch size to use, defaults to 32')
-    parser.add_argument('-e','--training_epochs', default=100, type=int, help='The number of training iterations for the neural networks models if one ise chosen, defaults to 100')
     parser.add_argument('-o','--outdir', required=True, type=Path, help='PATH to a directory on file where outputs will be saved')
     parser.add_argument('-wd','--workdir', default='/tmp/spill', type=Path, help='Optional. Path to a working directory where tuning data will be spilled')
     args = parser.parse_args()
