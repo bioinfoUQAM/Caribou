@@ -91,10 +91,6 @@ def chi2selection(ds, kmers):
         features = kmers,
         threshold = 0.05
     )
-    # TODO : PARALLELIZE FITTING LIKE IN OCCURENCES
-    import sys
-    preprocessor.fit(ds)
-    sys.exit()
     
     ds = preprocessor.fit_transform(ds)
 
