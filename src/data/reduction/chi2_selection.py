@@ -28,22 +28,40 @@ class TensorChi2Selection(Preprocessor):
         mean_chi = []
         cols_keep = []
         # cols_drop = []
-        # Compute chi2 over batches
-        for batch in ds.iter_batches(batch_size = 5, batch_format = 'pandas'):
-            X = batch[TENSOR_COLUMN_NAME].to_numpy()
+
+        # Function for parallel chi2 computing
+        def chi_sqr(batch):
+            X = batch[TENSOR_COLUMN_NAME]
             X = _unwrap_ndarray_object_type_if_needed(X)
             X = pd.DataFrame(X, columns = self.features)
-            y = batch['species'].to_numpy().ravel()
-            mean_chi.append(chi2(X, y)[1])
+            y = batch['species'].ravel()
+            return {'chi' : [chi2(X, y)[1]]}
+
+
+        # Compute chi2 over batches
+        # for batch in ds.iter_batches(batch_size = 5, batch_format = 'pandas'):
+        #     X = batch[TENSOR_COLUMN_NAME].to_numpy()
+        #     X = _unwrap_ndarray_object_type_if_needed(X)
+        #     X = pd.DataFrame(X, columns = self.features)
+        #     y = batch['species'].to_numpy().ravel()
+        #     mean_chi.append(chi2(X, y)[1])
+
+        chi = ds.map_batches(chi_sqr, batch_format = 'numpy')
+
+        for i, row in enumerate(chi.iter_rows()):
+            mean_chi.append(row['chi'])
 
         # Compute the mean of chi2 by feature
         mean_chi = np.array(mean_chi)
         mean_chi = np.mean(mean_chi, axis = 0)
 
-        cols_keep = pd.Series(mean_chi, index = self.features)
-        cols_keep = cols_keep[cols_keep <= self.threshold]
-        cols_keep = list(cols_keep.index)
+        # cols_keep = pd.Series(mean_chi, index = self.features)
+        # cols_keep = cols_keep[cols_keep <= self.threshold]
+        # cols_keep = list(cols_keep.index)
         
+        # Construct list of features to keep by position
+        cols_keep = [self.features[i] for i, chi in enumerate(mean_chi) if chi < self.threshold]
+
         # Keep all features if none are under the threshold
         if len(cols_keep) == 0:
             cols_keep = self.features

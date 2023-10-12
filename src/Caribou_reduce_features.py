@@ -46,12 +46,9 @@ def features_reduction(opt):
 # Features reduction
 ################################################################################
     """
-    Brute -> Affined (20% recursive removal == 40% of original)
-    1. OccurenceExclusion
-    2. LowVarSelection
-    3. Chi2 + SelectPercentile(50) / SelectKBest(X)
-    4. TruncatedSVD + text -> LSA
-    5. KRFE (require to train an estimator)
+    Brute force -> Features statistically related to classes
+    1. OccurenceExclusion (5% extremes)
+    2. Chi2 + SelectKBest() (<0.05 p-value)
     """
 
     # Load data 
@@ -81,6 +78,7 @@ def occurence_exclusion(ds, kmers):
         features = kmers,
         percent = 0.05
     )
+    
     ds = preprocessor.fit_transform(ds)
     
     kmers = preprocessor.stats_['cols_keep']
@@ -93,6 +91,11 @@ def chi2selection(ds, kmers):
         features = kmers,
         threshold = 0.05
     )
+    # TODO : PARALLELIZE FITTING LIKE IN OCCURENCES
+    import sys
+    preprocessor.fit(ds)
+    sys.exit()
+    
     ds = preprocessor.fit_transform(ds)
 
     kmers = preprocessor.stats_['cols_keep']
