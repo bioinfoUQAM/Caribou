@@ -16,6 +16,7 @@ from data.extraction.seen_kmers_vectorizer import SeenKmersVectorizer
 from data.extraction.given_kmers_vectorizer import GivenKmersVectorizer
 
 # Features selection
+from data.reduction.low_var_selection import TensorLowVarSelection
 from data.reduction.features_selection import TensorFeaturesSelection
 from data.reduction.occurence_exclusion import TensorPercentOccurenceExclusion
 
@@ -342,25 +343,37 @@ class KmersCollection():
         self.df = tokenizer.transform(self.df)
         if self.method == 'seen':
             self.kmers_list = tokenizer.stats_['tokens(sequence)']
-            # self._kmers_reduction()
+            self._kmers_reduction()
 
     def _kmers_reduction(self):
-        # Exclusion of columns occuring in less 5% / more 95% of the samples
+        """
+        Brute force -> Features statistically related to classes
+        1. OccurenceExclusion (10% extremes)
+        2. LowVarSelection (variance > 10%)
+        3. Chi2 + SelectPercentile() (75% best values)
+        """
+        # Exclusion of columns occuring in less / more than 10% of the columns = 20% removed
         excluder = TensorPercentOccurenceExclusion(
             features = self.kmers_list,
-            percent = 0.05
+            percent = 0.1
         )
         self.df = excluder.fit_transform(self.df)
-        
         self.kmers_list = excluder.stats_['cols_keep']
 
-        # Chi2 evaluation of dependance between features and classes
+        # Exclusion of columns with less than 10% variance
+        varier = TensorLowVarSelection(
+            features = self.kmers_list,
+            threshold = 0.1,
+        )
+        self.df = varier.fit_transform(self.df)
+        self.kmers_list = varier.stats_['cols_keep']
+
+        # Chi2 evaluation of dependance between features and classes to keep 75% most significative
         selector = TensorFeaturesSelection(
             features = self.kmers_list,
-            threshold = 0.05
+            threshold = 0.25
         )
         self.df = selector.fit_transform(self.df)
-        
         self.kmers_list = selector.stats_['cols_keep']
 
     def _write_dataset(self):
