@@ -150,35 +150,19 @@ class TensorPercentOccurenceExclusion(Preprocessor):
         
         self.stats_ = {'cols_keep' : cols_keep}
 
-        """
-        # Nb of occurences
-        for batch in ds.iter_batches(batch_format = 'numpy'):
-            batch = batch[TENSOR_COLUMN_NAME]
-            occurences += np.count_nonzero(batch, axis = 0)
-        # Include / Exclude by occurences thresholds across samples
-        cols_keep = pd.Series(occurences, index = self.features)
-        cols_keep = cols_keep[cols_keep.between(low_treshold, high_treshold, inclusive = 'neither')]
-        cols_keep = list(cols_keep.index)
-
-        # cols_drop = list(set(self.features).difference(set(cols_keep)))
-        # self.stats_ = {'cols_keep' : cols_keep, 'cols_drop' : cols_drop}
-
-        self.stats_ = {'cols_keep' : cols_keep}
-        """
-
         return self
 
     def _transform_pandas(self, df: pd.DataFrame) -> pd.DataFrame:
         # _validate_df(df, TENSOR_COLUMN_NAME, self._nb_features)
         cols_keep = self.stats_['cols_keep']
         
-        tensor_col = df[TENSOR_COLUMN_NAME]
-        tensor_col = _unwrap_ndarray_object_type_if_needed(tensor_col)
-        tensor_col = pd.DataFrame(tensor_col, columns = self.features)
-        tensor_col = tensor_col[cols_keep].to_numpy()
-        # tensor_col = tensor_col.drop(cols_keep, axis = 1).to_numpy()
-        
-        df[TENSOR_COLUMN_NAME] = pd.Series(list(tensor_col))
+        if len(cols_keep) < self._nb_features:
+            tensor_col = df[TENSOR_COLUMN_NAME]
+            tensor_col = _unwrap_ndarray_object_type_if_needed(tensor_col)
+            tensor_col = pd.DataFrame(tensor_col, columns = self.features)
+            tensor_col = tensor_col[cols_keep].to_numpy()
+            
+            df[TENSOR_COLUMN_NAME] = pd.Series(list(tensor_col))
         
         return df
 

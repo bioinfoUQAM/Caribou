@@ -8,7 +8,11 @@ from utils import *
 from time import time
 from pathlib import Path
 
-from data.reduction.chi2_selection import TensorChi2Selection
+from ray.data.preprocessors import Chain, LabelEncoder
+
+from models.preprocessors.min_max_scaler import TensorMinMaxScaler
+from data.reduction.low_var_selection import TensorLowVarSelection
+from data.reduction.features_selection import TensorFeaturesSelection
 from data.reduction.occurence_exclusion import TensorPercentOccurenceExclusion
 
 __author__ = "Nicolas de Montigny"
@@ -32,12 +36,6 @@ def features_reduction(opt):
     # Verification of k length
     k_length, kmers_list = verify_kmers_list_length(k_length, opt['kmers_list'])
 
-    # Not sure if needed for training KRFE
-    """
-    # Verify that model type is valid / choose default depending on host presence
-    if opt['model_type'] is None:
-        opt['model_type'] = 'cnn'
-    """
     outdirs = define_create_outdirs(opt['outdir'])
     
     # Initialize cluster
@@ -47,36 +45,84 @@ def features_reduction(opt):
 ################################################################################
     """
     Brute force -> Features statistically related to classes
-    1. OccurenceExclusion (5% extremes)
-    2. Chi2 + SelectKBest() (<0.05 p-value)
+    1. OccurenceExclusion (10% extremes)
+    2. LowVarSelection ()
+    3. Chi2 + SelectPercentile() (75% best values)
     """
 
     # Load data 
     ds = ray.data.read_parquet(data['profile'])
-    # Iterate over methods for exp results
+    ds_train = ray.data.read_parquet(data['profile'])
+    # Time the computation of transformations
     t_start = time()
-    ds, kmers_list = occurence_exclusion(ds, kmers_list)
-    ds, data['kmers'] = chi2selection(ds, kmers_list)
+    ds, data['kmers'] = exclude_select(ds, ds_train, kmers_list, data['taxas'][0])
+    # ds, kmers_list = occurence_exclusion(ds, kmers_list)
+    # ds, kmers_list = low_var_selection(ds,kmers_list)
+    # ds, data['kmers'] = features_selection(ds, kmers_list, data['taxas'][0])
     t_end = time()
     t_reduction = t_end - t_start
     # Save reduced dataset
     data['profile'] = f"{data['profile']}_reduced"
     ds.write_parquet(data['profile'])
     # Save reduced K-mers
-    with open(os.path.join(outdirs["data_dir"],'kmers_list.txt'),'w') as handle:
+    with open(os.path.join(outdirs["data_dir"],'kmers_list_reduced.txt'),'w') as handle:
         handle.writelines("%s\n" % item for item in data['kmers'])
     # Save reduced data
     path, ext = os.path.splitext(opt['dataset'])
     data_file = f'{path}_reduced{ext}'
     save_Xy_data(data, data_file)
 
-    print(f"Caribou finished reducing k-mers features of {opt['dataset_name']} using the combined occurence and chi2 methods from the original dataset in {t_reduction} seconds.")
+    print(f"Caribou finished reducing k-mers features of {opt['dataset_name']} in {t_reduction} seconds.")
 
-# Exclusion columns occuring in less / more than 10% of the columns
+def exclude_select(ds, ds_train, kmers, taxa):
+    # Occurence exclusion
+    excluder = TensorPercentOccurenceExclusion(
+        features = kmers,
+        percent = 0.1 # remove features present in less than 10% samples
+    )
+
+    ds = excluder.fit_transform(ds)
+    ds_train = excluder.transform(ds_train)
+
+    kmers = excluder.stats_['cols_keep']
+
+    varier = TensorLowVarSelection(
+        features = kmers,
+        threshold = 0.1, # remove features with less than 10% variance
+    )
+
+    ds = varier.fit_transform(ds)
+    ds_train = varier.transform(ds_train)
+
+    kmers = varier.stats_['cols_keep']
+
+    # Preprocessing
+    preprocessor = Chain(
+        LabelEncoder(taxa),
+        TensorMinMaxScaler(kmers),
+    )
+
+    ds_train = preprocessor.fit_transform(ds_train)
+
+    # Statistical features selection
+    selector = TensorFeaturesSelection(
+            features = kmers,
+            taxa = taxa,
+            threshold = 0.25, # remove lowest 25% significance
+        )
+    
+    selector.fit(ds_train)
+    ds = selector.transform(ds)
+
+    kmers = selector.stats_['cols_keep']
+
+    return ds, kmers
+
+# Exclusion columns occuring in less / more than 10% of the columns = 20% removed
 def occurence_exclusion(ds, kmers):
     preprocessor = TensorPercentOccurenceExclusion(
         features = kmers,
-        percent = 0.05
+        percent = 0.1 # remove features present in less than 10% samples
     )
     
     ds = preprocessor.fit_transform(ds)
@@ -85,15 +131,29 @@ def occurence_exclusion(ds, kmers):
 
     return ds, kmers
 
-# Chi2 evaluation of dependance between features and classes
-def chi2selection(ds, kmers):
-    preprocessor = TensorChi2Selection(
+# Exclusion of columns with variance lower than a certain threshold
+def low_var_selection(ds, kmers):
+    preprocessor = TensorLowVarSelection(
         features = kmers,
-        threshold = 0.05
+        threshold = 0.1, # remove features with less than 10% variance
     )
-    
+
     ds = preprocessor.fit_transform(ds)
 
+    kmers = preprocessor.stats_['cols_keep']
+
+    return ds, kmers
+
+# Chi2 evaluation of dependance between features and classes
+def features_selection(ds, kmers, taxa):
+    preprocessor = TensorFeaturesSelection(
+            features = kmers,
+            taxa = taxa,
+            threshold = 0.25, # remove lowest 25% significance
+        )
+
+    ds = preprocessor.fit_transform(ds)
+    
     kmers = preprocessor.stats_['cols_keep']
 
     return ds, kmers

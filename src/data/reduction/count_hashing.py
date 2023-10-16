@@ -24,7 +24,6 @@ class TensorCountHashing(Preprocessor):
         self.num_features = num_features
 
     def _transform_pandas(self, df: pd.DataFrame):
-        # TODO(matt): Use sparse matrix for efficiency.
         def row_feature_hasher(row):
             hash_counts = collections.defaultdict(int)
             for feature in self.features:

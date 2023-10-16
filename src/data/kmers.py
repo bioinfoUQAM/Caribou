@@ -16,7 +16,7 @@ from data.extraction.seen_kmers_vectorizer import SeenKmersVectorizer
 from data.extraction.given_kmers_vectorizer import GivenKmersVectorizer
 
 # Features selection
-from data.reduction.chi2_selection import TensorChi2Selection
+from data.reduction.features_selection import TensorFeaturesSelection
 from data.reduction.occurence_exclusion import TensorPercentOccurenceExclusion
 
 __author__ = ['Amine Remita', 'Nicolas de Montigny']
@@ -355,7 +355,7 @@ class KmersCollection():
         self.kmers_list = excluder.stats_['cols_keep']
 
         # Chi2 evaluation of dependance between features and classes
-        selector = TensorChi2Selection(
+        selector = TensorFeaturesSelection(
             features = self.kmers_list,
             threshold = 0.05
         )

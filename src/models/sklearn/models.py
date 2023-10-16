@@ -9,7 +9,7 @@ from shutil import rmtree
 
 # Preprocessing
 from ray.data.preprocessors import Chain, BatchMapper, LabelEncoder
-from models.preprocessing.ray_tensor_min_max import TensorMinMaxScaler
+from models.preprocessors.min_max_scaler import TensorMinMaxScaler
 from src.models.encoders.onesvm_label_encoder import OneClassSVMLabelEncoder
 
 # Training

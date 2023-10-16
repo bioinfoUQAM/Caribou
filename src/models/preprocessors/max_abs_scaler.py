@@ -5,6 +5,7 @@ import pandas as pd
 
 from ray.data.preprocessor import Preprocessor
 from ray.data.extensions.tensor_extension import TensorArray
+from ray.air.util.data_batch_conversion import _unwrap_ndarray_object_type_if_needed
 
 TENSOR_COLUMN_NAME = '__value__'
 
@@ -38,7 +39,9 @@ class TensorMaxAbsScaler(Preprocessor):
         """
         Transform the given dataset to pandas dataframe.
         """
-        df = pd.DataFrame(np.vstack(batch[TENSOR_COLUMN_NAME]), columns = self._features_list)
+        df = batch[TENSOR_COLUMN_NAME]
+        df = _unwrap_ndarray_object_type_if_needed(df)
+        df = pd.DataFrame(df, columns = self._features_list)
         for i, col in enumerate(self._features_list):
             df[col] = df[col].apply(value_transform, args=[self._absmax[i]])
 

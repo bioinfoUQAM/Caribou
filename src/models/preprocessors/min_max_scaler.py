@@ -4,6 +4,7 @@ import pandas as pd
 
 from ray.data.dataset import Dataset
 from ray.data.preprocessor import Preprocessor
+from ray.air.util.data_batch_conversion import _unwrap_ndarray_object_type_if_needed
 
 TENSOR_COLUMN_NAME = '__value__'
 
@@ -54,7 +55,8 @@ class TensorMinMaxScaler(Preprocessor):
         """
         min = self.stats_['min']
         max = self.stats_['max']
-        df = np.vstack(batch[TENSOR_COLUMN_NAME].to_numpy())
+        df = batch[TENSOR_COLUMN_NAME]
+        df = _unwrap_ndarray_object_type_if_needed(df)
 
         diff = max - min
         diff[diff == 0] = 1

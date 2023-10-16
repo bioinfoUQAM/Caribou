@@ -52,8 +52,8 @@ def init_ray_cluster(workdir):
                 object_store_memory = mem * frac,
                 _temp_dir = str(workdir),
             )
-            ray.data.DataContext.get_current().execution_options.verbose_progress = True
             logging.getLogger("ray").setLevel(logging.WARNING)
+            ray.data.DataContext.get_current().execution_options.verbose_progress = True
         except ValueError :
             ray.shutdown()
             frac -= 0.05
