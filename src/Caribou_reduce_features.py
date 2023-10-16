@@ -54,8 +54,8 @@ def features_reduction(opt):
     # Time the computation of transformations
     t_start = time()
     ds, kmers_list = occurence_exclusion(ds, kmers_list)
-    ds, kmers_list = low_var_selection(ds,kmers_list)
-    ds, data['kmers'] = features_selection(ds, kmers_list, data['taxas'][0])
+    # ds, kmers_list = low_var_selection(ds,kmers_list)
+    # ds, data['kmers'] = features_selection(ds, kmers_list, data['taxas'][0])
     t_end = time()
     t_reduction = t_end - t_start
     # Save reduced dataset

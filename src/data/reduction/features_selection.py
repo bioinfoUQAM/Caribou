@@ -43,7 +43,7 @@ class TensorFeaturesSelection(Preprocessor):
         
         # Chi batches means extraction
         chi = ds.map_batches(stats, batch_format = 'numpy', batch_size = 32)
-        for i, row in enumerate(chi.iter_rows()):
+        for row in chi.iter_rows():
             mean_chi.append(row['chi'])
 
         # Chi mean of batches means computing

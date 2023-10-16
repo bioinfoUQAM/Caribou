@@ -39,7 +39,7 @@ class TensorLowVarSelection(Preprocessor):
             return({'sum' : [np.sum(df, axis = 0)]})
         
         # Sum per column
-        sums = ds.map_batches(get_sums, batch_format = 'pandas')
+        sums = ds.map_batches(get_sums, batch_format = 'numpy')
         for row in sums.iter_rows():
             sum_arr += row['sum']
         
@@ -53,7 +53,7 @@ class TensorLowVarSelection(Preprocessor):
             return({'sqr_dev' : [np.sum(np.power(np.subtract(df, mean_arr), 2), axis = 0)]})
         
         # Sum of deviation per column
-        sqr_devs = ds.map_batches(get_sqr_dev, batch_format = 'pandas')
+        sqr_devs = ds.map_batches(get_sqr_dev, batch_format = 'numpy')
         for row in sqr_devs.iter_rows():
             sqr_dev_arr += row['sqr_dev']
 

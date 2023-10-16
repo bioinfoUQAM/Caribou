@@ -132,18 +132,18 @@ class TensorPercentOccurenceExclusion(Preprocessor):
         nb_samples = ds.count()
         low_treshold = ceil((0 + self.percent) * nb_samples)
         high_treshold = floor((1 -  self.percent) * nb_samples)
+        occurences = np.zeros(self._nb_features)
 
         # Function for parallel occurences counting
         def count_occurences(batch):
             batch = batch[TENSOR_COLUMN_NAME]
+            batch = _unwrap_ndarray_object_type_if_needed(batch)
             return {'occurences' : [np.count_nonzero(batch, axis = 0)]}
         
         occur = ds.map_batches(count_occurences, batch_format = 'numpy')
 
-        occurences = np.zeros(self._nb_features)
-        for batch in occur.iter_batches(batch_format = 'numpy'):
-            batch_occur = batch['occurences'].sum(axis = 0)
-            occurences += batch_occur
+        for row in occur.iter_rows():
+            occurences += row['occurences']
 
         # Construct list of features to keep by position
         cols_keep = [self.features[i] for i, occurence in enumerate(occurences) if low_treshold < occurence < high_treshold]
