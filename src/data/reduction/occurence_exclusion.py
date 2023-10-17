@@ -29,11 +29,8 @@ class TensorOccurenceExclusion(Preprocessor):
             occurences += np.count_nonzero(batch, axis = 0)
         
         # Include / Exclude by sorted position
-        # cols_drop = []
         cols_keep = pd.Series(occurences, index = self.features)
         cols_keep = cols_keep.sort_values(ascending = True) # Long operation
-        # cols_drop.extend(cols_keep.iloc[0 : self.num_features].index)
-        # cols_drop.extend(cols_keep.iloc[(self._nb_features - self.num_features) : self._nb_features].index)
         cols_keep = cols_keep.iloc[self.num_features : (self._nb_features - self.num_features)]
         cols_keep = list(cols_keep.index)
 
@@ -51,7 +48,6 @@ class TensorOccurenceExclusion(Preprocessor):
         tensor_col = pd.DataFrame(tensor_col, columns = self.features)
 
         tensor_col = tensor_col[cols_keep].to_numpy()
-        # tensor_col = tensor_col.drop(cols_keep, axis = 1).to_numpy()
         
         df[TENSOR_COLUMN_NAME] = pd.Series(list(tensor_col))
 
@@ -59,63 +55,6 @@ class TensorOccurenceExclusion(Preprocessor):
         
     def __repr__(self):
         return (f"{self.__class__.__name__}(features={self._nb_features!r}, num_features={self.num_features!r})")
-"""
-class TensorPercentOccurenceExclusion(Preprocessor):
-    
-
-    def __init__(self, features: List[str], percent : int = 0.05):
-        # Parameters
-        self.features = features
-        self.percent = percent
-        self._nb_features = len(features)
-    
-    def _fit(self, ds: Dataset) -> Preprocessor:
-        nb_samples = ds.count()
-        low_treshold = ceil((0 + self.percent) * nb_samples)
-        high_treshold = floor((1 -  self.percent) * nb_samples)
-
-        # Nb of occurences
-        occurences = np.zeros(self._nb_features)
-        for batch in ds.iter_batches(batch_format = 'numpy'):
-            batch = batch[TENSOR_COLUMN_NAME]
-            occurences += np.count_nonzero(batch, axis = 0)
-
-        # Include / Exclude by occurences thresholds across samples
-        cols_keep = pd.Series(occurences, index = self.features)
-        cols_keep = cols_keep[cols_keep.between(low_treshold, high_treshold, inclusive = 'neither')]
-        cols_keep = list(cols_keep.index)
-
-        # cols_drop = list(set(self.features).difference(set(cols_keep)))
-        # self.stats_ = {'cols_keep' : cols_keep, 'cols_drop' : cols_drop}
-
-        self.stats_ = {'cols_keep' : cols_keep}
-
-        return self
-
-    def _transform_pandas(self, df: pd.DataFrame) -> pd.DataFrame:
-        # _validate_df(df, TENSOR_COLUMN_NAME, self._nb_features)
-        cols_keep = self.stats_['cols_keep']
-        
-        tensor_col = df[TENSOR_COLUMN_NAME]
-        tensor_col = _unwrap_ndarray_object_type_if_needed(tensor_col)
-        tensor_col = pd.DataFrame(tensor_col, columns = self.features)
-        tensor_col = tensor_col[cols_keep].to_numpy()
-        # tensor_col = tensor_col.drop(cols_keep, axis = 1).to_numpy()
-        
-        df[TENSOR_COLUMN_NAME] = pd.Series(list(tensor_col))
-        
-        return df
-
-    def __repr__(self):
-        return (f"{self.__class__.__name__}(features={self._nb_features!r}, percent={self.percent!r}%)")
-"""
-
-def _validate_df(df: pd.DataFrame, column: str, nb_features: int) -> None:
-    if len(df.loc[0, column]) != nb_features:
-        raise ValueError('Discordant number of features in the tensor column with the one from the dataframe used for fitting')
-    
-
-
 
 class TensorPercentOccurenceExclusion(Preprocessor):
     """
@@ -168,3 +107,7 @@ class TensorPercentOccurenceExclusion(Preprocessor):
 
     def __repr__(self):
         return (f"{self.__class__.__name__}(features={self._nb_features!r}, percent={self.percent!r}%)")
+
+def _validate_df(df: pd.DataFrame, column: str, nb_features: int) -> None:
+    if len(df.loc[0, column]) != nb_features:
+        raise ValueError('Discordant number of features in the tensor column with the one from the dataframe used for fitting')

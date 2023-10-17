@@ -343,7 +343,7 @@ class KmersCollection():
         self.df = tokenizer.transform(self.df)
         if self.method == 'seen':
             self.kmers_list = tokenizer.stats_['tokens(sequence)']
-            self._kmers_reduction()
+            # self._kmers_reduction()
 
     def _kmers_reduction(self):
         """
