@@ -8,8 +8,8 @@ import pandas as pd
 from glob import glob
 from shutil import rmtree
 from utils import load_Xy_data
-from src.models.sklearn.models import SklearnModel
-from src.models.kerasTF.models import KerasTFModel
+from models.sklearn.models import SklearnModel
+from models.kerasTF.models import KerasTFModel
 
 # Simulation class
 from models.reads_simulation import readsSimulation
