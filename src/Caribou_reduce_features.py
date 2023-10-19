@@ -6,6 +6,7 @@ import argparse
 
 from utils import *
 from time import time
+from glob import glob
 from pathlib import Path
 
 from ray.data.preprocessors import Chain, LabelEncoder
@@ -50,12 +51,14 @@ def features_reduction(opt):
     """
 
     # Load data 
-    ds = ray.data.read_parquet(data['profile'])
+    files_lst = glob(os.path.join(data['profile'], '*.parquet'))
+    ds = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
+    # ds = ray.data.read_parquet(data['profile'])
     # Time the computation of transformations
     t_start = time()
     ds, kmers_list = occurence_exclusion(ds, kmers_list)
-    # ds, kmers_list = low_var_selection(ds,kmers_list)
-    # ds, data['kmers'] = features_selection(ds, kmers_list, data['taxas'][0])
+    ds, kmers_list = low_var_selection(ds,kmers_list)
+    ds, data['kmers'] = features_selection(ds, kmers_list, data['taxas'][0])
     t_end = time()
     t_reduction = t_end - t_start
     # Save reduced dataset
@@ -75,7 +78,7 @@ def features_reduction(opt):
 def occurence_exclusion(ds, kmers):
     preprocessor = TensorPercentOccurenceExclusion(
         features = kmers,
-        percent = 0.1 # remove features present in less than 10% samples
+        percent = 0.05 # remove features present in less than 5% samples
     )
     
     ds = preprocessor.fit_transform(ds)
@@ -87,7 +90,7 @@ def occurence_exclusion(ds, kmers):
 def low_var_selection(ds, kmers):
     preprocessor = TensorLowVarSelection(
         features = kmers,
-        threshold = 0.1, # remove features with less than 10% variance
+        threshold = 0.05, # remove features with less than 5% variance
     )
 
     ds = preprocessor.fit_transform(ds)

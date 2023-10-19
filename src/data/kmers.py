@@ -371,6 +371,7 @@ class KmersCollection():
         # Chi2 evaluation of dependance between features and classes to keep 75% most significative
         selector = TensorFeaturesSelection(
             features = self.kmers_list,
+            taxa = self.taxas[0],
             threshold = 0.25
         )
         self.df = selector.fit_transform(self.df)
