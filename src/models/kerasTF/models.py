@@ -11,7 +11,7 @@ from shutil import rmtree
 # Preprocessing
 from ray.data.preprocessors import LabelEncoder, Chain
 from models.preprocessors.min_max_scaler import TensorMinMaxScaler
-from src.models.encoders.one_hot_tensor_encoder import OneHotTensorEncoder
+from models.encoders.one_hot_tensor_encoder import OneHotTensorEncoder
 
 # Parent class / models
 from models.models_utils import ModelsUtils
