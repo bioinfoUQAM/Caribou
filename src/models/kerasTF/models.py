@@ -14,7 +14,7 @@ from models.preprocessors.min_max_scaler import TensorMinMaxScaler
 from src.models.encoders.one_hot_tensor_encoder import OneHotTensorEncoder
 
 # Parent class / models
-from src.models.models_utils import ModelsUtils
+from models.models_utils import ModelsUtils
 from models.kerasTF.build_neural_networks import *
 
 # Training

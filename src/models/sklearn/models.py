@@ -10,7 +10,7 @@ from shutil import rmtree
 # Preprocessing
 from ray.data.preprocessors import Chain, BatchMapper, LabelEncoder
 from models.preprocessors.min_max_scaler import TensorMinMaxScaler
-from src.models.encoders.onesvm_label_encoder import OneClassSVMLabelEncoder
+from models.encoders.onesvm_label_encoder import OneClassSVMLabelEncoder
 
 # Training
 from sklearn.naive_bayes import MultinomialNB
@@ -24,10 +24,10 @@ from ray.train.batch_predictor import BatchPredictor
 from ray.train.sklearn.sklearn_predictor import SklearnPredictor
 
 # Parent class
-from src.models.models_utils import ModelsUtils
-from src.models.sklearn.partial_trainer import SklearnPartialTrainer
-from src.models.sklearn.tensor_predictor import SklearnTensorPredictor
-from src.models.sklearn.probability_predictor import SklearnTensorProbaPredictor
+from models.models_utils import ModelsUtils
+from models.sklearn.partial_trainer import SklearnPartialTrainer
+from models.sklearn.tensor_predictor import SklearnTensorPredictor
+from models.sklearn.probability_predictor import SklearnTensorProbaPredictor
 
 
 __author__ = 'Nicolas de Montigny'
