@@ -8,27 +8,29 @@ from glob import glob
 from shutil import rmtree
 
 # Preprocessing
-from ray.data.preprocessors import Chain, BatchMapper, LabelEncoder
+from ray.data.preprocessors import Chain, BatchMapper
+from models.encoders.model_label_encoder import ModelLabelEncoder
 from models.preprocessors.min_max_scaler import TensorMinMaxScaler
 from models.encoders.onesvm_label_encoder import OneClassSVMLabelEncoder
 
 # Training
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.linear_model import SGDOneClassSVM, SGDClassifier
+from models.sklearn.partial_trainer import SklearnPartialTrainer
+from models.sklearn.tensor_predictor import SklearnTensorPredictor
 
 # Tuning
-from ray.air.config import RunConfig, ScalingConfig
+from ray.air.config import RunConfig
 
 # Predicting
 from ray.train.batch_predictor import BatchPredictor
-from ray.train.sklearn.sklearn_predictor import SklearnPredictor
+from models.sklearn.probability_predictor import SklearnTensorProbaPredictor
 
 # Parent class
 from models.models_utils import ModelsUtils
-from models.sklearn.partial_trainer import SklearnPartialTrainer
-from models.sklearn.tensor_predictor import SklearnTensorPredictor
-from models.sklearn.probability_predictor import SklearnTensorProbaPredictor
 
+TENSOR_COLUMN_NAME = '__value__'
+LABELS_COLUMN_NAME = 'labels'
 
 __author__ = 'Nicolas de Montigny'
 
@@ -105,7 +107,7 @@ class SklearnModel(ModelsUtils):
             self._encoded = np.array([1,-1], dtype = np.int32)
             labels = np.array(['bacteria', 'unknown'], dtype = object)
         else:
-            self._encoder = LabelEncoder(self.taxa)
+            self._encoder = ModelLabelEncoder(self.taxa)
         
         self._preprocessor = Chain(
             TensorMinMaxScaler(self.kmers),
@@ -211,7 +213,6 @@ class SklearnModel(ModelsUtils):
         # Define trainer
         self._trainer = SklearnPartialTrainer(
             estimator=self._clf,
-            label_column=self.taxa,
             labels_list=training_labels,
             features_list=self.kmers,
             params=self._train_params,
@@ -238,10 +239,8 @@ class SklearnModel(ModelsUtils):
         print('_predict_cv')
         if df.count() > 0:
             predict_kwargs = {'features':self.kmers, 'num_estimator_cpus':-1}
-# BATCHPREDICTOR DEPRECATED : https://docs.ray.io/en/releases-2.6.3/ray-air/api/doc/ray.train.batch_predictor.BatchPredictor.html#ray.train.batch_predictor.BatchPredictor
-# MUST BE CHANGED TO MAP_BATCHES
             self._predictor = BatchPredictor.from_checkpoint(self._model_ckpt, SklearnTensorPredictor)
-            predictions = self._predictor.predict(df, batch_size = self.batch_size, feature_columns = ['__value__'], **predict_kwargs)
+            predictions = self._predictor.predict(df, batch_size = self.batch_size, feature_columns = [TENSOR_COLUMN_NAME], **predict_kwargs)
             predictions = np.array(predictions.to_pandas()).reshape(-1)
 
             return self._label_decode(predictions)
@@ -255,12 +254,12 @@ class SklearnModel(ModelsUtils):
             if self.classifier == 'onesvm':
                 predict_kwargs = {'features':self.kmers, 'num_estimator_cpus':-1}
                 self._predictor = BatchPredictor.from_checkpoint(self._models_collection['domain'], SklearnTensorPredictor)
-                predictions = self._predictor.predict(df, batch_size = self.batch_size, feature_columns = ['__value__'], **predict_kwargs)
+                predictions = self._predictor.predict(df, batch_size = self.batch_size, feature_columns = [TENSOR_COLUMN_NAME], **predict_kwargs)
                 predictions = np.array(predictions.to_pandas()).reshape(-1)
             else:
                 predict_kwargs = {'features':self.kmers, 'num_estimator_cpus':-1}
                 self._predictor = BatchPredictor.from_checkpoint(self._model_ckpt, SklearnTensorProbaPredictor)
-                predictions = self._predictor.predict(df, batch_size = self.batch_size, feature_columns = ['__value__'], **predict_kwargs)
+                predictions = self._predictor.predict(df, batch_size = self.batch_size, feature_columns = [TENSOR_COLUMN_NAME], **predict_kwargs)
                 predictions = self._prob_2_cls(predictions, len(self._encoded), threshold)
             return self._label_decode(predictions)    
         else:
@@ -279,8 +278,7 @@ class SklearnModel(ModelsUtils):
         if nb_cls == 1:
             predict = np.round(abs(np.concatenate(predict.to_pandas()['predictions'])))
         else:
-            mapper = BatchMapper(map_predicted_label, batch_format = 'pandas')
-            predict = mapper.transform(predict)
+            predict = predict.map_batches(map_predicted_label, batch_format = 'pandas')
             predict = np.ravel(np.array(predict.to_pandas()))
 
         return predict

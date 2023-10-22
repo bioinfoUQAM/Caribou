@@ -26,6 +26,8 @@ from ray.train.sklearn._sklearn_utils import _set_cpu_params
 
 from ray.train.sklearn import SklearnTrainer
 
+LABELS_COLUMN_NAME = 'labels'
+
 simplefilter(action='ignore', category=FutureWarning)
 
 class SklearnPartialTrainer(SklearnTrainer):
@@ -38,7 +40,6 @@ class SklearnPartialTrainer(SklearnTrainer):
         *,
         estimator,
         datasets,
-        label_column = None,
         labels_list = None,
         features_list = None,
         params = None,
@@ -57,7 +58,7 @@ class SklearnPartialTrainer(SklearnTrainer):
         super().__init__(
         estimator = estimator,
         datasets = datasets,
-        label_column = label_column,
+        label_column = LABELS_COLUMN_NAME,
         params = params,
         scoring = scoring,
         cv = cv,
@@ -204,17 +205,20 @@ class SklearnPartialTrainer(SklearnTrainer):
                 start_time = time()
                 for batch_X, batch_y in zip(
                     epoch_X.iter_batches(
-                        batch_size = self._batch_size,
+                        # batch_size = self._batch_size,
+                        batch_size = 1,
                         batch_format = 'numpy'
                     ),
                     epoch_y.iter_batches(
-                        batch_size = self._batch_size,
+                        # batch_size = self._batch_size,
+                        batch_size = 1,
                         batch_format = 'numpy'
                     )
                 ):  
                     if isinstance(batch_X, dict):
                         batch_X = batch_X['__value__']
-                        
+                    
+                    """    
                     try:
                         batch_X = pd.DataFrame(batch_X, columns = self._features_list)
                     except ValueError:
@@ -224,6 +228,7 @@ class SklearnPartialTrainer(SklearnTrainer):
                                     Removing the last {} additionnal values, this may influence training.\
                                         If this persists over multiple samples, please rerun the K-mers extraction".format(len(batch_X[i]) - len(self._features_list)))
                                 batch_X[i] = batch_X[i][:len(self._features_list)]
+                    """
                     batch_y = np.ravel(batch_y[self.label_column])
                     try:
                         self.estimator.partial_fit(batch_X, batch_y, classes = self._labels, **self.fit_params)
@@ -240,8 +245,10 @@ class SklearnPartialTrainer(SklearnTrainer):
                 )):
                     X_calib_df[ind] = batch['__value__']
 
+                """
                 X_calib = pd.DataFrame(X_calib_df, columns = self._features_list)
-                y_calib = y_calib.to_pandas()
+                """
+                y_calib = y_calib.to_pandas().to_numpy()
                 self.estimator = CalibratedClassifierCV(
                     estimator = self.estimator,
                     method = 'sigmoid',
@@ -300,16 +307,19 @@ class SklearnPartialTrainer(SklearnTrainer):
 
             start_time = time()
             for batch, labels in zip(X_test.iter_batches(
-                    batch_size = self._batch_size,
+                    # batch_size = self._batch_size,
+                    batch_size = 1,
                     batch_format = 'numpy'
                 ), y_test.iter_batches(
-                    batch_size=self._batch_size,
+                    # batch_size = self._batch_size,
+                    batch_size = 1,
                     batch_format = 'numpy'
                 )
             ):
                 if isinstance(batch, dict):
                     batch = batch['__value__']
 
+                """
                 try:
                     batch = pd.DataFrame(batch, columns = self._features_list)
                 except ValueError:
@@ -319,9 +329,9 @@ class SklearnPartialTrainer(SklearnTrainer):
                                 Removing the last {} additionnal values, this may influence training.\
                                     If this persists over multiple samples, please rerun the K-mers extraction".format(len(batch[i]) - len(self._features_list)))
                             batch[i] = batch[i][:len(self._features_list)]
+                """
+                
                 labels = np.ravel(labels[self.label_column])
-
-                print(batch)
 
                 try:
                     test_scores.append(_score(estimator, batch, labels, scorers))

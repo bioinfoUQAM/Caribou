@@ -6,6 +6,8 @@ from ray.data.dataset import Dataset
 from ray.data.preprocessor import Preprocessor
 from ray.data.preprocessors.encoder import _get_unique_value_indices, _validate_df, LabelEncoder
 
+LABELS_COLUMN_NAME = 'labels'
+
 class OneClassSVMLabelEncoder(LabelEncoder):
     """
     Class adapted from Ray's LabelEncoder class to encode labels as integer targets for Scikit-Learn SGDOneClassSVM model.
@@ -33,4 +35,6 @@ class OneClassSVMLabelEncoder(LabelEncoder):
             return s
 
         df[self.label_column] = df[self.label_column].transform(column_label_encoder)
+        df = df.rename(columns = {self.label_column : LABELS_COLUMN_NAME})
+
         return df

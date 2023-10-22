@@ -11,6 +11,7 @@ from shutil import rmtree
 # Preprocessing
 from ray.data.preprocessors import LabelEncoder, Chain
 from models.preprocessors.min_max_scaler import TensorMinMaxScaler
+from models.encoders.model_label_encoder import ModelLabelEncoder
 from models.encoders.one_hot_tensor_encoder import OneHotTensorEncoder
 
 # Parent class / models
@@ -36,6 +37,9 @@ from ray.train.batch_predictor import BatchPredictor
 __author__ = 'Nicolas de Montigny'
 
 __all__ = ['KerasTFModel']
+
+TENSOR_COLUMN_NAME = '__value__'
+LABELS_COLUMN_NAME = 'labels'
 
 # Ignore warnings to have a more comprehensible output on stdout
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
@@ -138,11 +142,17 @@ class KerasTFModel(ModelsUtils):
         for row in df.iter_rows():
             labels.append(row[self.taxa])
         self._nb_classes = len(np.unique(labels))
-        self._preprocessor = Chain(
-            TensorMinMaxScaler(self.kmers),
-            LabelEncoder(self.taxa),
-            OneHotTensorEncoder(self.taxa),
-        )
+        if self._nb_classes == 2:
+            self._preprocessor = Chain(
+                TensorMinMaxScaler(self.kmers),
+                ModelLabelEncoder(self.taxa),
+            )
+        else:
+            self._preprocessor = Chain(
+                TensorMinMaxScaler(self.kmers),
+                LabelEncoder(self.taxa),
+                OneHotTensorEncoder(self.taxa),
+            )
         self._preprocessor.fit(df)
 
     def _label_decode(self, predict):
@@ -220,6 +230,7 @@ class KerasTFModel(ModelsUtils):
             ),
             datasets=datasets,
         )
+        
         training_result = self._trainer.fit()
         self._model_ckpt = training_result.best_checkpoints[0][0]
 
@@ -227,7 +238,7 @@ class KerasTFModel(ModelsUtils):
         print('predict')
         if df.count() > 0:
             if len(df.schema().names) > 1:
-                col_2_drop = [col for col in df.schema().names if col != '__value__']
+                col_2_drop = [col for col in df.schema().names if col != TENSOR_COLUMN_NAME]
                 df = df.drop_columns(col_2_drop)
 
             # Preprocess
@@ -235,12 +246,12 @@ class KerasTFModel(ModelsUtils):
 
             print('number of classes :', self._nb_classes)
 
-            predictor = BatchPredictor.from_checkpoint(
+            self._predictor = BatchPredictor.from_checkpoint(
                 self._model_ckpt,
                 TensorflowPredictor,
                 model_definition = lambda: build_model(self.classifier, self._nb_classes, len(self.kmers))
             )
-            predictions = predictor.predict(
+            predictions = self._predictor.predict(
                 data = df,
                 batch_size = self.batch_size
             )
@@ -258,46 +269,44 @@ class KerasTFModel(ModelsUtils):
     def _prob_2_cls(self, predictions, threshold):
         print('_prob_2_cls')
         def map_predicted_label_binary(df, threshold):
-            # lower_threshold = 0.5 - (threshold * 0.5)
-            # upper_threshold = 0.5 + (threshold * 0.5)
-            predictions = pd.DataFrame({
-                'best_proba': [df['predictions'][i][np.argmax(df['predictions'][i])] for i in range(len(df))],
-                'predicted_label': df["predictions"].map(lambda x: np.array(x).argmax()) # GET POSITION OF ARGMAX
+            df = np.ravel(df['predictions'])
+            lower_threshold = 0.5 - (threshold * 0.5)
+            upper_threshold = 0.5 + (threshold * 0.5)
+            predict = pd.DataFrame({
+                'proba': df,
+                'predicted_label': np.full(len(df), -1)
             })
-            print('map_predicted_label_binary')
-            print(predictions)
-            # predict = pd.DataFrame({
-            #     'proba': df['predictions'],
-            #     'predicted_label': np.zeros(len(df), dtype = np.float32)
-            # })
             # predict['predicted_label'] = np.round(predict['proba'])
-            # predict.loc[predict['proba'] >= upper_threshold, 'predicted_label'] = 1
-            # predict.loc[predict['proba'] <= lower_threshold, 'predicted_label'] = 0
-            return predictions['predicted_label'].to_numpy(dtype = np.int32)
+            predict.loc[predict['proba'] >= upper_threshold, 'predicted_label'] = 1
+            predict.loc[predict['proba'] <= lower_threshold, 'predicted_label'] = 0
+            return {'predictions' : predict['predicted_label'].to_numpy(dtype = np.int32)}
         
         def map_predicted_label_multiclass(df, threshold):
-            predictions = pd.DataFrame({
-                'best_proba': [df['predictions'][i][np.argmax(df['predictions'][i])] for i in range(len(df))],
-                'predicted_label': df["predictions"].map(lambda x: np.array(x).argmax())
+            df = df['predictions']
+            pred = pd.DataFrame({
+                'best_proba': [df[i][np.argmax(df[i])] for i in range(len(df))],
+                'predicted_label': df.map(lambda x: np.array(x).argmax())
             })
-            predictions.loc[predictions['best_proba'] < threshold, 'predicted_label'] = -1
-            return predictions['predicted_label'].to_numpy(dtype = np.int32)
+            pred.loc[pred['best_proba'] < threshold, 'predicted_label'] = -1
+            return {'predictions' : pred['predicted_label'].to_numpy(dtype = np.int32)}
         
         if self._nb_classes == 2:
+            print('map_predicted_label_binary')
             fn = map_predicted_label_binary
         else:
+            print('map_predicted_label_multiclass')
             fn = map_predicted_label_multiclass
 
         predict = []
-        for batch in predictions.iter_batches(batch_size = self.batch_size):
-            predict.append(lambda : fn(batch, threshold))
+        predictions = predictions.map_batches(
+            lambda batch : fn(batch, threshold),
+            batch_format = 'numpy',
+            batch_size = self.batch_size
+        )
+        for row in predictions.iter_rows():
+            predict.append(row['predictions'])
 
-        import sys
-        predictions.materialize()
-        print(predict)
-        sys.exit()
-
-        return np.concatenate(predict)
+        return predict
 
 
 # Training/building function outside of the class as mentioned on the Ray discussion
@@ -317,6 +326,8 @@ def train_func(config):
     nb_cls = config.get('nb_cls')
     model = config.get('model')
 
+    
+
     # Model construction 
     model = build_model(model, nb_cls, size)
 
@@ -326,15 +337,15 @@ def train_func(config):
 
     for _ in range(epochs):
         batch_train = train_data.to_tf(
-            feature_columns = '__value__',
-            label_columns = 'labels',
+            feature_columns = TENSOR_COLUMN_NAME,
+            label_columns = LABELS_COLUMN_NAME,
             batch_size = batch_size,
             local_shuffle_buffer_size = batch_size,
             local_shuffle_seed = int(np.random.randint(1,10000, size = 1))
         )
         batch_val = val_data.to_tf(
-            feature_columns = '__value__',
-            label_columns = 'labels',
+            feature_columns = TENSOR_COLUMN_NAME,
+            label_columns = LABELS_COLUMN_NAME,
             batch_size = batch_size,
             local_shuffle_buffer_size = batch_size,
             local_shuffle_seed = int(np.random.randint(1,10000, size = 1))

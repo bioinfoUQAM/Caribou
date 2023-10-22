@@ -25,7 +25,7 @@ def build_attention(nb_kmers):
 
     x = Dense(128, activation = "relu")(x)
     x = Dropout(0.1)(x)
-    x = Dense(2, activation = "tanh")(x)
+    x = Dense(1, activation = "tanh")(x)
 
     model = Model(inputs = inputs, outputs = x)
     model.compile(loss = BinaryCrossentropy(from_logits = False), optimizer = 'adam', metrics = ['accuracy'])
@@ -45,7 +45,7 @@ def build_LSTM(nb_kmers):
 
     x = LSTM(128, recurrent_dropout = 0.1, dropout = 0.1)(x)
 
-    x = Dense(2, activation = 'tanh')(x)
+    x = Dense(1, activation = 'tanh')(x)
     
     model = Model(inputs = inputs, outputs = x)
     model.compile(loss=BinaryCrossentropy(from_logits = False), optimizer='adam', metrics=['accuracy'])
@@ -77,9 +77,9 @@ def build_deepLSTM(nb_kmers):
     net = Dense(10, activation='relu', name='D_%d'%10)(net)
     net = Dropout(0.1,name='fr_same')(net)
 
-    outputs = Dense(2, activation='tanh', name='score')(net)
+    outputs = Dense(1, activation='sigmoid', name='score')(net)
     model = Model(inputs=inputs, outputs=outputs)
-    model.compile(loss=BinaryCrossentropy(from_logits = True), optimizer='adam', metrics=['accuracy'])
+    model.compile(loss=BinaryCrossentropy(from_logits = False), optimizer='adam', metrics=['accuracy'])
 
     return model
 

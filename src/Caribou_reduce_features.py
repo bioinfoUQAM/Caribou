@@ -78,7 +78,7 @@ def features_reduction(opt):
 def occurence_exclusion(ds, kmers):
     preprocessor = TensorPercentOccurenceExclusion(
         features = kmers,
-        percent = 0.05 # remove features present in less than 5% samples
+        percent = 0.1 # remove features present in less than 5% samples
     )
     
     ds = preprocessor.fit_transform(ds)
@@ -90,7 +90,7 @@ def occurence_exclusion(ds, kmers):
 def low_var_selection(ds, kmers):
     preprocessor = TensorLowVarSelection(
         features = kmers,
-        threshold = 0.05, # remove features with less than 5% variance
+        threshold = 0.1, # remove features with less than 5% variance
     )
 
     ds = preprocessor.fit_transform(ds)
