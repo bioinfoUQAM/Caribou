@@ -139,6 +139,7 @@ class KerasTFModel(ModelsUtils):
     def preprocess(self, df):
         print('preprocess')
         labels = []
+        encoded = []
         for row in df.iter_rows():
             labels.append(row[self.taxa])
         self._nb_classes = len(np.unique(labels))
@@ -154,25 +155,23 @@ class KerasTFModel(ModelsUtils):
                 OneHotTensorEncoder(self.taxa),
             )
         self._preprocessor.fit(df)
+        # Labels mapping
+        labels = list(self._preprocessor.preprocessors[1].stats_[f'unique_values({self.taxa})'].keys())
+        encoded = np.arange(len(labels))
+        labels = np.append(labels, 'unknown')
+        encoded = np.append(encoded, -1)
+        self._labels_map = zip(labels, encoded)
 
     def _label_decode(self, predict):
         print('_label_decode')
-        if self._labels_map is None:
-            encoded = []
-            encoded.append(-1)
-            labels = ['unknown']
-            for k, v in self._preprocessor.preprocessors[1].stats_['unique_values({})'.format(self.taxa)].items():
-                encoded.append(v)
-                labels.append(k)
         decoded = pd.Series(np.empty(len(predict), dtype=object))
-        for label, coded in zip(labels, encoded):
-            decoded[predict == coded] = label
+        for label, encoded in self._labels_map:
+            decoded[predict == encoded] = label
 
         return np.array(decoded)
 
     def train(self, datasets, kmers_ds, cv = True):
         print('train')
-
         if cv:
             self._cross_validation(datasets, kmers_ds)
         else:
@@ -180,7 +179,6 @@ class KerasTFModel(ModelsUtils):
 
     def _cross_validation(self, datasets, kmers_ds):
         print('_cross_validation')
-
         df_test = datasets.pop('test')
 
         self._fit_model(datasets)
@@ -189,7 +187,7 @@ class KerasTFModel(ModelsUtils):
         for row in df_test.iter_rows():
             y_true.append(row[self.taxa])
 
-        y_pred = self.predict(df_test.drop_columns([self.taxa]), threshold = 0)
+        y_pred = self.predict(df_test.drop_columns([self.taxa]), threshold = 0.8)
 
         self._cv_score(y_true, y_pred)
 
@@ -197,7 +195,6 @@ class KerasTFModel(ModelsUtils):
         print('_fit_model')
         # Preprocessing loop
         for name, ds in datasets.items():
-            print(f'dataset preprocessing : {name}')
             ds = ds.drop_columns(['id'])
             ds = self._preprocessor.transform(ds)
             datasets[name] = ds
@@ -244,8 +241,6 @@ class KerasTFModel(ModelsUtils):
             # Preprocess
             df = self._preprocessor.preprocessors[0].transform(df)
 
-            print('number of classes :', self._nb_classes)
-
             self._predictor = BatchPredictor.from_checkpoint(
                 self._model_ckpt,
                 TensorflowPredictor,
@@ -255,8 +250,6 @@ class KerasTFModel(ModelsUtils):
                 data = df,
                 batch_size = self.batch_size
             )
-
-            print(predictions.to_pandas())
 
             # Convert predictions to labels
             predictions = self._prob_2_cls(predictions, threshold)
@@ -276,7 +269,6 @@ class KerasTFModel(ModelsUtils):
                 'proba': df,
                 'predicted_label': np.full(len(df), -1)
             })
-            # predict['predicted_label'] = np.round(predict['proba'])
             predict.loc[predict['proba'] >= upper_threshold, 'predicted_label'] = 1
             predict.loc[predict['proba'] <= lower_threshold, 'predicted_label'] = 0
             return {'predictions' : predict['predicted_label'].to_numpy(dtype = np.int32)}
@@ -284,10 +276,11 @@ class KerasTFModel(ModelsUtils):
         def map_predicted_label_multiclass(df, threshold):
             df = df['predictions']
             pred = pd.DataFrame({
-                'best_proba': [df[i][np.argmax(df[i])] for i in range(len(df))],
-                'predicted_label': df.map(lambda x: np.array(x).argmax())
+                'best_proba': [np.max(arr) for arr in df],
+                'predicted_label' : [np.argmax(arr) for arr in df]
             })
             pred.loc[pred['best_proba'] < threshold, 'predicted_label'] = -1
+
             return {'predictions' : pred['predicted_label'].to_numpy(dtype = np.int32)}
         
         if self._nb_classes == 2:

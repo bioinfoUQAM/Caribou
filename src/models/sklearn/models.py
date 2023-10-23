@@ -114,6 +114,7 @@ class SklearnModel(ModelsUtils):
             self._encoder,
         )
         self._preprocessor.fit(df)
+        # Labels mapping
         if self.classifier != 'onesvm':
             labels = list(self._preprocessor.preprocessors[1].stats_[f'unique_values({self.taxa})'].keys())
             self._encoded = np.arange(len(labels))

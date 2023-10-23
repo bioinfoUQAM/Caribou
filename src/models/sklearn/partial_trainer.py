@@ -255,7 +255,7 @@ class SklearnPartialTrainer(SklearnTrainer):
                     cv = 'prefit',
                 )
                 self.estimator.fit(
-                    X_calib,
+                    X_calib_df,
                     y_calib,
                 )
         
