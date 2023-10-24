@@ -26,15 +26,11 @@ class OneClassSVMLabelEncoder(LabelEncoder):
 
     def _transform_pandas(self, df: pd.DataFrame):
         _validate_df(df, self.label_column)
+        mapping = self.stats_[f"unique_values({self.label_column})"]
+        df[self.label_column] = df[self.label_column].str.lower()
+        df[self.label_column] = df[self.label_column].map(mapping)
+        df[self.label_column] = df[self.label_column].fillna(-1)
 
-        def column_label_encoder(s: pd.Series):
-            s_values = self.stats_[f"unique_values({s.name})"]
-            s = s.str.lower()
-            s = s.map(s_values)
-            s = s.fillna(-1)
-            return s
-
-        df[self.label_column] = df[self.label_column].transform(column_label_encoder)
         df = df.rename(columns = {self.label_column : LABELS_COLUMN_NAME})
 
         return df

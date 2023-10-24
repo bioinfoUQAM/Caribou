@@ -535,5 +535,5 @@ class ClassificationMethods():
 ###############################################################################
 
 def convert_archaea_bacteria(df):
-            df.loc[df['domain'].str.lower() == 'archaea', 'domain'] = 'Bacteria'
-            return df
+    df.loc[df['domain'].str.lower() == 'archaea', 'domain'] = 'Bacteria'
+    return df

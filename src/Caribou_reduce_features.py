@@ -103,7 +103,7 @@ def features_selection(ds, kmers, taxa):
     preprocessor = TensorFeaturesSelection(
             features = kmers,
             taxa = taxa,
-            threshold = 0.25, # remove lowest 25% significance
+            threshold = 0.75, # Keep 25% higest results
         )
 
     ds = preprocessor.fit_transform(ds)
