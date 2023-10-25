@@ -51,9 +51,7 @@ def features_reduction(opt):
     """
 
     # Load data 
-    files_lst = glob(os.path.join(data['profile'], '*.parquet'))
-    ds = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
-    # ds = ray.data.read_parquet(data['profile'])
+    ds = ray.data.read_parquet(data['profile'], parallelism = -1)
     # Time the computation of transformations
     t_start = time()
     ds, kmers_list = occurence_exclusion(ds, kmers_list)
