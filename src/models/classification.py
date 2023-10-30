@@ -112,7 +112,8 @@ class ClassificationMethods():
     def execute_training_prediction(self, data2classify):
         print('execute_training_prediction')
         files_lst = glob(os.path.join(data2classify['profile'],'*.parquet'))
-        df2classify = ray.data.read_parquet_bulk(files_lst, parallelism = -1)
+        df2classify = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
+        # df2classify = ray.data.read_parquet_bulk(files_lst, parallelism = -1)
         ids2classify = data2classify['ids']
         for i, taxa in enumerate(self._taxas_order):
             if taxa in self._taxas:
@@ -129,9 +130,9 @@ class ClassificationMethods():
                 # Predicting
                 try:
                     if i == 0:
-                        df2classify = self._classify_first(df2classify, taxa, ids2classify, file2classify)
+                        df2classify = self._classify_first(df2classify, taxa, ids2classify, data2classify['profile'])
                     else:
-                        df2classify = self._classify_subsequent(df2classify, taxa, ids2classify, file2classify)
+                        df2classify = self._classify_subsequent(df2classify, taxa, ids2classify, data2classify['profile'])
                 except ValueError:
                     print('Stopping classification prematurelly because there are no more sequences to classify')
                     return taxa
@@ -248,16 +249,17 @@ class ClassificationMethods():
     def execute_classification(self, data2classify):
         print('execute_classification')
         files_lst = glob(os.path.join(data2classify['profile'],'*.parquet'))
-        df = ray.data.read_parquet_bulk(files_lst, parallelism = -1)
+        df = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
+        # df = ray.data.read_parquet_bulk(files_lst, parallelism = -1)
         ids = data2classify['ids']
         if len(self.classified_data['sequence']) == 0:
             raise ValueError('Please train a model before executing classification')
         for i, taxa in enumerate(self.classified_data['sequence']):
             try:
                 if i == 0:
-                    df = self._classify_first(df, taxa, ids, df_file)
+                    df = self._classify_first(df, taxa, ids, data2classify['profile'])
                 else:
-                    df = self._classify_subsequent(df, taxa, ids, df_file)
+                    df = self._classify_subsequent(df, taxa, ids, data2classify['profile'])
             except ValueError:
                 print('Stopping classification prematurelly because there are no more sequences to classify')
                 return taxa
@@ -437,12 +439,15 @@ class ClassificationMethods():
 
         if os.path.exists(self._merged_database_host['profile']):
             files_lst = glob(os.path.join(self._merged_database_host['profile'],'*.parquet'))
-            df_merged = ray.data.read_parquet_bulk(files_lst, parallelism = -1)
+            df_merged = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
+            # df_merged = ray.data.read_parquet_bulk(files_lst, parallelism = -1)
         else:
             files_lst = glob(os.path.join(database_data['profile'],'*.parquet'))
-            df_db = ray.data.read_parquet_bulk(files_lst, parallelism = -1)
+            df_db = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
+            # df_db = ray.data.read_parquet_bulk(files_lst, parallelism = -1)
             files_lst = glob(os.path.join(host_data['profile'],'*.parquet'))
-            df_host = ray.data.read_parquet_bulk(files_lst, parallelism = -1)
+            df_host = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
+            # df_host = ray.data.read_parquet_bulk(files_lst, parallelism = -1)
 
             cols2drop = []
             for col in df_db.schema().names:
@@ -470,7 +475,8 @@ class ClassificationMethods():
         print('_load_training_data_merged')
         if self._classifier_binary == 'onesvm' and taxa == 'domain':
             files_lst = glob(os.path.join(self._database_data['profile'],'*.parquet'))
-            df_train = ray.data.read_parquet_bulk(files_lst, parallelism = -1)
+            df_train = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
+            # df_train = ray.data.read_parquet_bulk(files_lst, parallelism = -1)
             df_train = df_train.map_batches(convert_archaea_bacteria, batch_format = 'pandas')
             df_val_test = self._merge_database_host(self._database_data, self._host_data)
             df_val_test = df_val_test.map_batches(convert_archaea_bacteria, batch_format = 'pandas')
@@ -492,7 +498,8 @@ class ClassificationMethods():
     def _load_training_data(self):
         print('_load_training_data')
         files_lst = glob(os.path.join(self._database_data['profile'],'*.parquet'))
-        df_train = ray.data.read_parquet_bulk(files_lst, parallelism = -1)
+        df_train = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
+        # df_train = ray.data.read_parquet_bulk(files_lst, parallelism = -1)
         df_train = df_train.map_batches(convert_archaea_bacteria, batch_format = 'pandas')
         df_val = self.split_sim_cv_ds(df_train,self._database_data, 'validation')
         self._training_datasets = {'train': df_train, 'validation': df_val}
@@ -512,7 +519,8 @@ class ClassificationMethods():
         cv_sim = readsSimulation(kmers_ds['fasta'], cls, list(cls['id']), 'miseq', sim_outdir, name)
         sim_data = cv_sim.simulation(self._k, kmers_ds['kmers'])
         files_lst = glob(os.path.join(sim_data['profile'],'*.parquet'))
-        df = ray.data.read_parquet_bulk(files_lst, parallelism = -1)
+        df = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
+        # df = ray.data.read_parquet_bulk(files_lst, parallelism = -1)
         return df
     
     def split_sim_cv_ds(self, ds, data, name):
@@ -522,7 +530,8 @@ class ClassificationMethods():
             )
         if os.path.exists(ds_path):
             files_lst = glob(os.path.join(ds_path,'*.parquet'))
-            cv_ds = ray.data.read_parquet_bulk(files_lst, parallelism = -1)
+            cv_ds = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
+            # cv_ds = ray.data.read_parquet_bulk(files_lst, parallelism = -1)
         else:
             cv_ds = ds.random_sample(0.1)
             if cv_ds.count() == 0:
