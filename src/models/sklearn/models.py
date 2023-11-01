@@ -14,6 +14,7 @@ from models.preprocessors.min_max_scaler import TensorMinMaxScaler
 from models.encoders.onesvm_label_encoder import OneClassSVMLabelEncoder
 
 # Training
+from ray.air.config import ScalingConfig
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.linear_model import SGDOneClassSVM, SGDClassifier
 from models.sklearn.partial_trainer import SklearnPartialTrainer
@@ -155,7 +156,7 @@ class SklearnModel(ModelsUtils):
         y_true = list(y_true)
         
         y_pred = self._predict_cv(df_test.drop_columns([self.taxa]))
-
+        
         self._cv_score(y_true, y_pred)
 
     def _build(self):
@@ -221,11 +222,11 @@ class SklearnModel(ModelsUtils):
             batch_size=self.batch_size,
             training_epochs=self._training_epochs,
             set_estimator_cpus=True,
-            # scaling_config=ScalingConfig(
-            #     trainer_resources={
-            #         'CPU': int(os.cpu_count()*0.6)
-            #     }
-            # ),
+            scaling_config=ScalingConfig(
+                trainer_resources={
+                    'CPU': int(os.cpu_count()*0.6)
+                }
+            ),
             run_config=RunConfig(
                 name=self.classifier,
                 local_dir=self._workdir

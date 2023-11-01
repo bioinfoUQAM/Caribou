@@ -15,7 +15,7 @@ from ray.air.util.data_batch_conversion import _unwrap_ndarray_object_type_if_ne
 
 TENSOR_COLUMN_NAME = '__value__'
 
-class TensorFeaturesSelection(Preprocessor):
+class TensorChiFeaturesSelection(Preprocessor):
     """
     Custom implementation of SelectKBest with Chi2 inspired by sklearn.feature_selection.SelectPercentile and sklearn.feature_selection.chi2 features selector to be used as a Ray preprocessor.
     https://scikit-learn.org/stable/modules/generated/sklearn.feature_selection.chi2.html#sklearn.feature_selection.chi2

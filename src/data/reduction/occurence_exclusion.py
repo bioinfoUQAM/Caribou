@@ -19,7 +19,7 @@ class TensorOccurenceExclusion(Preprocessor):
         # Parameters
         self.features = features
         self._nb_features = len(features)
-        self.num_features = int((self._nb_features - num_features) / 2)
+        self._num_features = int(self._nb_features - num_features)
 
     def _fit(self, ds: Dataset) -> Preprocessor:
         # Nb of occurences
@@ -31,7 +31,7 @@ class TensorOccurenceExclusion(Preprocessor):
         # Include / Exclude by sorted position
         cols_keep = pd.Series(occurences, index = self.features)
         cols_keep = cols_keep.sort_values(ascending = True) # Long operation
-        cols_keep = cols_keep.iloc[self.num_features : (self._nb_features - self.num_features)]
+        cols_keep = cols_keep.iloc[0 : self._num_features]
         cols_keep = list(cols_keep.index)
 
         # self.stats_ = {'cols_keep' : cols_keep, 'cols_drop' : cols_drop}
@@ -54,7 +54,7 @@ class TensorOccurenceExclusion(Preprocessor):
         return df
         
     def __repr__(self):
-        return (f"{self.__class__.__name__}(features={self._nb_features!r}, num_features={self.num_features!r})")
+        return (f"{self.__class__.__name__}(features={self._nb_features!r}, num_features={self._num_features!r})")
 
 class TensorPercentOccurenceExclusion(Preprocessor):
     """
@@ -69,7 +69,6 @@ class TensorPercentOccurenceExclusion(Preprocessor):
     
     def _fit(self, ds: Dataset) -> Preprocessor:
         nb_samples = ds.count()
-        low_treshold = ceil((0 + self.percent) * nb_samples)
         high_treshold = floor((1 -  self.percent) * nb_samples)
         occurences = np.zeros(self._nb_features)
 
@@ -85,7 +84,7 @@ class TensorPercentOccurenceExclusion(Preprocessor):
             occurences += row['occurences']
 
         # Construct list of features to keep by position
-        cols_keep = [self.features[i] for i, occurence in enumerate(occurences) if low_treshold < occurence < high_treshold]
+        cols_keep = [self.features[i] for i, occurence in enumerate(occurences) if occurence < high_treshold]
         
         self.stats_ = {'cols_keep' : cols_keep}
 

@@ -4,15 +4,18 @@ import ray
 import os.path
 import argparse
 
+import numpy as np
+
 from utils import *
 from time import time
 from glob import glob
 from pathlib import Path
 
-from ray.data.preprocessors import Chain, LabelEncoder
+from models.preprocessors.tfidf_transformer import TensorTfIdfTransformer
 
 from data.reduction.low_var_selection import TensorLowVarSelection
-from data.reduction.features_selection import TensorFeaturesSelection
+from data.reduction.chi_features_selection import TensorChiFeaturesSelection
+from data.reduction.rdf_features_selection import TensorRDFFeaturesSelection
 from data.reduction.occurence_exclusion import TensorPercentOccurenceExclusion
 
 __author__ = "Nicolas de Montigny"
@@ -44,21 +47,33 @@ def features_reduction(opt):
 # Features reduction
 ################################################################################
     """
+    First option : Select features relevant to classification by Random Forest of decision trees
+    
     Brute force -> Features statistically related to classes
     1. OccurenceExclusion (10% extremes)
     2. LowVarSelection (variance > 10%)
     3. Chi2 + SelectPercentile() (75% best values)
     """
 
+    """
+    TODO: Add to preprocessing in model training
+    1. Replace the MinMaxScaling -> TfidfTransformer to scale down the impact of tokens that occur very frequently (https://scikit-learn.org/stable/modules/generated/sklearn.feature_extraction.text.TfidfTransformer.html#sklearn.feature_extraction.text.TfidfTransformer)
+    2. TruncatedSVD to reduce dimensions and keep 10 000 features ~PCA (https://scikit-learn.org/stable/modules/generated/sklearn.decomposition.TruncatedSVD.html#sklearn.decomposition.TruncatedSVD)
+    """
+
     # Load data 
-    files_lst = glob(data['profile'])
+    files_lst = glob(os.path.join(data['profile'],'*.parquet'))
     ds = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
     # ds = ray.data.read_parquet(data['profile'], parallelism = -1)
     # Time the computation of transformations
     t_start = time()
-    ds, kmers_list = occurence_exclusion(ds, kmers_list)
-    ds, kmers_list = low_var_selection(ds,kmers_list)
-    ds, data['kmers'] = features_selection(ds, kmers_list, data['taxas'][0])
+    ds = tfidf_transform(ds, kmers_list)
+    ds, kmers_list = tree_relevant_features(ds, kmers_list, 'phylum')
+    print(len(kmers_list))
+    if len(kmers_list) == 0:
+        ds, kmers_list = occurence_exclusion(ds, opt['kmers_list'])
+        ds, kmers_list = low_var_selection(ds,kmers_list)
+        ds, data['kmers'] = features_selection(ds, kmers_list, 'phylum')
     t_end = time()
     t_reduction = t_end - t_start
     # Save reduced dataset
@@ -78,7 +93,7 @@ def features_reduction(opt):
 def occurence_exclusion(ds, kmers):
     preprocessor = TensorPercentOccurenceExclusion(
         features = kmers,
-        percent = 0.1 # remove features present in less than 5% samples
+        percent = 0.1 # remove features present in less than 10% samples
     )
     
     ds = preprocessor.fit_transform(ds)
@@ -100,7 +115,7 @@ def low_var_selection(ds, kmers):
 
 # Chi2 evaluation of dependance between features and classes
 def features_selection(ds, kmers, taxa):
-    preprocessor = TensorFeaturesSelection(
+    preprocessor = TensorChiFeaturesSelection(
             features = kmers,
             taxa = taxa,
             threshold = 0.75, # Keep 25% higest results
@@ -108,8 +123,31 @@ def features_selection(ds, kmers, taxa):
 
     ds = preprocessor.fit_transform(ds)
     kmers = preprocessor.stats_['cols_keep']
+    print(len(kmers))
 
     return ds, kmers
+
+# TF-IDF scaling of the features
+def tfidf_transform(ds, kmers):
+    preprocessor = TensorTfIdfTransformer(
+        features = kmers
+    )
+    ds = preprocessor.fit_transform(ds)
+
+    return ds
+
+# Decision tree feature selection to keep only those identified as relevant to classification
+def tree_relevant_features(ds, kmers, taxa):
+    preprocessor = TensorRDFFeaturesSelection(
+        features = kmers,
+        taxa = taxa
+    )
+    preprocessor.fit_transform(ds)
+
+    kmers = preprocessor.stats_['cols_keep']
+    
+    return ds, kmers
+
 
 # Argument parsing from CLI
 ################################################################################

@@ -93,3 +93,5 @@ Werkzeug==2.3.6
 wrapt==1.15.0
 yarl==1.9.2
 zipp==3.16.2
+xgboost==2.0.1
+xgboost_ray==0.1.18

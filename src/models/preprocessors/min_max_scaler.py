@@ -13,9 +13,9 @@ class TensorMinMaxScaler(Preprocessor):
     Custom implementation of Ray's MinMax Scaler for usage with tensor column in ray.data.dataset.Dataset.
     """
     
-    def __init__(self, features_list):
+    def __init__(self, features):
         # Parameters
-        self._features_list = features_list
+        self._features = features
         
     def _fit(self, ds: Dataset) -> Preprocessor:
         """
@@ -23,7 +23,7 @@ class TensorMinMaxScaler(Preprocessor):
         """
         min = []
         max = []
-        nb_features = len(self._features_list)
+        nb_features = len(self._features)
 
         def Min(dct):
             arr = dct[TENSOR_COLUMN_NAME]
