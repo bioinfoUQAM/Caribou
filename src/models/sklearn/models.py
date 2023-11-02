@@ -7,8 +7,13 @@ import pandas as pd
 from glob import glob
 from shutil import rmtree
 
+# Dimensions reduction
+from models.preprocessors.tfidf_transformer import TensorTfIdfTransformer
+from data.reduction.rdf_features_selection import TensorRDFFeaturesSelection
+from data.reduction.truncated_svd_reduction import TensorTruncatedSVDReduction
+
 # Preprocessing
-from ray.data.preprocessors import Chain, BatchMapper
+from ray.data.preprocessors import Chain
 from models.encoders.model_label_encoder import ModelLabelEncoder
 from models.preprocessors.min_max_scaler import TensorMinMaxScaler
 from models.encoders.onesvm_label_encoder import OneClassSVMLabelEncoder
@@ -97,7 +102,6 @@ class SklearnModel(ModelsUtils):
         )
         # Parameters
         self._encoded = []
-        self._encoder = None
         # Computes
         self._build()
 
@@ -111,13 +115,18 @@ class SklearnModel(ModelsUtils):
             self._encoder = ModelLabelEncoder(self.taxa)
         
         self._preprocessor = Chain(
-            TensorMinMaxScaler(self.kmers),
-            self._encoder,
+            TensorTfIdfTransformer(self.kmers),
+            TensorRDFFeaturesSelection(self.kmers, self.taxa),
         )
-        self._preprocessor.fit(df)
+        self._encoder.fit(df)
+        df = self._preprocessor.fit_transform(df)
+        self.kmers = self._preprocessor.preprocessors[1].stats_['cols_keep']
+        self._reductor = TensorTruncatedSVDReduction(self.kmers)
+        self._reductor.fit(df)
+
         # Labels mapping
         if self.classifier != 'onesvm':
-            labels = list(self._preprocessor.preprocessors[1].stats_[f'unique_values({self.taxa})'].keys())
+            labels = list(self._encoder.stats_[f'unique_values({self.taxa})'].keys())
             self._encoded = np.arange(len(labels))
             labels = np.append(labels, 'unknown')
             self._encoded = np.append(self._encoded, -1)
@@ -146,8 +155,6 @@ class SklearnModel(ModelsUtils):
 
         self._fit_model(datasets)
         
-        df_test = self._preprocessor.preprocessors[0].transform(df_test)
-
         y_true = []
         for row in df_test.iter_rows():
             y_true.append(row[self.taxa])
@@ -202,9 +209,10 @@ class SklearnModel(ModelsUtils):
         print('_fit_model')
         for name, ds in datasets.items():
             ds = ds.drop_columns(['id'])
+            ds = self._encoder.transform(ds)
             ds = self._preprocessor.transform(ds)
+            ds = self._reductor.transform(ds)
             datasets[name] = ray.put(ds)
-
         try:
             training_labels = self._encoded.copy()
             training_labels = np.delete(
@@ -252,7 +260,8 @@ class SklearnModel(ModelsUtils):
     def predict(self, df, threshold = 0.8):
         print('predict')
         if df.count() > 0:
-            df = self._preprocessor.preprocessors[0].transform(df)
+            df = self._preprocessor.transform(df)
+            df = self._reductor.transform(df)
             if self.classifier == 'onesvm':
                 predict_kwargs = {'features':self.kmers, 'num_estimator_cpus':-1}
                 self._predictor = BatchPredictor.from_checkpoint(self._models_collection['domain'], SklearnTensorPredictor)

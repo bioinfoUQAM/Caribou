@@ -8,6 +8,11 @@ import pandas as pd
 from glob import glob
 from shutil import rmtree
 
+# Dimensions reduction
+from models.preprocessors.tfidf_transformer import TensorTfIdfTransformer
+from data.reduction.rdf_features_selection import TensorRDFFeaturesSelection
+from data.reduction.truncated_svd_reduction import TensorTruncatedSVDReduction
+
 # Preprocessing
 from ray.data.preprocessors import LabelEncoder, Chain
 from models.preprocessors.min_max_scaler import TensorMinMaxScaler
@@ -144,19 +149,31 @@ class KerasTFModel(ModelsUtils):
             labels.append(row[self.taxa])
         self._nb_classes = len(np.unique(labels))
         if self._nb_classes == 2:
+            self._encoder = ModelLabelEncoder(self.taxa)
             self._preprocessor = Chain(
-                TensorMinMaxScaler(self.kmers),
-                ModelLabelEncoder(self.taxa),
+                TensorTfIdfTransformer(self.kmers),
+                TensorRDFFeaturesSelection(self.kmers, self.taxa),
             )
         else:
-            self._preprocessor = Chain(
-                TensorMinMaxScaler(self.kmers),
+            self._encoder = Chain(
                 LabelEncoder(self.taxa),
-                OneHotTensorEncoder(self.taxa),
+                OneHotTensorEncoder(self.taxa)
             )
-        self._preprocessor.fit(df)
+            self._preprocessor = Chain(
+                TensorTfIdfTransformer(self.kmers),
+                TensorRDFFeaturesSelection(self.kmers, self.taxa),
+            )
+        
+
+        self._encoder.fit(df)
+        df = self._preprocessor.fit_transform(df)
+        self._reductor = TensorTruncatedSVDReduction(self.kmers)
+        self._reductor.fit(df)
         # Labels mapping
-        labels = list(self._preprocessor.preprocessors[1].stats_[f'unique_values({self.taxa})'].keys())
+        if self._nb_classes == 2:
+            labels = list(self._encoder.stats_[f'unique_values({self.taxa})'].keys())
+        else:
+            labels = list(self._encoder.preprocessors[0].stats_[f'unique_values({self.taxa})'].keys())
         encoded = np.arange(len(labels))
         labels = np.append(labels, 'unknown')
         encoded = np.append(encoded, -1)
@@ -196,7 +213,9 @@ class KerasTFModel(ModelsUtils):
         # Preprocessing loop
         for name, ds in datasets.items():
             ds = ds.drop_columns(['id'])
+            ds = self._encoder.transform(ds)
             ds = self._preprocessor.transform(ds)
+            ds = self._reductor.transform(ds)
             datasets[name] = ds
 
         # Training parameters
@@ -239,7 +258,7 @@ class KerasTFModel(ModelsUtils):
                 df = df.drop_columns(col_2_drop)
 
             # Preprocess
-            df = self._preprocessor.preprocessors[0].transform(df)
+            df = self._preprocessor.transform(df)
 
             self._predictor = BatchPredictor.from_checkpoint(
                 self._model_ckpt,

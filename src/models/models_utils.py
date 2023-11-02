@@ -85,7 +85,9 @@ class ModelsUtils(ABC):
         self._predict_ids = []
         # Initialize Ray variables
         self._clf = None
+        self._encoder = None
         self._preprocessor = None
+        self._reductor = None
         self._model_ckpt = None
         self._trainer = None
         self._train_params = {}

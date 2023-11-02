@@ -11,11 +11,12 @@ from time import time
 from glob import glob
 from pathlib import Path
 
-from models.preprocessors.tfidf_transformer import TensorTfIdfTransformer
 
 from data.reduction.low_var_selection import TensorLowVarSelection
+from models.preprocessors.tfidf_transformer import TensorTfIdfTransformer
 from data.reduction.chi_features_selection import TensorChiFeaturesSelection
 from data.reduction.rdf_features_selection import TensorRDFFeaturesSelection
+from data.reduction.truncated_svd_reduction import TensorTruncatedSVDReduction
 from data.reduction.occurence_exclusion import TensorPercentOccurenceExclusion
 
 __author__ = "Nicolas de Montigny"
@@ -55,12 +56,6 @@ def features_reduction(opt):
     3. Chi2 + SelectPercentile() (75% best values)
     """
 
-    """
-    TODO: Add to preprocessing in model training
-    1. Replace the MinMaxScaling -> TfidfTransformer to scale down the impact of tokens that occur very frequently (https://scikit-learn.org/stable/modules/generated/sklearn.feature_extraction.text.TfidfTransformer.html#sklearn.feature_extraction.text.TfidfTransformer)
-    2. TruncatedSVD to reduce dimensions and keep 10 000 features ~PCA (https://scikit-learn.org/stable/modules/generated/sklearn.decomposition.TruncatedSVD.html#sklearn.decomposition.TruncatedSVD)
-    """
-
     # Load data 
     files_lst = glob(os.path.join(data['profile'],'*.parquet'))
     ds = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
@@ -68,12 +63,11 @@ def features_reduction(opt):
     # Time the computation of transformations
     t_start = time()
     ds = tfidf_transform(ds, kmers_list)
-    ds, kmers_list = tree_relevant_features(ds, kmers_list, 'phylum')
-    print(len(kmers_list))
+    ds, kmers_list = tree_relevant_features(ds, kmers_list, opt['taxa'])
     if len(kmers_list) == 0:
         ds, kmers_list = occurence_exclusion(ds, opt['kmers_list'])
         ds, kmers_list = low_var_selection(ds,kmers_list)
-        ds, data['kmers'] = features_selection(ds, kmers_list, 'phylum')
+        ds, data['kmers'] = features_selection(ds, kmers_list, opt['taxa'])
     t_end = time()
     t_reduction = t_end - t_start
     # Save reduced dataset
@@ -148,6 +142,15 @@ def tree_relevant_features(ds, kmers, taxa):
     
     return ds, kmers
 
+# Features decomposition for dimension reduction
+def truncated_svd(ds, kmers):
+    preprocessor = TensorTruncatedSVDReduction(
+        features = kmers,
+        nb_components = 10
+    )
+    ds = preprocessor.fit_transform(ds)
+
+    return ds
 
 # Argument parsing from CLI
 ################################################################################
@@ -159,6 +162,7 @@ if __name__ == "__main__":
     parser.add_argument('-dt','--dataset_name', default='dataset', help='Name of the dataset used to name files')
     parser.add_argument('-l','--kmers_list', default=None, type=Path, help='PATH to a file containing a list of k-mers that will be reduced')
     # Parameters
+    parser.add_argument('-t','--taxa', default='phylum', help='The taxonomic level to use for the classification, defaults to Phylum.')
     parser.add_argument('-o','--outdir', required=True, type=Path, help='PATH to a directory on file where outputs will be saved')
     parser.add_argument('-wd','--workdir', default='/tmp/spill', type=Path, help='Optional. Path to a working directory where tuning data will be spilled')
     args = parser.parse_args()
