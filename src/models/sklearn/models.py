@@ -188,6 +188,7 @@ class SklearnModel(ModelsUtils):
                 'eta0' : 0.001,
                 'n_jobs' : -1
             }
+# TODO: Test performances for classifiers, if need more accuracy -> sklearn.multiclass.OneVsRestClassifier for multiple binary problems
         elif self.classifier == 'sgd':
             print('Training multiclass SGD classifier')
             self._clf = SGDClassifier()

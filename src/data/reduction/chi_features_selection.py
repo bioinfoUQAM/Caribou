@@ -56,7 +56,10 @@ class TensorChiFeaturesSelection(Preprocessor):
         # Keep features with values higher than the threshold
         cols_keep = [self.features[i] for i, chi in enumerate(mean_chi) if chi > self.threshold]
         
-        self.stats_ = {'cols_keep' : cols_keep}
+        if 0 < len(cols_keep) :
+            self.stats_ = {'cols_keep' : cols_keep}
+        else:
+            self.stats_ = {'cols_keep' : self.features}
 
         return self
 

@@ -53,7 +53,10 @@ class TensorRDFFeaturesSelection(Preprocessor):
             cols_keep.extend(row['features'])
         cols_keep = np.unique(cols_keep)
 
-        self.stats_ = {'cols_keep' : cols_keep}
+        if 0 < len(cols_keep) :
+            self.stats_ = {'cols_keep' : cols_keep}
+        else:
+            self.stats_ = {'cols_keep' : self.features}
 
         return self
 
@@ -61,7 +64,7 @@ class TensorRDFFeaturesSelection(Preprocessor):
         # _validate_df(df, TENSOR_COLUMN_NAME, self._nb_features)
         cols_keep = self.stats_['cols_keep']
 
-        if len(cols_keep) < self._nb_features and len(cols_keep) > 0 :
+        if len(cols_keep) < self._nb_features:
             tensor_col = df[TENSOR_COLUMN_NAME]
             tensor_col = _unwrap_ndarray_object_type_if_needed(tensor_col)
             tensor_col = pd.DataFrame(tensor_col, columns = self.features)

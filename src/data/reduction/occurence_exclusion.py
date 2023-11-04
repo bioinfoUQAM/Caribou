@@ -86,7 +86,10 @@ class TensorPercentOccurenceExclusion(Preprocessor):
         # Construct list of features to keep by position
         cols_keep = [self.features[i] for i, occurence in enumerate(occurences) if occurence < high_treshold]
         
-        self.stats_ = {'cols_keep' : cols_keep}
+        if 0 < len(cols_keep) :
+            self.stats_ = {'cols_keep' : cols_keep}
+        else:
+            self.stats_ = {'cols_keep' : self.features}
 
         return self
 

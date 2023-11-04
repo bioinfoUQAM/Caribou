@@ -18,7 +18,7 @@ class TensorLowVarSelection(Preprocessor):
     def __init__(
         self,
         features : List[str],
-        threshold: float = 0.1,
+        threshold: float = 0.05,
     ):
         self.features = features
         self.threshold = threshold
@@ -66,7 +66,10 @@ class TensorLowVarSelection(Preprocessor):
         # Keep features with values higher than the threshold
         cols_keep = [self.features[i] for i, var in enumerate(var_arr) if var > self.threshold]
         
-        self.stats_ = {'cols_keep' : cols_keep}
+        if 0 < len(cols_keep) :
+            self.stats_ = {'cols_keep' : cols_keep}
+        else:
+            self.stats_ = {'cols_keep' : self.features}
 
         return self
 
