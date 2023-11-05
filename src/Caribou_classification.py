@@ -6,7 +6,7 @@ import argparse
 from utils import *
 from time import time
 from pathlib import Path
-from models.classification import ClassificationMethods
+from models.classification_old import ClassificationMethods
 
 __author__ = "Nicolas de Montigny"
 
@@ -15,17 +15,8 @@ __all__ = ['bacteria_classification_train_cv']
 # Initialisation / validation of parameters from CLI
 ################################################################################
 def bacteria_classification(opt):
-    # Verify existence of files and load data
-    data_bacteria = verify_load_data(opt['data_bacteria'])
-    data_metagenome = verify_load_data(opt['data_metagenome'])
-    k_length = len(data_bacteria['kmers'][0])
     
-    if opt['preclassified_data'] is not None:
-        preclassified_data = verify_load_preclassified(opt['preclassified_data'])
-    else:
-        preclassified_data = None
-
-    # Verify that model type is valid / choose default depending on host presence
+    # Verify that model type is valid / choose default
     if opt['model_type'] is None:
         opt['model_type'] = 'cnn'
 
@@ -35,22 +26,37 @@ def bacteria_classification(opt):
     
     outdirs = define_create_outdirs(opt['outdir'])
 
+    # Initialize cluster
+    init_ray_cluster(opt['workdir'])
+
+# Data loading
+################################################################################
+
+    db_data, db_ds = verify_load_db(opt['data_bacteria'])
+    data_metagenome = verify_load_data(opt['data_metagenome'])
+
+    k_length = len(db_data['kmers'][0])
+
+    if opt['preclassified_data'] is not None:
+        preclassified_data = verify_load_preclassified(opt['preclassified_data'])
+    else:
+        preclassified_data = None
+
     # Validate and extract list of taxas
     if opt['taxa'] is not None:
-        lst_taxas = verify_taxas(opt['taxa'], data_bacteria['taxas'])
+        lst_taxas = verify_taxas(opt['taxa'], db_data['taxas'])
     else:
-        lst_taxas = data_bacteria['taxas'].copy()
+        lst_taxas = db_data['taxas'].copy()
     
     if 'domain' in lst_taxas:
         lst_taxas.remove('domain')
 
-    # Initialize cluster
-    init_ray_cluster(opt['workdir'])
+    val_ds = split_sim_dataset(db_ds, db_data, 'validation')
 
 # Definition of model for bacteria taxonomic classification + training
 ################################################################################
     clf = ClassificationMethods(
-        database_k_mers = data_bacteria,
+        database_k_mers = db_data,
         k = k_length,
         outdirs = outdirs,
         database = opt['database_name'],
@@ -66,7 +72,7 @@ def bacteria_classification(opt):
 ################################################################################
     
     t_start = time()
-    end_taxa = clf.execute_training_prediction(data_metagenome)
+    end_taxa = clf.fit_predict(data_metagenome)
     t_end = time()
     t_classif = t_end - t_start
     clf_data = merge_save_data(

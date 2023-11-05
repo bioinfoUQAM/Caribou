@@ -164,7 +164,6 @@ class KerasTFModel(ModelsUtils):
                 TensorRDFFeaturesSelection(self.kmers, self.taxa),
             )
         
-
         self._encoder.fit(df)
         df = self._preprocessor.fit_transform(df)
         self._reductor = TensorTruncatedSVDReduction(self.kmers)

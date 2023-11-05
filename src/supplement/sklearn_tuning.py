@@ -14,16 +14,19 @@ from pathlib import Path
 from utils import *
 from models.reads_simulation import readsSimulation
 from models.ray_tensor_min_max import TensorMinMaxScaler
+
 # from ray.data.preprocessors import MinMaxScaler
 from src.models.sklearn.partial_trainer import SklearnPartialTrainer
 from src.models.encoders.onesvm_label_encoder import OneClassSVMLabelEncoder
 
 # Preprocessing
 from ray.data.preprocessors import Chain, LabelEncoder
+
 # Training
 from models.sklearn.scoring_one_svm import ScoringSGDOneClassSVM
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.linear_model import SGDClassifier
+
 # Tuning
 from ray import tune
 from ray.tune import Tuner, TuneConfig
@@ -42,41 +45,41 @@ def merge_db_host(db_data, host_data):
 
     if os.path.exists(merged_db_host['profile']):
         files_lst = glob(os.path.join(merged_db_host['profile'], '*.parquet'))
-        df_merged = ray.data.read_parquet_bulk(files_lst, parallelism = -1)
+        merged_ds = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
     else:
         files_lst = glob(os.path.join(db_data['profile'], '*.parquet'))
-        df_db = ray.data.read_parquet_bulk(files_lst, parallelism = -1)
+        db_ds = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
         files_lst = glob(os.path.join(host_data['profile'], '*.parquet'))
-        df_host = ray.data.read_parquet_bulk(files_lst, parallelism = -1)
+        host_ds = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
 
         col2drop = []
-        for col in df_db.schema().names:
+        for col in db_ds.schema().names:
             if col not in ['id','domain','__value__']:
                 col2drop.append(col)
-        df_db = df_db.drop_columns(col2drop)
+        db_ds = db_ds.drop_columns(col2drop)
         col2drop = []
-        for col in df_host.schema().names:
+        for col in host_ds.schema().names:
             if col not in ['id','domain','__value__']:
                 col2drop.append(col)
-        df_host = df_host.drop_columns(col2drop)
+        host_ds = host_ds.drop_columns(col2drop)
 
-        df_merged = df_db.union(df_host)
-        df_merged.write_parquet(merged_db_host['profile'])
+        merged_ds = db_ds.union(host_ds)
+        merged_ds.write_parquet(merged_db_host['profile'])
     
     merged_db_host['ids'] = np.concatenate((db_data["ids"], host_data["ids"]))  # IDs
     merged_db_host['kmers'] = db_data['kmers']  # Features
     merged_db_host['taxas'] = ['domain']  # Known taxas for classification
     merged_db_host['fasta'] = (db_data['fasta'], host_data['fasta'])  # Fasta file needed for reads simulation
     
-    return merged_db_host, df_merged
+    return merged_db_host, merged_ds
 
-def sim_4_cv(df, database_data, name):
+def sim_4_cv(ds, database_data, name):
     print('_sim_4_cv')
     k = len(database_data['kmers'][0])
     cols = ['id']
     cols.extend(database_data['taxas'])
     cls = pd.DataFrame(columns = cols)
-    for batch in df.iter_batches(batch_format = 'pandas'):
+    for batch in ds.iter_batches(batch_format = 'pandas'):
         cls = pd.concat([cls, batch[cols]], axis = 0, ignore_index = True)
     
     sim_outdir = os.path.dirname(database_data['profile'])
@@ -84,8 +87,8 @@ def sim_4_cv(df, database_data, name):
     cv_sim = readsSimulation(database_data['fasta'], cls, list(cls['id']), 'miseq', sim_outdir, name)
     sim_data = cv_sim.simulation(k, database_data['kmers'])
     files_lst = glob(os.path.join(sim_data['profile'], '*.parquet'))
-    df = ray.data.read_parquet_bulk(files_lst, parallelism = -1)
-    return df
+    ds = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
+    return ds
 
 def convert_archaea_bacteria(df):
     df.loc[df['domain'].str.lower() == 'archaea', 'domain'] = 'Bacteria'
@@ -106,7 +109,7 @@ def split_val_test_ds(ds, data):
     test_path = os.path.join(os.path.dirname(data['profile']), f'Xy_genome_simulation_test_data_K{len(data["kmers"][0])}')
     if os.path.exists(val_path):
         files_lst = glob(os.path.join(val_path, '*.parquet'))
-        val_ds = ray.data.read_parquet_bulk(files_lst, parallelism = -1)
+        val_ds = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
         val_ds = val_ds.map_batches(
             convert_archaea_bacteria,
             batch_format = 'pandas'
@@ -119,7 +122,7 @@ def split_val_test_ds(ds, data):
         val_ds = sim_4_cv(val_ds, data, 'validation')
     if os.path.exists(test_path):
         files_lst = glob(os.path.join(test_path, '*.parquet'))
-        test_ds = ray.data.read_parquet_bulk(files_lst, parallelism = -1)
+        test_ds = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
         test_ds = test_ds.map_batches(
             convert_archaea_bacteria,
             batch_format = 'pandas'
@@ -164,7 +167,7 @@ if opt['classifier'] == 'onesvm' and opt['taxa'] == 'domain':
         val_ds, test_ds = split_val_test_ds(test_val_ds,test_val_data)
         db_data = verify_load_data(opt['data'])
         files_lst = glob(os.path.join(db_data['profile'], '*.parquet'))
-        train_ds = ray.data.read_parquet_bulk(files_lst, parallelism = -1)
+        train_ds = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
 elif opt['classifier'] == 'linearsvm' and opt['taxa'] == 'domain':
     if opt['data_host'] is None:
         raise ValueError('To tune for a domain taxa, a host species is required.\
@@ -175,7 +178,7 @@ elif opt['classifier'] == 'linearsvm' and opt['taxa'] == 'domain':
 else:
     db_data = verify_load_data(opt['data'])
     files_lst = glob(os.path.join(db_data['profile'], '*.parquet'))
-    train_ds = ray.data.read_parquet_bulk(files_lst, parallelism = -1)
+    train_ds = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
     val_ds, test_ds = split_val_test_ds(train_ds, db_data)
 
 # Preprocessing

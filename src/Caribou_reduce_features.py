@@ -15,8 +15,6 @@ from pathlib import Path
 from data.reduction.low_var_selection import TensorLowVarSelection
 from models.preprocessors.tfidf_transformer import TensorTfIdfTransformer
 from data.reduction.chi_features_selection import TensorChiFeaturesSelection
-from data.reduction.rdf_features_selection import TensorRDFFeaturesSelection
-from data.reduction.truncated_svd_reduction import TensorTruncatedSVDReduction
 from data.reduction.occurence_exclusion import TensorPercentOccurenceExclusion
 
 __author__ = "Nicolas de Montigny"
@@ -25,7 +23,6 @@ __all__ = ['features_reduction']
 
 """
 This script computes features reduction to a given K-mers dataset and then applies it.
-The method is based on the KRFE algorithm (Lebatteux et al., 2019)
 """
 
 # Initialisation / validation of parameters from CLI
@@ -126,11 +123,12 @@ def low_var_selection(train_ds, export_ds, kmers):
     return train_ds, export_ds, kmers
 
 # Chi2 evaluation of dependance between features and classes
+# Select 25% of features with highest Chi2 values
 def features_selection(train_ds, export_ds, kmers, taxa):
     preprocessor = TensorChiFeaturesSelection(
             features = kmers,
             taxa = taxa,
-            threshold = 0.75, # Keep 25% higest results
+            threshold = 0.75,
         )
 
     train_ds = preprocessor.fit_transform(train_ds)

@@ -5,7 +5,7 @@ import argparse
 from utils import *
 from time import time
 from pathlib import Path
-from models.classification import ClassificationMethods
+from models.classification_old import ClassificationMethods
 
 __author__ = "Nicolas de Montigny"
 
@@ -14,14 +14,6 @@ __all__ = ['bacteria_extraction_train_cv']
 # Initialisation / validation of parameters from CLI
 ################################################################################
 def bacteria_extraction(opt):
-    # Verify existence of files and load data
-    data_bacteria = verify_load_data(opt['data_bacteria'])
-    if opt['data_host'] is not None:
-        data_host = verify_load_data(opt['data_host'])
-        verify_concordance_klength(len(data_bacteria['kmers'][0]), len(data_host['kmers'][0]))
-    data_metagenome = verify_load_data(opt['data_metagenome'])
-
-    k_length = len(data_bacteria['kmers'][0])
 
     # Verify that model type is valid / choose default depending on host presence
     if opt['host_name'] is None:
@@ -38,11 +30,24 @@ def bacteria_extraction(opt):
     # Initialize cluster
     init_ray_cluster(opt['workdir'])
     
+# Data loading
+################################################################################
+
+    if opt['data_host'] is not None:
+        db_data, db_ds = verify_load_host_merge(opt['data_bacteria'], opt['data_host'])
+    else:
+        db_data, db_ds = verify_load_db(opt['data_bacteria'])
+    data_metagenome = verify_load_data(opt['data_metagenome'])
+
+    k_length = len(db_data['kmers'][0])
+
+    val_ds = split_sim_dataset(db_ds, db_data, 'validation')
+
 # Definition of model for bacteria extraction / host removal + execution
 ################################################################################
     if opt['host_name'] is None:
         clf = ClassificationMethods(
-            database_k_mers = data_bacteria,
+            database_k_mers = (db_data, db_ds),
             k = k_length,
             outdirs = outdirs,
             database = opt['database_name'],
@@ -55,7 +60,7 @@ def bacteria_extraction(opt):
         )
     else:
         clf = ClassificationMethods(
-            database_k_mers = (data_bacteria, data_host),
+            database_k_mers = (db_data, db_ds),
             k = k_length,
             outdirs = outdirs,
             database = opt['database_name'],

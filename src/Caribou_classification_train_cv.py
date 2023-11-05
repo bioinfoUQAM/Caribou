@@ -7,7 +7,7 @@ from utils import *
 from time import time
 from pathlib import Path
 from logging import ERROR
-from models.classification import ClassificationMethods
+from models.classification_old import ClassificationMethods
 
 warnings.filterwarnings('ignore')
 
@@ -18,11 +18,8 @@ __all__ = ['bacteria_classification_train_cv']
 # Initialisation / validation of parameters from CLI
 ################################################################################
 def bacteria_classification_train_cv(opt):
-    # Verify existence of files and load data
-    data_bacteria = verify_load_data(opt['data_bacteria'])
-    k_length = len(data_bacteria['kmers'][0])
 
-    # Verify that model type is valid / choose default depending on host presence
+    # Verify that model type is valid / choose default
     if opt['model_type'] is None:
         opt['model_type'] = 'cnn'
 
@@ -32,24 +29,34 @@ def bacteria_classification_train_cv(opt):
     
     outdirs = define_create_outdirs(opt['outdir'])
     
+    # Initialize cluster
+    init_ray_cluster(opt['workdir'])
+
+# Data loading
+################################################################################
+
+    db_data, db_ds = verify_load_db(opt['data_bacteria'])
+
+    k_length = len(db_data['kmers'][0])
+
     # Validate and extract list of taxas
     if opt['taxa'] is not None:
-        lst_taxas = verify_taxas(opt['taxa'], data_bacteria['taxas'])
+        lst_taxas = verify_taxas(opt['taxa'], db_data['taxas'])
     else:
-        lst_taxas = data_bacteria['taxas'].copy()
+        lst_taxas = db_data['taxas'].copy()
     
     if 'domain' in lst_taxas:
         lst_taxas.remove('domain')
-    
-    # Initialize cluster
-    init_ray_cluster(opt['workdir'])
+
+    test_ds = split_sim_dataset(db_ds, db_data, 'test')
+    val_ds = split_sim_dataset(db_ds, db_data, 'validation')
 
 # Training and cross-validation of models for classification of bacterias
 ################################################################################
 
     t_start = time()
     ClassificationMethods(
-        database_k_mers = data_bacteria,
+        database_k_mers = db_data,
         k = k_length,
         outdirs = outdirs,
         database = opt['database_name'],
@@ -60,7 +67,7 @@ def bacteria_classification_train_cv(opt):
         training_epochs = opt['training_epochs'],
         verbose = opt['verbose'],
         cv = True
-    ).execute_training()
+    ).fit()
     t_end = time()
     t_classify = t_end - t_start
     print(

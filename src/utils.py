@@ -2,13 +2,18 @@ import os
 import ray
 import json
 import logging
+import warnings
+
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 
+from glob import glob
 from pathlib import Path
 from warnings import warn
 from psutil import virtual_memory
+
+from models.reads_simulation import readsSimulation
 
 __author__ = "Nicolas de Montigny"
 
@@ -36,7 +41,13 @@ __all__ = [
     'verify_load_preclassified',
     'merge_save_data',
     'zip_X_y',
-    'ensure_length_ds'
+    'ensure_length_ds',
+    'convert_archaea_bacteria',
+    'verify_load_db',
+    'verify_load_host_merge',
+    'merge_db_host',
+    'split_sim_dataset',
+    'sim_dataset'
 ]
 
 # System
@@ -58,7 +69,7 @@ def init_ray_cluster(workdir):
             ray.shutdown()
             frac -= 0.05
 
-# Data handling
+# Data I/O
 #########################################################################################################
 
 # Load data from file
@@ -282,3 +293,92 @@ def ensure_length_ds(len_x, len_y):
     if len_x != len_y:
         raise ValueError(
             'X and y have different lengths: {} and {}'.format(len_x, len_y))
+
+# Datasets handling
+#########################################################################################################
+
+def convert_archaea_bacteria(df):
+    df.loc[df['domain'].str.lower() == 'archaea', 'domain'] = 'Bacteria'
+    return df
+
+def verify_load_db(db_data):
+    """
+    Wrapper function for verifying and loading the db dataset
+    """
+    db_data = verify_load_data(db_data)
+    files_lst = glob(os.path.join(db_data['profile'], '*.parquet'))
+    db_ds = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
+    db_ds = db_ds.map_batches(convert_archaea_bacteria, batch_format = 'pandas')
+    
+    return db_data, db_ds
+
+def verify_load_host_merge(db_data, host_data):
+    """
+    Wrapper function for verifying, loading and merging both datasets
+    """
+    db_data = verify_load_data(db_data)
+    host_data = verify_load_data(host_data)
+    verify_concordance_klength(len(db_data['kmers'][0]), len(host_data['kmers'][0]))
+    merged_data, merged_ds = merge_db_host(db_data, host_data)
+    
+    return merged_data, merged_ds
+
+def merge_db_host(db_data, host_data):
+    """
+    Merge the two databases along the rows axis
+    """
+    merged_db_host = {}
+    merged_db_host['profile'] = f"{db_data['profile']}_host_merged"
+
+    if os.path.exists(merged_db_host['profile']):
+        files_lst = glob(os.path.join(merged_db_host['profile'], '*.parquet'))
+        merged_ds = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
+    else:
+        files_lst = glob(os.path.join(db_data['profile'], '*.parquet'))
+        db_ds = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
+        files_lst = glob(os.path.join(host_data['profile'], '*.parquet'))
+        host_ds = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
+
+        merged_ds = db_ds.union(host_ds)
+        merged_ds = merged_ds.map_batches(convert_archaea_bacteria, batch_format = 'pandas')
+        merged_ds.write_parquet(merged_db_host['profile'])
+    
+    merged_db_host['ids'] = np.concatenate((db_data["ids"], host_data["ids"]))  # IDs
+    merged_db_host['kmers'] = db_data['kmers']  # Features
+    merged_db_host['taxas'] = ['domain']  # Known taxas for classification
+    merged_db_host['fasta'] = (db_data['fasta'], host_data['fasta'])  # Fasta file needed for reads simulation
+    
+    return merged_db_host, merged_ds
+
+def split_sim_dataset(ds, data, name):
+    splitted_path = os.path.join(os.path.dirname(data['profile']), f'Xy_genome_simulation_{name}_data_K{len(data["kmers"][0])}')
+    if os.path.exists(splitted_path):
+        warnings.warn(f'Splitted dataset {name} already exists, skipping simulation')
+        return None
+    else:
+        splitted_ds = ds.random_sample(0.1)
+        if splitted_ds.count() == 0:
+            nb_samples = round(ds.count() * 0.1)
+            splitted_ds = ds.random_shuffle().limit(nb_samples)
+        
+        sim_dataset(ds, data, name)
+        return splitted_ds
+
+def sim_dataset(ds, data, name):
+    """
+    Simulate the dataset from the database and generate its data
+    """
+    k = len(data['kmers'][0])
+    cols = ['id']
+    cols.extend(data['taxas'])
+    cls = pd.DataFrame(columns = cols)
+    for batch in ds.iter_batches(batch_format = 'pandas'):
+        cls = pd.concat([cls, batch[cols]], axis = 0, ignore_index = True)
+    
+    sim_outdir = os.path.dirname(data['profile'])
+    cv_sim = readsSimulation(data['fasta'], cls, list(cls['id']), 'miseq', sim_outdir, name)
+    sim_data = cv_sim.simulation(k, data['kmers'])
+    files_lst = glob(os.path.join(sim_data['profile'], '*.parquet'))
+    sim_ds = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
+    return sim_ds
+
