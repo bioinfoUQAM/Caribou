@@ -5,6 +5,7 @@ import argparse
 from utils import *
 from time import time
 from pathlib import Path
+from models.reads_simulation import split_sim_dataset
 
 __author__ = "Nicolas de Montigny"
 
@@ -46,15 +47,11 @@ def simulation(opt):
     t_val = None
     if opt['test']:
         t_s = time()
-        test_ds = split_dataset(db_ds, db_data, 'test')
-        if test_ds is not None:
-            sim_dataset(test_ds, db_data, 'test')
+        test_ds = split_sim_dataset(db_ds, db_data, 'test')
         t_test = time() - t_s
     if opt['validation']:
         t_s = time()
-        val_ds = split_dataset(db_ds, db_data, 'validation')
-        if val_ds is not None:
-            sim_dataset(val_ds, db_data, 'validation')
+        val_ds = split_sim_dataset(db_ds, db_data, 'validation')
         t_val = time() - t_s
     
     if t_test is not None:

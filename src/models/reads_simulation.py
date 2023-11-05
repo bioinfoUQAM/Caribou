@@ -15,7 +15,7 @@ from joblib import Parallel, delayed, parallel_backend
 
 __author__ = "Nicolas de Montigny"
 
-__all__ = ['ReadsSimulation']
+__all__ = ['ReadsSimulation','split_sim_dataset','sim_dataset']
 
 # Reduce number of cpus used to reduce nb of tmp files
 # reduce number of reads generated
@@ -204,3 +204,38 @@ class readsSimulation():
             warn("K is provided but k-mers list is None, k-mers list will be generated")
             raise ValueError("k value was provided but not k-mers list, please provide a k-mers list or no k value")
         return k, kmers_list
+
+# Helper functions
+#########################################################################################################
+
+def split_sim_dataset(ds, data, name):
+    splitted_path = os.path.join(os.path.dirname(data['profile']), f'Xy_genome_simulation_{name}_data_K{len(data["kmers"][0])}')
+    if os.path.exists(splitted_path):
+        warnings.warn(f'Splitted dataset {name} already exists, skipping simulation')
+        return None
+    else:
+        splitted_ds = ds.random_sample(0.1)
+        if splitted_ds.count() == 0:
+            nb_samples = round(ds.count() * 0.1)
+            splitted_ds = ds.random_shuffle().limit(nb_samples)
+        
+        sim_dataset(ds, data, name)
+        return splitted_ds
+
+def sim_dataset(ds, data, name):
+    """
+    Simulate the dataset from the database and generate its data
+    """
+    k = len(data['kmers'][0])
+    cols = ['id']
+    cols.extend(data['taxas'])
+    cls = pd.DataFrame(columns = cols)
+    for batch in ds.iter_batches(batch_format = 'pandas'):
+        cls = pd.concat([cls, batch[cols]], axis = 0, ignore_index = True)
+    
+    sim_outdir = os.path.dirname(data['profile'])
+    cv_sim = readsSimulation(data['fasta'], cls, list(cls['id']), 'miseq', sim_outdir, name)
+    sim_data = cv_sim.simulation(k, data['kmers'])
+    files_lst = glob(os.path.join(sim_data['profile'], '*.parquet'))
+    sim_ds = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
+    return sim_ds
