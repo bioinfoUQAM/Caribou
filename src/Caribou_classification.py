@@ -6,11 +6,14 @@ import argparse
 from utils import *
 from time import time
 from pathlib import Path
+from models.reads_simulation import split_sim_dataset
 from models.classification_old import ClassificationMethods
 
 __author__ = "Nicolas de Montigny"
 
 __all__ = ['bacteria_classification_train_cv']
+
+VALIDATION_DATASET_NAME = 'validation'
 
 # Initialisation / validation of parameters from CLI
 ################################################################################
@@ -51,7 +54,7 @@ def bacteria_classification(opt):
     if 'domain' in lst_taxas:
         lst_taxas.remove('domain')
 
-    val_ds = split_sim_dataset(db_ds, db_data, 'validation')
+    val_ds, val_data = split_sim_dataset(db_ds, db_data, VALIDATION_DATASET_NAME)
 
 # Definition of model for bacteria taxonomic classification + training
 ################################################################################

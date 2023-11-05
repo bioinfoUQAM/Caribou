@@ -17,6 +17,9 @@ The dataset should be in the form of a k-mers counts matrix and could have the k
 The script leverages the InSilicoSeq package for simulation of sequencing reads
 """
 
+VALIDATION_DATASET_NAME = 'validation'
+TEST_DATASET_NAME = 'test'
+
 # Initialisation / validation of parameters from CLI
 ################################################################################
 def simulation(opt):
@@ -24,18 +27,22 @@ def simulation(opt):
     1. Verify existence of files and load data
     2. Verify k-mers length concordance
     3. Initialize cluster
+    4. Load data and merge if necessary
     """
-    if opt['hostset'] is not None:
-        db_data, db_ds = verify_load_host_merge(opt['dataset'], opt['hostset'])
-    else:
-        db_data, db_ds = verify_load_db(opt['dataset'])
-        
+    
     verify_file(opt['kmers_list'])
     
     outdirs = define_create_outdirs(opt['outdir'])
     
     init_ray_cluster(opt['workdir'])
 
+    if opt['hostset'] is not None:
+        db_data, db_ds = verify_load_host_merge(opt['dataset'], opt['hostset'])
+        db_name = 'host_merged'
+    else:
+        db_data, db_ds = verify_load_db(opt['dataset'])
+        db_name = opt['dataset_name']
+    
 # Dataset(s) simulation
 ################################################################################
     """
@@ -47,17 +54,17 @@ def simulation(opt):
     t_val = None
     if opt['test']:
         t_s = time()
-        test_ds = split_sim_dataset(db_ds, db_data, 'test')
+        test_ds, test_data = split_sim_dataset(db_ds, db_data, f'{TEST_DATASET_NAME}_{db_name}')
         t_test = time() - t_s
     if opt['validation']:
         t_s = time()
-        val_ds = split_sim_dataset(db_ds, db_data, 'validation')
+        val_ds, val_data = split_sim_dataset(db_ds, db_data, f'{VALIDATION_DATASET_NAME}_{db_name}')
         t_val = time() - t_s
     
     if t_test is not None:
-        print(f'Caribou finished generating the test dataset in {t_test} seconds')
+        print(f'Caribou finished generating the {TEST_DATASET_NAME} dataset in {t_test} seconds')
     if t_val is not None:
-        print(f'Caribou finished generating the validation dataset simulated in {t_val} seconds')
+        print(f'Caribou finished generating the {VALIDATION_DATASET_NAME} dataset simulated in {t_val} seconds')
     
 # Argument parsing from CLI
 ################################################################################

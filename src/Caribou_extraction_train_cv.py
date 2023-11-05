@@ -5,11 +5,15 @@ import argparse
 from utils import *
 from time import time
 from pathlib import Path
+from models.reads_simulation import split_sim_dataset
 from models.classification_old import ClassificationMethods
 
 __author__ = "Nicolas de Montigny"
 
 __all__ = ['bacteria_extraction_train_cv']
+
+VALIDATION_DATASET_NAME = 'validation'
+TEST_DATASET_NAME = 'test'
 
 # Initialisation / validation of parameters from CLI
 ################################################################################
@@ -29,13 +33,15 @@ def bacteria_extraction_train_cv(opt):
 
     if opt['data_host'] is not None:
         db_data, db_ds = verify_load_host_merge(opt['data_bacteria'], opt['data_host'])
+        db_name = 'host_merged'
     else:
         db_data, db_ds = verify_load_db(opt['data_bacteria'])
+        db_name = opt['dataset_name']
 
     k_length = len(db_data['kmers'][0])
 
-    test_ds = split_sim_dataset(db_ds, db_data, 'test')
-    val_ds = split_sim_dataset(db_ds, db_data, 'validation')
+    test_ds, test_data = split_sim_dataset(db_ds, db_data, f'{TEST_DATASET_NAME}_{db_name}')
+    val_ds, val_data = split_sim_dataset(db_ds, db_data, f'{VALIDATION_DATASET_NAME}_{db_name}')
 
 # Training and cross-validation of models for bacteria extraction / host removal
 ################################################################################

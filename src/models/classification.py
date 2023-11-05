@@ -19,6 +19,10 @@ __author__ = 'Nicolas de Montigny'
 
 __all__ = ['ClassificationMethods']
 
+TRAINING_DATASET_NAME = 'train'
+VALIDATION_DATASET_NAME = 'validation'
+TEST_DATASET_NAME = 'test'
+
 class ClassificationMethods():
     """
     Utilities class for classifying sequences from metagenomes using ray
@@ -37,12 +41,14 @@ class ClassificationMethods():
     Methods
     ----------
 
-    execute_training : launch the training of the models for the chosen taxonomic levels
-        no parameters to pass
+    fit : function to call the fitting method
+    
+    predict : function to call the predicting method
 
-    execute_classification : 
-        data2classify : a dictionnary containing the data to classify produced by the function Caribou.src.data.build_data.build_X_data
+    fit_predict : wrapper function for calling fit and predict
 
+    cross_validation : function to call the cross-validation process
+    
     """
     def __init__(
         self,
@@ -112,7 +118,7 @@ class ClassificationMethods():
 # TODO: Remove parameters from global if they are only required for certain functions
 # TODO: Finish transfering the functions & calls from the old version
 # TODO: Validation of params before execution of private functions
-    def fit(self):
+    def fit(self, datasets, ):
         """
         Wrapper function to call the fitting method
         """

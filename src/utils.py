@@ -46,6 +46,11 @@ __all__ = [
     'merge_db_host'
 ]
 
+# Constants
+#########################################################################################################
+
+TENSOR_COLUMN_NAME = '__value__'
+
 # System
 #########################################################################################################
 
@@ -324,16 +329,24 @@ def merge_db_host(db_data, host_data):
     Merge the two databases along the rows axis
     """
     merged_db_host = {}
-    merged_db_host['profile'] = f"{db_data['profile']}_host_merged"
+    merged_db_host_file = f"{db_data['profile']}_host_merged.npz"
 
-    if os.path.exists(merged_db_host['profile']):
+    if os.path.exists(merged_db_host_file):
+        merged_db_host = load_Xy_data(merged_db_host_file)
         files_lst = glob(os.path.join(merged_db_host['profile'], '*.parquet'))
         merged_ds = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
     else:
+        merged_db_host['profile'] = f"{db_data['profile']}_host_merged"
         files_lst = glob(os.path.join(db_data['profile'], '*.parquet'))
         db_ds = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
         files_lst = glob(os.path.join(host_data['profile'], '*.parquet'))
         host_ds = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
+
+        cols2drop = [col for col in db_ds.schema().names if col not in ['id','domain',TENSOR_COLUMN_NAME]]
+        db_ds = db_ds.drop_columns(cols2drop)
+
+        cols2drop = [col for col in host_ds.schema().names if col not in ['id','domain',TENSOR_COLUMN_NAME]]
+        host_ds = host_ds.drop_columns(cols2drop)
 
         merged_ds = db_ds.union(host_ds)
         merged_ds = merged_ds.map_batches(convert_archaea_bacteria, batch_format = 'pandas')
@@ -344,4 +357,6 @@ def merge_db_host(db_data, host_data):
     merged_db_host['taxas'] = ['domain']  # Known taxas for classification
     merged_db_host['fasta'] = (db_data['fasta'], host_data['fasta'])  # Fasta file needed for reads simulation
     
+    save_Xy_data(merged_db_host, merged_db_host_file)
+
     return merged_db_host, merged_ds

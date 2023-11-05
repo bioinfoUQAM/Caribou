@@ -15,6 +15,7 @@ __author__ = 'Nicolas de Montigny'
 
 __all__ = ['caribou']
 
+
 # Part 0 - Initialisation / extraction of parameters from config file
 ################################################################################
 def caribou(opt):

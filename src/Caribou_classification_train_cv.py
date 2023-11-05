@@ -7,6 +7,7 @@ from utils import *
 from time import time
 from pathlib import Path
 from logging import ERROR
+from models.reads_simulation import split_sim_dataset
 from models.classification_old import ClassificationMethods
 
 warnings.filterwarnings('ignore')
@@ -14,6 +15,9 @@ warnings.filterwarnings('ignore')
 __author__ = "Nicolas de Montigny"
 
 __all__ = ['bacteria_classification_train_cv']
+
+VALIDATION_DATASET_NAME = 'validation'
+TEST_DATASET_NAME = 'test'
 
 # Initialisation / validation of parameters from CLI
 ################################################################################
@@ -48,8 +52,8 @@ def bacteria_classification_train_cv(opt):
     if 'domain' in lst_taxas:
         lst_taxas.remove('domain')
 
-    test_ds = split_sim_dataset(db_ds, db_data, 'test')
-    val_ds = split_sim_dataset(db_ds, db_data, 'validation')
+    test_ds, test_data = split_sim_dataset(db_ds, db_data, TEST_DATASET_NAME)
+    val_ds, val_data = split_sim_dataset(db_ds, db_data, VALIDATION_DATASET_NAME)
 
 # Training and cross-validation of models for classification of bacterias
 ################################################################################
