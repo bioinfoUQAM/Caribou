@@ -222,7 +222,7 @@ def split_sim_dataset(ds, data, name):
         warnings.warn(f'The {name} dataset already exists, skipping simulation and loading the dataset')
         splitted_data = load_Xy_data(splitted_path)
         files_lst = glob(os.path.join(splitted_data['profile'],'*.parquet'))
-        splitted_ds = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst)/100)
+        splitted_ds = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
         return splitted_ds, splitted_data
     else:
         splitted_ds = ds.random_sample(0.1)
@@ -246,5 +246,5 @@ def sim_dataset(ds, data, name):
     cv_sim = readsSimulation(data['fasta'], cls, list(cls['id']), 'miseq', sim_outdir, name)
     sim_data = cv_sim.simulation(k, data['kmers'])
     files_lst = glob(os.path.join(sim_data['profile'], '*.parquet'))
-    sim_ds = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst)/100)
+    sim_ds = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
     return sim_ds, sim_data

@@ -319,7 +319,7 @@ class KmersCollection():
                 self.df = self.df.repartition(int(self.df.count()/10))
         else:
             self._files_list = glob(os.path.join(self._tmp_dir, '*.parquet'))
-            self.df = ray.data.read_parquet_bulk(self._files_list, parallelism = len(files_lst)/100)
+            self.df = ray.data.read_parquet_bulk(self._files_list, parallelism = len(files_lst))
 
     def _kmers_tokenization(self):
         print('_kmers_tokenization')
