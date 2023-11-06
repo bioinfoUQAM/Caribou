@@ -308,7 +308,7 @@ def verify_load_db(db_data):
     """
     db_data = verify_load_data(db_data)
     files_lst = glob(os.path.join(db_data['profile'], '*.parquet'))
-    db_ds = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
+    db_ds = ray.data.read_parquet_bulk(files_lst, parallelism = -1)
     db_ds = db_ds.map_batches(convert_archaea_bacteria, batch_format = 'pandas')
     
     return db_data, db_ds
@@ -334,13 +334,13 @@ def merge_db_host(db_data, host_data):
     if os.path.exists(merged_db_host_file):
         merged_db_host = load_Xy_data(merged_db_host_file)
         files_lst = glob(os.path.join(merged_db_host['profile'], '*.parquet'))
-        merged_ds = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
+        merged_ds = ray.data.read_parquet_bulk(files_lst, parallelism = -1)
     else:
         merged_db_host['profile'] = f"{db_data['profile']}_host_merged"
         files_lst = glob(os.path.join(db_data['profile'], '*.parquet'))
-        db_ds = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
+        db_ds = ray.data.read_parquet_bulk(files_lst, parallelism = -1)
         files_lst = glob(os.path.join(host_data['profile'], '*.parquet'))
-        host_ds = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
+        host_ds = ray.data.read_parquet_bulk(files_lst, parallelism = -1)
 
         cols2drop = [col for col in db_ds.schema().names if col not in ['id','domain',TENSOR_COLUMN_NAME]]
         db_ds = db_ds.drop_columns(cols2drop)

@@ -172,8 +172,7 @@ class ClassificationMethods():
         Predict the given data using the trained model
         """
         files_lst = glob(os.path.join(data2classify['profile'],'*.parquet'))
-        df = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
-        # df = ray.data.read_parquet_bulk(files_lst, parallelism = -1)
+        df = ray.data.read_parquet_bulk(files_lst, parallelism = -1)
         ids = data2classify['ids']
         if len(self.classified_data['sequence']) == 0:
             raise ValueError('Please train a model before executing classification')
