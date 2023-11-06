@@ -12,6 +12,7 @@ from utils import *
 from Bio import SeqIO
 from glob import glob
 from pathlib import Path
+from shutil import rmtree
 from warnings import warn
 from data.build_data import build_load_save_data
 from joblib import Parallel, delayed, parallel_backend
@@ -92,7 +93,11 @@ class readsSimulation():
         self._cls_out = os.path.join(outdir, f'sim_{self._name}_class.csv')
         # Dataset variables
         self.kmers_data = {}
-        os.mkdir(self._tmp_path)
+        try:
+            os.mkdir(self._tmp_path)
+        except FileExistsError:
+            rmtree(self._tmp_path)
+            os.mkdir(self._tmp_path)
 
     def simulation(self, k = None, kmers_list = None):
         k, kmers_list = self._verify_sim_arguments(k, kmers_list)
@@ -224,8 +229,7 @@ def split_sim_dataset(ds, data, name):
         if splitted_ds.count() == 0:
             nb_samples = round(ds.count() * 0.1)
             splitted_ds = ds.random_shuffle().limit(nb_samples)
-        
-        splitted_ds, splitted_data = sim_dataset(ds, data, name)
+        splitted_ds, splitted_data = sim_dataset(splitted_ds, data, name)
         return splitted_ds, splitted_data
 
 def sim_dataset(ds, data, name):
@@ -238,7 +242,6 @@ def sim_dataset(ds, data, name):
     cls = pd.DataFrame(columns = cols)
     for batch in ds.iter_batches(batch_format = 'pandas'):
         cls = pd.concat([cls, batch[cols]], axis = 0, ignore_index = True)
-    
     sim_outdir = os.path.dirname(data['profile'])
     cv_sim = readsSimulation(data['fasta'], cls, list(cls['id']), 'miseq', sim_outdir, name)
     sim_data = cv_sim.simulation(k, data['kmers'])
