@@ -73,7 +73,7 @@ class KerasTFModel(ModelsUtils):
     train : train a model using the given datasets
 
     predict : predict the classes of a dataset
-        df : ray.data.Dataset
+        ds : ray.data.Dataset
             Dataset containing K-mers profiles of sequences to be classified
 
         threshold : float
@@ -86,27 +86,19 @@ class KerasTFModel(ModelsUtils):
     def __init__(
         self,
         classifier,
-        dataset,
         outdir_model,
-        outdir_results,
         batch_size,
         training_epochs,
-        k,
         taxa,
-        kmers_list,
-        verbose
+        kmers_list
     ):
         super().__init__(
             classifier,
-            dataset,
             outdir_model,
-            outdir_results,
             batch_size,
             training_epochs,
-            k,
             taxa,
-            kmers_list,
-            verbose
+            kmers_list
         )
         # Parameters
         # Initialize hidden
@@ -141,11 +133,11 @@ class KerasTFModel(ModelsUtils):
         elif self.classifier == 'widecnn':
             print('Training multiclass classifier based on Wide CNN Network')
 
-    def preprocess(self, df):
+    def preprocess(self, ds):
         print('preprocess')
         labels = []
         encoded = []
-        for row in df.iter_rows():
+        for row in ds.iter_rows():
             labels.append(row[self.taxa])
         self._nb_classes = len(np.unique(labels))
         if self._nb_classes == 2:
@@ -164,10 +156,10 @@ class KerasTFModel(ModelsUtils):
                 TensorRDFFeaturesSelection(self.kmers, self.taxa),
             )
         
-        self._encoder.fit(df)
-        df = self._preprocessor.fit_transform(df)
+        self._encoder.fit(ds)
+        ds = self._preprocessor.fit_transform(ds)
         self._reductor = TensorTruncatedSVDReduction(self.kmers)
-        self._reductor.fit(df)
+        self._reductor.fit(ds)
         # Labels mapping
         if self._nb_classes == 2:
             labels = list(self._encoder.stats_[f'unique_values({self.taxa})'].keys())
@@ -186,29 +178,8 @@ class KerasTFModel(ModelsUtils):
 
         return np.array(decoded)
 
-    def train(self, datasets, kmers_ds, cv = True):
-        print('train')
-        if cv:
-            self._cross_validation(datasets, kmers_ds)
-        else:
-            self._fit_model(datasets)
-
-    def _cross_validation(self, datasets, kmers_ds):
-        print('_cross_validation')
-        df_test = datasets.pop('test')
-
-        self._fit_model(datasets)
-
-        y_true = []
-        for row in df_test.iter_rows():
-            y_true.append(row[self.taxa])
-
-        y_pred = self.predict(df_test.drop_columns([self.taxa]), threshold = 0.8)
-
-        self._cv_score(y_true, y_pred)
-
-    def _fit_model(self, datasets):
-        print('_fit_model')
+    def fit(self, datasets):
+        print('fit')
         # Preprocessing loop
         for name, ds in datasets.items():
             ds = ds.drop_columns(['id'])
@@ -249,15 +220,15 @@ class KerasTFModel(ModelsUtils):
         training_result = self._trainer.fit()
         self._model_ckpt = training_result.best_checkpoints[0][0]
 
-    def predict(self, df, threshold=0.8):
+    def predict(self, ds, threshold=0.8):
         print('predict')
-        if df.count() > 0:
-            if len(df.schema().names) > 1:
-                col_2_drop = [col for col in df.schema().names if col != TENSOR_COLUMN_NAME]
-                df = df.drop_columns(col_2_drop)
+        if ds.count() > 0:
+            if len(ds.schema().names) > 1:
+                col_2_drop = [col for col in ds.schema().names if col != TENSOR_COLUMN_NAME]
+                ds = ds.drop_columns(col_2_drop)
 
             # Preprocess
-            df = self._preprocessor.transform(df)
+            ds = self._preprocessor.transform(ds)
 
             self._predictor = BatchPredictor.from_checkpoint(
                 self._model_ckpt,
@@ -265,7 +236,7 @@ class KerasTFModel(ModelsUtils):
                 model_definition = lambda: build_model(self.classifier, self._nb_classes, len(self.kmers))
             )
             predictions = self._predictor.predict(
-                data = df,
+                data = ds,
                 batch_size = self.batch_size
             )
 
@@ -279,23 +250,23 @@ class KerasTFModel(ModelsUtils):
     # Iterate over batches of predictions to transform probabilities to labels without mapping
     def _prob_2_cls(self, predictions, threshold):
         print('_prob_2_cls')
-        def map_predicted_label_binary(df, threshold):
-            df = np.ravel(df['predictions'])
+        def map_predicted_label_binary(ds, threshold):
+            ds = np.ravel(ds['predictions'])
             lower_threshold = 0.5 - (threshold * 0.5)
             upper_threshold = 0.5 + (threshold * 0.5)
             predict = pd.DataFrame({
-                'proba': df,
-                'predicted_label': np.full(len(df), -1)
+                'proba': ds,
+                'predicted_label': np.full(len(ds), -1)
             })
             predict.loc[predict['proba'] >= upper_threshold, 'predicted_label'] = 1
             predict.loc[predict['proba'] <= lower_threshold, 'predicted_label'] = 0
             return {'predictions' : predict['predicted_label'].to_numpy(dtype = np.int32)}
         
-        def map_predicted_label_multiclass(df, threshold):
-            df = df['predictions']
+        def map_predicted_label_multiclass(ds, threshold):
+            ds = ds['predictions']
             pred = pd.DataFrame({
-                'best_proba': [np.max(arr) for arr in df],
-                'predicted_label' : [np.argmax(arr) for arr in df]
+                'best_proba': [np.max(arr) for arr in ds],
+                'predicted_label' : [np.argmax(arr) for arr in ds]
             })
             pred.loc[pred['best_proba'] < threshold, 'predicted_label'] = -1
 

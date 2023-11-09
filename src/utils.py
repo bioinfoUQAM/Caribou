@@ -1,8 +1,6 @@
 import os
 import ray
-import json
 import logging
-import warnings
 
 import numpy as np
 import pandas as pd
@@ -41,6 +39,7 @@ __all__ = [
     'zip_X_y',
     'ensure_length_ds',
     'convert_archaea_bacteria',
+    'verify_load_metagenome',
     'verify_load_db',
     'verify_load_host_merge',
     'merge_db_host'
@@ -75,12 +74,12 @@ def init_ray_cluster(workdir):
 
 # Load data from file
 def load_Xy_data(Xy_file):
-    with np.load(Xy_file, allow_pickle=True) as f:
-        return f['data'].tolist()
+    with np.load(Xy_file, allow_pickle=True) as handle:
+        return handle['data'].tolist()
 
 # Save data to file
-def save_Xy_data(df, Xy_file):
-    np.savez(Xy_file, data = df)
+def save_Xy_data(data, Xy_file):
+    np.savez(Xy_file, data = data)
 
 # User arguments verification
 #########################################################################################################
@@ -301,6 +300,17 @@ def ensure_length_ds(len_x, len_y):
 def convert_archaea_bacteria(df):
     df.loc[df['domain'].str.lower() == 'archaea', 'domain'] = 'Bacteria'
     return df
+
+def verify_load_metagenome(data):
+    """
+    Wrapper function for verifying and loading the metagenome dataset
+    """
+    data = verify_load_data(data)
+    files_lst = glob(os.path.join(data['profile'], '*.parquet'))
+    ds = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
+    
+    return data, ds
+
 
 def verify_load_db(db_data):
     """

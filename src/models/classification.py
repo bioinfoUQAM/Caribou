@@ -5,15 +5,13 @@ import cloudpickle
 import numpy as np
 import pandas as pd
 
-from glob import glob
-from typing import Dict
-from shutil import rmtree
-from utils import load_Xy_data
+from warnings import warn
+from typing import Dict, List
 from models.sklearn.models import SklearnModel
 from models.kerasTF.models import KerasTFModel
 
-# Simulation class
-from models.reads_simulation import readsSimulation
+# CV metrics
+from sklearn.metrics import precision_recall_fscore_support
 
 __author__ = 'Nicolas de Montigny'
 
@@ -22,20 +20,11 @@ __all__ = ['ClassificationMethods']
 TRAINING_DATASET_NAME = 'train'
 VALIDATION_DATASET_NAME = 'validation'
 TEST_DATASET_NAME = 'test'
+TENSOR_COLUMN_NAME = '__value__'
 
 class ClassificationMethods():
     """
-    Utilities class for classifying sequences from metagenomes using ray
-
-    ----------
-    Attributes
-    ----------
-    
-    classified_data : dictionary
-        Dictionary containing the classified data for each classified taxonomic level
-
-    models : dictionary
-        Dictionary containing the trained models for each taxonomic level
+    Class for classifying sequences from metagenomes in a recursive manner
 
     ----------
     Methods
@@ -52,320 +41,387 @@ class ClassificationMethods():
     """
     def __init__(
         self,
-        database_k_mers: Dict,
-        k: int,
+        db_data: Dict,
         outdirs: Dict,
-        database: str,
-        classifier_binary: str = 'deeplstm',
-        classifier_multiclass: str = 'widecnn',
-        taxa: str = None,
-        threshold: float = 0.8,
+        db_name: str,
+        clf_binary: str = None,
+        clf_multiclass: str = None,
+        taxa: [str, List] = None,
         batch_size: int = 32,
-        training_epochs: int = 100,
-        verbose: bool = True,
-        cv: bool = False
+        training_epochs: int = 100
     ):
         # Parameters
-        self._k = k
-        self._cv = cv
         self._taxas = taxa
         self._outdirs = outdirs
-        self._database = database
-        self._verbose = verbose
-        self._threshold = threshold
-        self._classifier_binary = classifier_binary
-        self._classifier_multiclass = classifier_multiclass
+        self._database = db_name
+        self._database_data = db_data
+        self._classifier_binary = clf_binary
+        self._classifier_multiclass = clf_multiclass
         self._batch_size = batch_size
         self._training_epochs = training_epochs
-        # Initialize with values
-        self.classified_data = {
-            'sequence': [],
-            'classification' : None,
-            'classified_ids' : [],
-            'unknown_ids' : []
-        }
-        # Empty initializations
-        self.models = {}
-        self._host = False
-        self._taxas_order = []
-        self._host_data = None
-        self._database_data = None
-        self._training_datasets = None
-        self._merged_training_datasets = None
-        self._merged_database_host = None
-        self.previous_taxa_unclassified = None
-        # Extract database data 
-        if isinstance(database_k_mers, tuple):
-            self._host = True
-            self._database_data = database_k_mers[0]
-            self._host_data = database_k_mers[1]
-        else:
-            self._database_data = database_k_mers
-        # Remove 'id' from kmers if present
-        if 'id' in self._database_data['kmers']:
-            self._database_data['kmers'].remove('id')
-        if self._host and 'id' in self._host_data['kmers']:
-            self._host_data['kmers'].remove('id')
-        # Assign taxas order for top-down strategy
-        self._taxas_order = self._database_data['taxas'].copy()
-        self._taxas_order.reverse()
-        # Automatic executions
-        self._verify_assign_taxas(taxa)
+        # Init not fitted
+        self.is_fitted = False
 
     # Public functions
     #########################################################################################################
-# TODO: Revise documentation in heading
-# TODO: Remove parameters from global if they are only required for certain functions
-# TODO: Finish transfering the functions & calls from the old version
-# TODO: Validation of params before execution of private functions
-    def fit(self, datasets, ):
-        """
-        Wrapper function to call the fitting method
-        """
-        # TODO: Pass training/validation data here
 
-    def predict(self):
+    def fit(self, datasets):
         """
-        Wrapper function to call the predicting method
+        Public function to call the fitting method after validation of parameters
         """
-        # TODO: Pass data to predict here
+        self._valid_assign_taxas()
+        self._valid_classifier()
+        tax_map = self._verify_model_trained()
+        
+        self._fit(datasets, tax_map)
+        
+    def predict(self, dataset):
+        """
+        Public function to call the predicting method after validation of parameters
+        """
+        model_mapping = self._verify_load_model()
+        predictions = self._predict(dataset, model_mapping)
+        
+        return predictions
 
-    def fit_predict(self):
+    def fit_predict(self, datasets, predict_ds):
         """
-        Wrapper function for calling fit and predict
+        Public function for calling fit and predict after validation of parameters
         """
-        # TODO: Pass training/validation data here
-        # TODO: Pass data to predict here
+        self._valid_assign_taxas()
+        self._valid_classifier()
+        tax_map = self._verify_model_trained()
+
+        self._fit(datasets, tax_map)
+
+        model_mapping = self._verify_load_model()
+        predictions = self._predict(predict_ds, model_mapping)
     
-    def cross_validation(self):
+        return predictions
+
+    def cross_validation(self, datasets):
         """
-        Wrapper function to call the cross-validation method
+        Public function to call the cross-validation method after validation of parameters
+        Executes cross-validation of a model by fitting it and predicting over a test dataset
         """
-        # TODO: Pass training/validation data here
-        # TODO: Pass testing data here
+        
+        if isinstance(self._taxas, str):
+            self._valid_assign_taxas()
+            tax_map = self._verify_model_trained()
+
+            test_ds = datasets.pop(TEST_DATASET_NAME)
+            y_true, test_ds = self._get_true_classif(test_ds, self._taxas)
+
+            self._fit(datasets, tax_map)
+
+            model_mapping = self._verify_load_model()
+            y_pred = self._cv_predict(test_ds, model_mapping)
+            cv_scores = self._score_cv(y_true, y_pred, self._taxas[0])
+            
+            return cv_scores
+        else:
+            raise ValueError('Cross-validation can only be done on one taxa, please pass one taxa while initiating the ClassificationMethods object')
+
 
     # Private principal functions
     #########################################################################################################
-# TODO: Pass training/validation data here
-    def _fit(self):
+
+    def _fit(self, datasets, tax_map):
         """
         Fit the given model to the training dataset
         """
-        for taxa in self._taxas_order:
-            if taxa in self._taxas:
-                if taxa in ['domain','bacteria','host']:
-                    clf = self._classifier_binary
-                else:
-                    clf = self._classifier_multiclass
-                self._data_file = os.path.join(self._outdirs['data_dir'], f'Xy_{taxa}_database_K{self._k}_{clf}_{self._database}_data.npz')
-                self._model_file = os.path.join(self._outdirs['models_dir'], f'{clf}_{taxa}.pkl')
-                train = self._verify_load_data_model(self._data_file, self._model_file, taxa)
-                if train:
-                    if taxa in ['domain','bacteria','host']:
-                        self._binary_training(taxa)
-                    else:
-                        self._multiclass_training(taxa)
+        for taxa, file in tax_map.items():
+            if taxa in ['domain','bacteria','host']:
+                self._binary_training(datasets, taxa, file)
+            else:
+                self._multiclass_training(datasets, taxa, file)
+        self.is_fitted = True
 
-# TODO: Pass data to predict here
-    def _predict(self, data2classify):
+    def _predict(self, ds, model_map):
         """
-        Predict the given data using the trained model
+        Predict the given data using the trained model in a recursive manner over taxas using a top-down approach
+        Returns a mapping of the predictions made by the models for the targeted taxas
         """
-        files_lst = glob(os.path.join(data2classify['profile'],'*.parquet'))
-        df = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
-        ids = data2classify['ids']
-        if len(self.classified_data['sequence']) == 0:
-            raise ValueError('Please train a model before executing classification')
-        for i, taxa in enumerate(self.classified_data['sequence']):
+        mapping = {}
+        if self.is_fitted:
             try:
-                if i == 0:
-                    df = self._classify_first(df, taxa, ids, data2classify['profile'])
-                else:
-                    df = self._classify_subsequent(df, taxa, ids, data2classify['profile'])
+                for taxa, model in model_map.items():
+                    predictions = model.predict(ds) # np.array
+                    ds, predictions, ids = self._remove_unknown(ds, predictions)
+                    file = self._save_dataset(ds, taxa)
+                    mapping[taxa] = {
+                        'classification' : predictions,
+                        'ids' : ids,
+                        'dataset' : file
+                    }
+                return mapping
             except ValueError:
                 print('Stopping classification prematurelly because there are no more sequences to classify')
-                return taxa
-        return None
-    
-    def _cross_validation(self):
+                return mapping
+        else:
+            raise ValueError('The model was not fitted yet! Please call either the `fit` or the `fit_predict` method before making predictions')
+
+    def _cv_predict(self, ds, model_map):
         """
-        Execute cross-validation of a model by fitting a model and predicting over a test dataset
+        Predict the given data using the trained model for cross-validation
+        Returns a mapping of the predictions made by the models for the targeted taxas
         """
+        mapping = {}
+        for taxa, model in model_map.items():
+                mapping[taxa] = model.predict(ds) # np.array
+        return mapping
 
     # Private training secondary functions
     #########################################################################################################
-# TODO: Remove data loading & verification from inside these functions
-    def _binary_training(self, taxa):
+
+    def _binary_training(self, datasets, taxa, file):
         print('_binary_training')
-        self._verify_classifier_binary()
         if self._classifier_binary == 'onesvm':
-            self.models[taxa] = SklearnModel(
+            model = SklearnModel(
                 self._classifier_binary,
-                self._database,
                 self._outdirs['models_dir'],
-                self._outdirs['results_dir'],
                 self._batch_size,
                 self._training_epochs,
-                self._k,
                 taxa,
-                self._database_data['kmers'],
-                self._verbose
+                self._database_data['kmers']
+            )
+        elif self._classifier_binary == 'linearsvm':
+            model = SklearnModel(
+                self._classifier_binary,
+                self._outdirs['models_dir'],
+                self._batch_size,
+                self._training_epochs,
+                taxa,
+                self._database_data['kmers']
             )
         else:
-            if self._classifier_binary == 'linearsvm':
-                self.models[taxa] = SklearnModel(
-                    self._classifier_binary,
-                    self._database,
-                    self._outdirs['models_dir'],
-                    self._outdirs['results_dir'],
-                    self._batch_size,
-                    self._training_epochs,
-                    self._k,
-                    taxa,
-                    self._merged_database_host['kmers'],
-                    self._verbose
-                )
-            else:
-                self.models[taxa] = KerasTFModel(
-                    self._classifier_binary,
-                    self._database,
-                    self._outdirs['models_dir'],
-                    self._outdirs['results_dir'],
-                    self._batch_size,
-                    self._training_epochs,
-                    self._k,
-                    taxa,
-                    self._merged_database_host['kmers'],
-                    self._verbose
-                )
-        self.models[taxa].preprocess(self._merged_training_datasets['train'])
-        self.models[taxa].train(self._merged_training_datasets, self._merged_database_host, self._cv)
+            model = KerasTFModel(
+                self._classifier_binary,
+                self._outdirs['models_dir'],
+                self._batch_size,
+                self._training_epochs,
+                taxa,
+                self._database_data['kmers']
+            )
+        model.preprocess(datasets[TRAINING_DATASET_NAME])
+        model.fit(datasets)
 
-        self._save_model(self._model_file, taxa)
+        self._save_model(model, file)
 
-    def _multiclass_training(self, taxa):
+    def _multiclass_training(self, datasets, taxa, file):
         print('_multiclass_training')
-        self._verify_classifier_multiclass()
-        self._load_training_data()
         if self._classifier_multiclass in ['sgd','mnb']:
-            self.models[taxa] = SklearnModel(
+            model = SklearnModel(
                 self._classifier_multiclass,
-                self._database,
                 self._outdirs['models_dir'],
-                self._outdirs['results_dir'],
                 self._batch_size,
                 self._training_epochs,
-                self._k,
                 taxa,
-                self._database_data['kmers'],
-                self._verbose
+                self._database_data['kmers']
             )
         else:
-            self.models[taxa] = KerasTFModel(
+            model = KerasTFModel(
                 self._classifier_multiclass,
-                self._database,
                 self._outdirs['models_dir'],
-                self._outdirs['results_dir'],
                 self._batch_size,
                 self._training_epochs,
-                self._k,
                 taxa,
-                self._database_data['kmers'],
-                self._verbose
+                self._database_data['kmers']
             )
-        self.models[taxa].preprocess(self._training_datasets['train'])
-        self.models[taxa].train(self._training_datasets, self._database_data, self._cv)
-        self._save_model(self._model_file, taxa)
+        model.preprocess(datasets[TRAINING_DATASET_NAME])
+        model.fit(datasets)
+
+        self._save_model(model, file)
 
     # Private predicting secondary functions
     #########################################################################################################
-# TODO: Revise these functions to parallelise with Ray + ease process
-    # Classify sequences for first iteration
-    def _classify_first(self, df, taxa, ids, df_file):
-        print('_classify_first')
-        try:
-            pred_df = self._predict_sequences(df, taxa, ids)
-            not_pred_df = pred_df[pred_df[taxa] == 'unknown']
-            pred_df = pred_df[pred_df[taxa] != 'unknown']
 
-            self.classified_data['classified_ids'] = list(pred_df['id'].values)
-            self.classified_data['unknown_ids'] = list(not_pred_df['id'].values)
+    def _remove_unknown(self, ds, predict):
+        ids = []
+        for row in ds.iter_rows():
+            ids.append(row['id'])
+        mapping = pd.DataFrame({
+            'ids' : ids,
+            'predictions' : predict
+        })
+        mapping = mapping[mapping['predictions'] != -1]
+        ids = mapping['ids']
+        predict = mapping['predictions']
 
-            self.classified_data['classification'] = pred_df
+        def remove_unknown(df):
+            df = df[df['ids'].isin(ids)]
+            return df
+        
+        ds = ds.map_batches(remove_unknown, batch_format = 'pandas')
+        
+        return ds, predict, ids
 
-            if taxa == 'domain':
-                if self._host == True:
-                    pred_df_host = pred_df[pred_df['domain'] == 'host']
-                    pred_df = pred_df[pred_df['domain'] != 'host']
-                    classified_host, classified_host_file = self._extract_subset(df, df_file, list(pred_df_host['id'].values), taxa, 'bacteria')
-                    self.classified_data[taxa]['host'] = {
-                        'classification' : classified_host_file
-                    }
-                classified, classified_file = self._extract_subset(df, df_file, self.classified_data['classified_ids'], taxa, 'bacteria')
-                self.classified_data[taxa]['bacteria'] = classified_file
-                not_classified, not_classified_file = self._extract_subset(df, df_file, self.classified_data['unknown_ids'], taxa, 'unknown')
-                self.classified_data[taxa]['unknown'] = not_classified_file
-                return classified
-            else:
-                classified, classified_file = self._extract_subset(df, df_file, self.classified_data['classified_ids'], taxa, 'bacteria')
-                self.classified_data[taxa]['classified'] = classified_file
-                not_classified, not_classified_file = self._extract_subset(df, df_file, self.classified_data['unknown_ids'], taxa, 'unknown')
-                self.classified_data[taxa]['unknown'] = not_classified_file
-                return classified
-        except:
-            raise ValueError('No sequences to classify for {}.'.format(taxa))
-
-    # Classify sequences according to passed taxa and model
-    def _classify_subsequent(self, df, taxa, ids, df_file):
-        print('_classify_subsequent')
-        try:
-            pred_df = self._predict_sequences(df, taxa, ids)
-            not_pred_df = pred_df[pred_df[taxa] == 'unknown']
-            pred_df = pred_df[pred_df[taxa] != 'unknown']
-
-            self.classified_data['classification'] = self.classified_data['classification'].join(pred_df, how = 'outer', on = 'id')
-
-            classified, classified_file = self._extract_subset(df, df_file, list(pred_df['id'].values), taxa, 'classified')
-            self.classified_data[taxa]['classified'] = classified_file
-            not_classified, not_classified_file = self._extract_subset(df, df_file, list(not_pred_df['id'].values), taxa, 'unknown')
-            self.classified_data[taxa]['unknown'] = not_classified_file
-            
-            return classified
-        except:
-            raise ValueError('No sequences to classify for {}.'.format(taxa))
-
-    # Make predictions
-    def _predict_sequences(self, df, taxa, ids):
-        print('_predict_sequences')
-        try:
-            predictions = self.models[taxa].predict(df, self._threshold)
-            pred_df = pd.DataFrame({'id': ids, taxa: predictions.values})
-
-            taxa_pos = self.classified_data['sequence'].index(taxa)
-            lst_taxa = self.classified_data['sequence'][taxa_pos:]
-            db_df = pd.DataFrame(
-                self._database_data['classes'],
-                columns=self._database_data['taxas']
-            )[lst_taxa]
-            pred_df = pred_df.merge(db_df, on=taxa, how='left')
-            
-            return pred_df
-        except ValueError:
-            raise ValueError('No sequences to classify for {}.'.format(taxa))
-
-    # Extract subset of classified or not classified sequences
-    def _extract_subset(self, df, df_file, ids, taxa, status):
-        print('_extract_subset')
-        clf_file = df_file + '_{}_{}'.format(taxa, status)
-        rows_clf = []
-        for row in df.iter_rows():
-            if row['id'] in ids:
-                rows_clf.append(row)
-        df_clf = ray.data.from_items(rows_clf)
-        if df_clf.count() > 0:
-            df_clf.write_parquet(clf_file)
-        return df_clf, clf_file
-
-    # Helper functions
+    # Private cross-validation secondary methods
     #########################################################################################################
 
+    def _get_true_classif(self, ds, taxas):
+        """
+        Extract the true classification of the dataset used for cross-validation
+        """
+        classif = {taxa : [] for taxa in taxas}
+        
+        cols2drop = [col for col in ds.schema().names if col not in ['id', taxas[0]]]
+        classif_ds = ds.drop_columns(cols2drop)
+
+        cols2drop = [col for col in ds.schema().names if col not in ['id',TENSOR_COLUMN_NAME]]
+        ds = ds.drop_columns(cols2drop)
+
+        for row in classif_ds.iter_rows():
+            for taxa in taxas:
+                classif[taxa].append(row[taxa])
+
+        return classif, ds
+
+    def _score_cv(self, y_true, y_pred, taxa):
+        """
+        Compute the cross validation scores
+        """
+        if self._classifier_binary is not None:
+            model = self._classifier_binary
+        else :
+            model = self._classifier_multiclass
+
+        cv_csv = os.path.join(self._outdirs['results_dir'],f'{self._database}_{model}_{taxa}_cv_scores.csv')
+
+
+        y_compare = pd.DataFrame({
+            'y_true': y_true[taxa],
+            'y_pred': y_pred[taxa]
+        })
+        y_compare['y_true'] = y_compare['y_true'].str.lower()
+        y_compare['y_pred'] = y_compare['y_pred'].str.lower()
+        y_compare.to_csv(os.path.join(self._outdirs['models_dir'], f'y_compare_{self._database}_{model}_{taxa}.csv'))
+
+        support = precision_recall_fscore_support(
+            y_compare['y_true'],
+            y_compare['y_pred'],
+            average = 'weighted'
+        )
+
+        scores = pd.DataFrame({
+            taxa : [support[0],support[1],support[2]]
+            },
+            index = ['Precision','Recall','F-score']
+        )
+        
+        scores.T.to_csv(cv_csv, index = True)
+
+        return scores
+    
+    # Validation & verification methods
+    #########################################################################################################
+
+    def _valid_assign_taxas(self):
+        """
+        Validate taxas and assign to class variable
+        Assign order for top-down strategy
+        """
+        print('_valid_assign_taxas')
+        if self._taxas is None:
+            self._taxas = self._database_data['taxas'].copy()            
+        elif isinstance(self._taxas, list):
+            self._taxas = self._taxas
+        elif isinstance(self._taxas, str):
+            self._taxas = [self._taxas]
+        else:
+            raise ValueError("Invalid taxa option, it must either be absent/None, be a list of taxas to extract or a string identifiying a taxa to extract")
+        self._valid_taxas()
+        self._taxas = [taxa for taxa in self._database_data['taxas'] if taxa in self._taxas]
+        self._taxas.reverse()
+
+    def _valid_taxas(self):
+        """
+        Validate that selected taxas are in database
+        """
+        print('_valid_taxas')
+        for taxa in self._taxas:
+            if taxa not in self._database_data['taxas']:
+                raise ValueError("Taxa {} not found in database".format(taxa))
+
+    def _valid_classifier(self):
+        if self._classifier_binary is not None:
+            if self._classifier_binary not in ['onesvm','linearsvm','attention','lstm','deeplstm']:
+                raise ValueError("""
+                                 Invalid classifier option for bacteria extraction!
+                                 Models implemented at this moment are :
+                                 Classic algorithm : One-class SVM (onesvm) and Linear SVM (linearsvm)
+                                 Neural networks : Attention (attention), LSTM (lstm) and Deep LSTM (deeplstm)
+                                 """)
+        if self._classifier_multiclass is not None:
+            if self._classifier_multiclass not in ['sgd','mnb','lstm_attention','cnn','widecnn']:
+                raise ValueError("""
+                                 Invalid classifier option for bacteria classification!
+                                 Models implemented at this moment are :
+                                 Classic algorithm : Stochastic Gradient Descent (sgd) and Multinomial Naïve Bayes (mnb)
+                                 Neural networks : Deep hybrid between LSTM and Attention (lstm_attention), CNN (cnn) and Wide CNN (widecnn)
+                                 """)
+
+    def _verify_model_trained(self):
+        """
+        Verify if the model is already trained for all desired taxas
+        Taxas for which a model is already trained will be removed from the list
+        Returns a mapping of the file per taxa to train
+        """
+        mapping = {}
+        for taxa in self._taxas:
+            if taxa in ['domain','bacteria','host']:
+                clf = self._classifier_binary
+            else:
+                clf = self._classifier_multiclass
+            file = os.path.join(self._outdirs['models_dir'], f'{clf}_{taxa}.pkl')
+            if not os.path.isfile(file):
+                mapping[taxa] = file
+        
+        return mapping
+    
+    def _verify_load_model(self):
+        """
+        Verify if the model is already trained for all desired taxas
+        Taxas for which no model was not trained will raise a ValueError
+        Returns a mapping of the model per taxa for predicting
+        """
+        mapping = {}
+        for taxa in self._taxas:
+            if taxa in ['domain','bacteria','host']:
+                clf = self._classifier_binary
+            else:
+                clf = self._classifier_multiclass
+            file = os.path.join(self._outdirs['models_dir'], f'{clf}_{taxa}.pkl')
+            if not os.path.isfile(file):
+                raise ValueError(f'No model found for {taxa}')
+            else:
+                mapping[taxa] = self._load_model(file, taxa)
+        return mapping
+    
+    def _load_model(self, file, taxa):
+        """
+        Load a model from the specified file
+        """
+        print('_load_model')
+        with open(file, 'rb') as handle:
+            return cloudpickle.load(handle)
+        
+    def _save_model(self, model, file):
+        """
+        Save a model to a specified file
+        """
+        print('_save_model')
+        with open(file, 'wb') as handle:
+            cloudpickle.dump(model, handle)
+    
+    def _save_dataset(self, ds, taxa):
+        """
+        Save a dataset to disk and return the filename
+        """
+        if taxa in ['domain','bacteria','host']:
+            model = self._classifier_binary
+        else:
+            model = self._classifier_multiclass
+        file = os.path.join(self._outdirs['results'], f'data_classified_{model}_{taxa}.parquet')
+        ds.write_parquet(file)
+        return file

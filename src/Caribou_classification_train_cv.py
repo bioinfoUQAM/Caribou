@@ -8,7 +8,7 @@ from time import time
 from pathlib import Path
 from logging import ERROR
 from models.reads_simulation import split_sim_dataset
-from models.classification_old import ClassificationMethods
+from models.classification import ClassificationMethods
 
 warnings.filterwarnings('ignore')
 
@@ -16,6 +16,7 @@ __author__ = "Nicolas de Montigny"
 
 __all__ = ['bacteria_classification_train_cv']
 
+TRAINING_DATASET_NAME = 'train'
 VALIDATION_DATASET_NAME = 'validation'
 TEST_DATASET_NAME = 'test'
 
@@ -41,53 +42,59 @@ def bacteria_classification_train_cv(opt):
 
     db_data, db_ds = verify_load_db(opt['data_bacteria'])
 
-    k_length = len(db_data['kmers'][0])
-
     # Validate and extract list of taxas
     if opt['taxa'] is not None:
         lst_taxas = verify_taxas(opt['taxa'], db_data['taxas'])
     else:
         lst_taxas = db_data['taxas'].copy()
-    
+        
     if 'domain' in lst_taxas:
         lst_taxas.remove('domain')
+    
+    for taxa in lst_taxas:
 
-    test_ds, test_data = split_sim_dataset(db_ds, db_data, TEST_DATASET_NAME)
-    val_ds, val_data = split_sim_dataset(db_ds, db_data, VALIDATION_DATASET_NAME)
+        test_ds, test_data = split_sim_dataset(db_ds, db_data, TEST_DATASET_NAME)
+        val_ds, val_data = split_sim_dataset(db_ds, db_data, VALIDATION_DATASET_NAME)
+
+        datasets = {
+            TRAINING_DATASET_NAME : db_ds,
+            TEST_DATASET_NAME : test_ds,
+            VALIDATION_DATASET_NAME : val_ds
+        }
 
 # Training and cross-validation of models for classification of bacterias
 ################################################################################
 
-    t_start = time()
-    ClassificationMethods(
-        database_k_mers = db_data,
-        k = k_length,
-        outdirs = outdirs,
-        database = opt['database_name'],
-        classifier_binary = None,
-        classifier_multiclass = opt['model_type'],
-        taxa = lst_taxas,
-        batch_size = opt['batch_size'],
-        training_epochs = opt['training_epochs'],
-        verbose = opt['verbose'],
-        cv = True
-    ).fit()
-    t_end = time()
-    t_classify = t_end - t_start
-    print(
-        f"Caribou finished training and cross-validating the {opt['model_type']} model in {t_classify} seconds")
+        clf = ClassificationMethods(
+            db_data = db_data,
+            outdirs = outdirs,
+            db_name = opt['database_name'],
+            clf_multiclass = opt['model_type'],
+            taxa = taxa,
+            batch_size = opt['batch_size'],
+            training_epochs = opt['training_epochs']
+        )
+
+        t_s = time()
+
+        cv_scores = clf.cross_validation(datasets)
+
+        t_clf = time() - t_s
+
+        print(f"Caribou finished training and cross-validating the {opt['model_type']} model at taxa {taxa} in {t_clf} seconds")
 
 # Argument parsing from CLI
 ################################################################################
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='This script trains and cross-validates a model for the bacteria classification step.')
+    # Database
     parser.add_argument('-db','--data_bacteria', required=True, type=Path, help='PATH to a npz file containing the data corresponding to the k-mers profile for the bacteria database')
-    parser.add_argument('-dt','--database_name', required=True, help='Name of the bacteria database used to name files')
+    parser.add_argument('-dn','--database_name', required=True, help='Name of the bacteria database used to name files')
+    # Parameters
     parser.add_argument('-model','--model_type', default='lstm_attention', choices=['sgd','mnb','lstm_attention','cnn','widecnn'], help='The type of model to train')
     parser.add_argument('-t','--taxa', default=None, help='The taxonomic level to use for the classification, defaults to None. Can be one level or a list of levels separated by commas.')
     parser.add_argument('-bs','--batch_size', default=32, type=int, help='Size of the batch size to use, defaults to 32')
     parser.add_argument('-e','--training_epochs', default=100, type=int, help='The number of training iterations for the neural networks models if one ise chosen, defaults to 100')
-    parser.add_argument('-v','--verbose', action='store_true', help='Should the program be verbose')
     parser.add_argument('-o','--outdir', required=True, type=Path, help='PATH to a directory on file where outputs will be saved')
     parser.add_argument('-wd','--workdir', default='/tmp/spill', type=Path, help='Optional. Path to a working directory where Ray Tune will output and spill tuning data')
     args = parser.parse_args()

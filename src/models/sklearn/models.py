@@ -21,8 +21,9 @@ from models.encoders.onesvm_label_encoder import OneClassSVMLabelEncoder
 # Training
 from ray.air.config import ScalingConfig
 from sklearn.naive_bayes import MultinomialNB
-from sklearn.linear_model import SGDOneClassSVM, SGDClassifier
+from sklearn.linear_model import SGDClassifier
 from models.sklearn.partial_trainer import SklearnPartialTrainer
+from models.sklearn.scoring_one_svm import ScoringSGDOneClassSVM
 from models.sklearn.tensor_predictor import SklearnTensorPredictor
 
 # Tuning
@@ -66,7 +67,7 @@ class SklearnModel(ModelsUtils):
     train : train a model using the given datasets
 
     predict : predict the classes of a dataset
-        df : ray.data.Dataset
+        ds : ray.data.Dataset
             Dataset containing K-mers profiles of sequences to be classified
 
         threshold : float
@@ -78,34 +79,26 @@ class SklearnModel(ModelsUtils):
     def __init__(
         self,
         classifier,
-        dataset,
         outdir_model,
-        outdir_results,
         batch_size,
         training_epochs,
-        k,
         taxa,
-        kmers_list,
-        verbose
+        kmers_list
     ):
         super().__init__(
             classifier,
-            dataset,
             outdir_model,
-            outdir_results,
             batch_size,
             training_epochs,
-            k,
             taxa,
-            kmers_list,
-            verbose
+            kmers_list
         )
         # Parameters
         self._encoded = []
         # Computes
         self._build()
 
-    def preprocess(self, df):
+    def preprocess(self, ds):
         print('preprocess')
         if self.classifier == 'onesvm':
             self._encoder = OneClassSVMLabelEncoder(self.taxa)
@@ -118,11 +111,11 @@ class SklearnModel(ModelsUtils):
             TensorTfIdfTransformer(self.kmers),
             TensorRDFFeaturesSelection(self.kmers, self.taxa),
         )
-        self._encoder.fit(df)
-        df = self._preprocessor.fit_transform(df)
+        self._encoder.fit(ds)
+        ds = self._preprocessor.fit_transform(ds)
         self.kmers = self._preprocessor.preprocessors[1].stats_['cols_keep']
         self._reductor = TensorTruncatedSVDReduction(self.kmers)
-        self._reductor.fit(df)
+        self._reductor.fit(ds)
 
         # Labels mapping
         if self.classifier != 'onesvm':
@@ -140,37 +133,11 @@ class SklearnModel(ModelsUtils):
 
         return np.array(decoded)
 
-    def train(self, datasets, kmers_ds, cv = True):
-        print('train')
-        
-        if cv:
-            self._cross_validation(datasets, kmers_ds)
-        else:
-            self._fit_model(datasets)
-            
-    def _cross_validation(self, datasets, kmers_ds):
-        print('_cross_validation')
-        
-        df_test = datasets.pop('test')
-
-        self._fit_model(datasets)
-        
-        y_true = []
-        for row in df_test.iter_rows():
-            y_true.append(row[self.taxa])
-
-        y_true = np.array(y_true)
-        y_true = list(y_true)
-        
-        y_pred = self._predict_cv(df_test.drop_columns([self.taxa]))
-        
-        self._cv_score(y_true, y_pred)
-
     def _build(self):
         print('_build')
         if self.classifier == 'onesvm':
             print('Training bacterial extractor with One Class SVM')
-            self._clf = SGDOneClassSVM()
+            self._clf = ScoringSGDOneClassSVM()
             self._train_params = {
                 'nu' : 0.026441491,
                 'learning_rate' : 'constant',
@@ -206,7 +173,7 @@ class SklearnModel(ModelsUtils):
                 'fit_prior' : True
             }
 
-    def _fit_model(self, datasets):
+    def fit(self, datasets):
         print('_fit_model')
         for name, ds in datasets.items():
             ds = ds.drop_columns(['id'])
@@ -216,8 +183,7 @@ class SklearnModel(ModelsUtils):
             datasets[name] = ray.put(ds)
         try:
             training_labels = self._encoded.copy()
-            training_labels = np.delete(
-                training_labels, np.where(training_labels == -1))
+            training_labels = np.delete(training_labels, np.where(training_labels == -1))
         except:
             pass
 
@@ -246,43 +212,25 @@ class SklearnModel(ModelsUtils):
         training_result = self._trainer.fit()
         self._model_ckpt = training_result.checkpoint
 
-    def _predict_cv(self, df):
-        print('_predict_cv')
-        if df.count() > 0:
+    def predict(self, ds, threshold = 0.8):
+        print('predict')
+        if ds.count() > 0:
+            ds = self._preprocessor.transform(ds)
+            ds = self._reductor.transform(ds)
             predict_kwargs = {'features':self.kmers, 'num_estimator_cpus':-1}
             self._predictor = BatchPredictor.from_checkpoint(self._model_ckpt, SklearnTensorPredictor)
-            predictions = self._predictor.predict(df, batch_size = self.batch_size, feature_columns = [TENSOR_COLUMN_NAME], **predict_kwargs)
+            predictions = self._predictor.predict(ds, batch_size = self.batch_size, feature_columns = [TENSOR_COLUMN_NAME], **predict_kwargs)
             predictions = np.array(predictions.to_pandas()).reshape(-1)
-
-            return self._label_decode(predictions)
-        else:
-            raise ValueError('No data to predict')
-        
-    def predict(self, df, threshold = 0.8):
-        print('predict')
-        if df.count() > 0:
-            df = self._preprocessor.transform(df)
-            df = self._reductor.transform(df)
-            if self.classifier == 'onesvm':
-                predict_kwargs = {'features':self.kmers, 'num_estimator_cpus':-1}
-                self._predictor = BatchPredictor.from_checkpoint(self._models_collection['domain'], SklearnTensorPredictor)
-                predictions = self._predictor.predict(df, batch_size = self.batch_size, feature_columns = [TENSOR_COLUMN_NAME], **predict_kwargs)
-                predictions = np.array(predictions.to_pandas()).reshape(-1)
-            else:
-                predict_kwargs = {'features':self.kmers, 'num_estimator_cpus':-1}
-                self._predictor = BatchPredictor.from_checkpoint(self._model_ckpt, SklearnTensorProbaPredictor)
-                predictions = self._predictor.predict(df, batch_size = self.batch_size, feature_columns = [TENSOR_COLUMN_NAME], **predict_kwargs)
-                predictions = self._prob_2_cls(predictions, len(self._encoded), threshold)
             return self._label_decode(predictions)    
         else:
             raise ValueError('No data to predict')
 
     def _prob_2_cls(self, predict, nb_cls, threshold):
         print('_prob_2_cls')
-        def map_predicted_label(df : pd.DataFrame):
+        def map_predicted_label(ds : pd.DataFrame):
             predict = pd.DataFrame({
-                'best_proba': [max(df.iloc[i].values) for i in range(len(df))],
-                'predicted_label': [np.argmax(df.iloc[i].values) for i in range(len(df))]
+                'best_proba': [max(ds.iloc[i].values) for i in range(len(ds))],
+                'predicted_label': [np.argmax(ds.iloc[i].values) for i in range(len(ds))]
             })
             predict.loc[predict['best_proba'] < threshold, 'predicted_label'] = -1
             return pd.DataFrame(predict['predicted_label'])

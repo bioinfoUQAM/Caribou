@@ -2,6 +2,7 @@ from collections import Counter, OrderedDict
 from functools import partial
 from typing import Dict, List, Optional
 
+import ray
 import numpy as np
 import pandas as pd
 import pandas.api.types

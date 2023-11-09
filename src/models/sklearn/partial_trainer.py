@@ -26,6 +26,7 @@ from ray.train.sklearn._sklearn_utils import _set_cpu_params
 
 from ray.train.sklearn import SklearnTrainer
 
+TENSOR_COLUMN_NAME = '__value__'
 LABELS_COLUMN_NAME = 'labels'
 
 simplefilter(action='ignore', category=FutureWarning)
@@ -216,7 +217,7 @@ class SklearnPartialTrainer(SklearnTrainer):
                     )
                 ):  
                     if isinstance(batch_X, dict):
-                        batch_X = batch_X['__value__']
+                        batch_X = batch_X[TENSOR_COLUMN_NAME]
                     
                     """    
                     try:
@@ -244,7 +245,7 @@ class SklearnPartialTrainer(SklearnTrainer):
         #             batch_size = 1,
         #             batch_format = 'numpy'
         #         )):
-        #             X_calib_df[ind] = batch['__value__']
+                    # X_calib_df[ind] = batch[TENSOR_COLUMN_NAME]
 
         #         """
         #         X_calib = pd.DataFrame(X_calib_df, columns = self._features_list)
@@ -318,7 +319,7 @@ class SklearnPartialTrainer(SklearnTrainer):
                 )
             ):
                 if isinstance(batch, dict):
-                    batch = batch['__value__']
+                    batch = batch[TENSOR_COLUMN_NAME]
 
                 """
                 try:

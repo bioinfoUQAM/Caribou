@@ -23,7 +23,7 @@ class OneHotTensorEncoder(Preprocessor):
             [self.column],
             encode_lists = False,
         )
-
+            
         return self
 
     def _transform_pandas(self, df: pd.DataFrame) -> pd.DataFrame:

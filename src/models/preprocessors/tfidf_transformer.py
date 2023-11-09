@@ -47,7 +47,7 @@ class TensorTfIdfTransformer(Preprocessor):
         return self
     
     def _transform_pandas(self, batch: pd.DataFrame) -> pd.DataFrame:
-        # _validate_df(df, TENSOR_COLUMN_NAME, self._nb_features)
+        # _validate_df(batch, TENSOR_COLUMN_NAME, self._nb_features)
         idf_diag = self.stats_['idf_diag']
         
         df = batch[TENSOR_COLUMN_NAME]
