@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 
+from tqdm import tqdm
 from typing import List
 from warnings import warn
 from ray.data import Dataset
@@ -65,7 +66,7 @@ class TensorTruncatedSVDReduction(Preprocessor):
         components = None
         singular_values = None
         if self._nb_features > self._nb_components:
-            for batch in ds.iter_batches(batch_format = 'numpy'):
+            for batch in tqdm(ds.iter_batches(batch_format = 'numpy')):
                 batch = batch[TENSOR_COLUMN_NAME]
                 batch = _unwrap_ndarray_object_type_if_needed(batch)
                 if components is not None:

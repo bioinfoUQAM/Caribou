@@ -190,6 +190,9 @@ class KerasTFModel(ModelsUtils):
             ds = self._scaler.transform(ds)
             # ds = self._preprocessor.transform(ds)
             ds = self._reductor.transform(ds)
+            # Trigger the preprocessing computations before ingest in trainer
+            # Otherwise, it would be executed at each epoch
+            ds = ds.materialize()
             datasets[name] = ds
 
         # Training parameters
@@ -320,7 +323,6 @@ def train_func(config):
 
     train_data = session.get_dataset_shard('train')
     val_data = session.get_dataset_shard('validation')
-
 
     for _ in range(epochs):
         batch_train = train_data.to_tf(
