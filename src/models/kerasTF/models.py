@@ -142,22 +142,25 @@ class KerasTFModel(ModelsUtils):
         self._nb_classes = len(np.unique(labels))
         if self._nb_classes == 2:
             self._encoder = ModelLabelEncoder(self.taxa)
-            self._preprocessor = Chain(
-                TensorTfIdfTransformer(self.kmers),
-                TensorRDFFeaturesSelection(self.kmers, self.taxa),
-            )
+            self._scaler = TensorTfIdfTransformer(self.kmers)
+            # self._preprocessor = Chain(
+            #     TensorTfIdfTransformer(self.kmers),
+            #     TensorRDFFeaturesSelection(self.kmers, self.taxa),
+            # )
         else:
             self._encoder = Chain(
                 LabelEncoder(self.taxa),
                 OneHotTensorEncoder(self.taxa)
             )
-            self._preprocessor = Chain(
-                TensorTfIdfTransformer(self.kmers),
-                TensorRDFFeaturesSelection(self.kmers, self.taxa),
-            )
+            self._scaler = TensorTfIdfTransformer(self.kmers)
+            # self._preprocessor = Chain(
+            #     TensorTfIdfTransformer(self.kmers),
+            #     TensorRDFFeaturesSelection(self.kmers, self.taxa),
+            # )
         
         self._encoder.fit(ds)
-        ds = self._preprocessor.fit_transform(ds)
+        ds = self._scaler.fit_transform(ds)
+        # ds = self._preprocessor.fit_transform(ds)
         self._reductor = TensorTruncatedSVDReduction(self.kmers)
         self._reductor.fit(ds)
         # Labels mapping
@@ -184,7 +187,8 @@ class KerasTFModel(ModelsUtils):
         for name, ds in datasets.items():
             ds = ds.drop_columns(['id'])
             ds = self._encoder.transform(ds)
-            ds = self._preprocessor.transform(ds)
+            ds = self._scaler.transform(ds)
+            # ds = self._preprocessor.transform(ds)
             ds = self._reductor.transform(ds)
             datasets[name] = ds
 
@@ -228,7 +232,8 @@ class KerasTFModel(ModelsUtils):
                 ds = ds.drop_columns(col_2_drop)
 
             # Preprocess
-            ds = self._preprocessor.transform(ds)
+            ds = self._scaler.transform(ds)
+            # ds = self._preprocessor.transform(ds)
 
             self._predictor = BatchPredictor.from_checkpoint(
                 self._model_ckpt,

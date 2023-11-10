@@ -71,6 +71,7 @@ class ModelsUtils(ABC):
         # Initialize Ray variables
         self._clf = None
         self._encoder = None
+        self._scaler = None
         self._preprocessor = None
         self._reductor = None
         self._model_ckpt = None

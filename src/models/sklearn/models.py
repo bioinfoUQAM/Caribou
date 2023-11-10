@@ -107,13 +107,16 @@ class SklearnModel(ModelsUtils):
         else:
             self._encoder = ModelLabelEncoder(self.taxa)
         
-        self._preprocessor = Chain(
-            TensorTfIdfTransformer(self.kmers),
-            TensorRDFFeaturesSelection(self.kmers, self.taxa),
-        )
+        self._scaler = TensorTfIdfTransformer(self.kmers)
+
+        # self._preprocessor = Chain(
+        #     TensorTfIdfTransformer(self.kmers),
+        #     TensorRDFFeaturesSelection(self.kmers, self.taxa),
+        # )
         self._encoder.fit(ds)
-        ds = self._preprocessor.fit_transform(ds)
-        self.kmers = self._preprocessor.preprocessors[1].stats_['cols_keep']
+        ds = self._scaler.fit_transform(ds)
+        # ds = self._preprocessor.fit_transform(ds)
+        # self.kmers = self._preprocessor.preprocessors[1].stats_['cols_keep']
         self._reductor = TensorTruncatedSVDReduction(self.kmers)
         self._reductor.fit(ds)
 
@@ -178,7 +181,8 @@ class SklearnModel(ModelsUtils):
         for name, ds in datasets.items():
             ds = ds.drop_columns(['id'])
             ds = self._encoder.transform(ds)
-            ds = self._preprocessor.transform(ds)
+            ds = self._scaler.transform(ds)
+            # ds = self._preprocessor.transform(ds)
             ds = self._reductor.transform(ds)
             datasets[name] = ray.put(ds)
         try:
@@ -215,7 +219,8 @@ class SklearnModel(ModelsUtils):
     def predict(self, ds, threshold = 0.8):
         print('predict')
         if ds.count() > 0:
-            ds = self._preprocessor.transform(ds)
+            ds = self._scaler.transform(ds)
+            # ds = self._preprocessor.transform(ds)
             ds = self._reductor.transform(ds)
             predict_kwargs = {'features':self.kmers, 'num_estimator_cpus':-1}
             self._predictor = BatchPredictor.from_checkpoint(self._model_ckpt, SklearnTensorPredictor)
