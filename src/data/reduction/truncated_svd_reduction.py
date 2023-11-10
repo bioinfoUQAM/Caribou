@@ -18,7 +18,9 @@ class TensorTruncatedSVDReduction(Preprocessor):
     This makes it possible to use the class as a Ray preprocessor in a features reduction strategy.
     TruncatedSVD performs linear dimensionality reduction by means of truncated singular value decomposition (SVD).
     When it is applied following the TF-IDF normalisation, it becomes a latent semantic analysis (LSA).
+    https://scikit-learn.org/stable/modules/decomposition.html#truncated-singular-value-decomposition-and-latent-semantic-analysis
     https://scikit-learn.org/stable/modules/generated/sklearn.decomposition.TruncatedSVD.html#sklearn.decomposition.TruncatedSVD
+    https://scikit-learn.org/stable/modules/generated/sklearn.decomposition.IncrementalPCA.html#sklearn.decomposition.IncrementalPCA
     """
     
     def __init__(self, features: List[str], nb_components: int = 10000):
@@ -26,17 +28,20 @@ class TensorTruncatedSVDReduction(Preprocessor):
         self.features = features
         self._nb_features = len(features)
         self._nb_components = nb_components
-        
-    
+        self._n_samples_seen = 0
+        self._mean = 0.0
+        self._var = 0.0
+
     def _fit(self, ds: Dataset) -> Preprocessor:
+        # Parallel
+        """
         def svd_batch(arr: np.array):
-            df = arr['__value__']
+            df = arr[TENSOR_COLUMN_NAME]
             df = _unwrap_ndarray_object_type_if_needed(df)
             U, Sigma, VT = randomized_svd(
                 df,
                 n_components = self._nb_components,
-                n_iter = 5,
-                n_oversamples = 10,
+                n_iter = 1,
                 power_iteration_normalizer = 'LU',
                 random_state = None
             )
@@ -51,8 +56,36 @@ class TensorTruncatedSVDReduction(Preprocessor):
             for row in svd_vt.iter_rows():
                 components.append(row['VT'])
 
-            components = np.mean(components, axis = 0)
+            components = np.concatenate(components, axis = 0)
 
+            self.stats_ = {'components' : components}
+        """
+        # Incremental
+        # If too long to exec, will have to parallelise internal SVD computations
+        components = None
+        singular_values = None
+        if self._nb_features > self._nb_components:
+            for batch in ds.iter_batches(batch_format = 'numpy'):
+                batch = batch[TENSOR_COLUMN_NAME]
+                batch = _unwrap_ndarray_object_type_if_needed(batch)
+                if components is not None:
+                    # Build matrix of previous computations
+                    batch = np.vstack(
+                        (
+                            singular_values.reshape((-1, 1)) * components,
+                            batch,
+                        )
+                    )
+                
+                U, Sigma, VT = randomized_svd(
+                    batch,
+                    n_components = self._nb_components,
+                    n_iter = 1,
+                    power_iteration_normalizer = 'LU',
+                )
+                components = VT
+                singular_values = Sigma
+                
             self.stats_ = {'components' : components}
         else:
             warn('No features reduction to do because the number of features is already lower than the required number of components')
