@@ -33,12 +33,12 @@ class TensorTfIdfTransformer(Preprocessor):
 
         # Nb of occurences
         occurences = np.zeros(self._nb_features)
-        occur = ds.map_batches(get_occurences, batch_format = 'numpy')
-        # for batch in ds.iter_batches(batch_format = 'numpy'):
-        #     batch = batch[TENSOR_COLUMN_NAME]
-        #     occurences += np.count_nonzero(batch, axis = 0)
-        for row in occur.iter_rows():
-            occurences += row['occurences']
+        # occur = ds.map_batches(get_occurences, batch_format = 'numpy')
+        for batch in ds.iter_batches(batch_format = 'numpy'):
+            batch = batch[TENSOR_COLUMN_NAME]
+            occurences += np.count_nonzero(batch, axis = 0)
+        # for row in occur.iter_rows():
+        #     occurences += row['occurences']
 
         idf = np.log(nb_samples / occurences) + 1
         
