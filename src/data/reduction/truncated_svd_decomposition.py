@@ -13,9 +13,9 @@ from ray.air.util.data_batch_conversion import _unwrap_ndarray_object_type_if_ne
 
 TENSOR_COLUMN_NAME = '__value__'
 
-class TensorTruncatedSVDReduction(Preprocessor):
+class TensorTruncatedSVDDecomposition(Preprocessor):
     """
-    Custom class for using a mix of TruncatedSVD inspired by sklearn.decomposition.TruncatedSVD and applying a batched strategy inspired by sklearn.decomposition.IncrementalPCA to process batches in parallel.
+    Custom class for using a mix of TruncatedSVD inspired by sklearn.decomposition.TruncatedSVD and applying a batched strategy inspired by sklearn.decomposition.IncrementalPCA to process batches sequentially.
     This makes it possible to use the class as a Ray preprocessor in a features reduction strategy.
     TruncatedSVD performs linear dimensionality reduction by means of truncated singular value decomposition (SVD).
     When it is applied following the TF-IDF normalisation, it becomes a latent semantic analysis (LSA).
@@ -23,7 +23,6 @@ class TensorTruncatedSVDReduction(Preprocessor):
     https://scikit-learn.org/stable/modules/generated/sklearn.decomposition.TruncatedSVD.html#sklearn.decomposition.TruncatedSVD
     https://scikit-learn.org/stable/modules/generated/sklearn.decomposition.IncrementalPCA.html#sklearn.decomposition.IncrementalPCA
     """
-    
     def __init__(self, features: List[str], nb_components: int = 10000):
         # Parameters
         self.features = features
@@ -34,36 +33,65 @@ class TensorTruncatedSVDReduction(Preprocessor):
         self._var = 0.0
 
     def _fit(self, ds: Dataset) -> Preprocessor:
-        # Parallel
+        # Parallel MiniBatchPCA
         """
-        # TODO: implement parallel computation for svd
-        # https://docs.scipy.org/doc/scipy/reference/generated/scipy.linalg.svd.html#scipy.linalg.svd
-        # https://github.com/scipy/scipy/blob/v1.11.3/scipy/linalg/_decomp_svd.py#L13-L138
+        Possibilities for parallel TruncatedSVD
+        * sklearn minibatch PCA -> PCA / SVD mostly equivalent
+        * implement parallel based on other library
+        * dask-ml has a truncated svd
+        * tf has a svd function
         """
-        # Incremental
-        components = None
-        singular_values = None
-        if self._nb_features > self._nb_components:
-            for batch in tqdm(ds.iter_batches(batch_format = 'numpy')):
-                batch = batch[TENSOR_COLUMN_NAME]
-                batch = _unwrap_ndarray_object_type_if_needed(batch)
-                if components is not None:
-                    # Build matrix of previous computations
-                    batch = np.vstack(
-                        (
-                            singular_values.reshape((-1, 1)) * components,
-                            batch,
-                        )
-                    )
-                
-                U, Sigma, VT = randomized_svd(
+        """
+        Option to implement parallel computation for SVD
+        1- Sparse Dictionnary Learning -> encode data to sparse representation by sample
+        2- Sparse PCA (sparse SVD?) -> construct a PCA from sparsely encoded data
+        It is possible to parallelize batches computation by applying the logic from MiniBatchDictionaryLearning and MiniBatchSparsePCA
+        """
+        components = []
+        def batch_svd(batch):
+            batch = batch[TENSOR_COLUMN_NAME]
+            batch = _unwrap_ndarray_object_type_if_needed(batch)
+            
+            U, Sigma, VT = randomized_svd(
                     batch,
                     n_components = self._nb_components,
                     n_iter = 1,
                     power_iteration_normalizer = 'LU',
                 )
-                components = VT
-                singular_values = Sigma
+            return {'VT' : VT}
+
+        if self._nb_features > self._nb_components:
+            svd = ds.map_batches(batch_svd, batch_format = 'numpy')
+            for row in svd.iter_rows():
+                components.append(row['VT'])
+            components = np.sum(components, axis = 0)
+
+        # Incremental
+        # components = None
+        # singular_values = None
+        # if self._nb_features > self._nb_components:
+        #     for batch in tqdm(ds.iter_batches(batch_format = 'numpy')):
+        #         batch = batch[TENSOR_COLUMN_NAME]
+        #         batch = _unwrap_ndarray_object_type_if_needed(batch)
+        #         if components is not None:
+        #             # Build matrix of previous computations
+        #             batch = np.vstack(
+        #                 (
+        #                     singular_values.reshape((-1, 1)) * components,
+        #                     batch,
+        #                 )
+        #             )
+        #         # U : (1000, 100), S : (100,), V : (100, 1024)
+        #         # S.reshape : (100, 1), S.reshape * components : (100, 1024)
+        #         # batch : (1000, 1024), vstack : (1100, 1024)
+        #         U, Sigma, VT = randomized_svd(
+        #             batch,
+        #             n_components = self._nb_components,
+        #             n_iter = 1,
+        #             power_iteration_normalizer = 'LU',
+        #         )
+        #         components = VT
+        #         singular_values = Sigma
                 
             self.stats_ = {'components' : components}
         else:

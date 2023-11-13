@@ -10,7 +10,7 @@ from shutil import rmtree
 # Dimensions reduction
 from models.preprocessors.tfidf_transformer import TensorTfIdfTransformer
 from data.reduction.rdf_features_selection import TensorRDFFeaturesSelection
-from data.reduction.truncated_svd_reduction import TensorTruncatedSVDReduction
+from data.reduction.truncated_svd_decomposition import TensorTruncatedSVDDecomposition
 
 # Preprocessing
 from ray.data.preprocessors import Chain
@@ -117,7 +117,7 @@ class SklearnModel(ModelsUtils):
         ds = self._scaler.fit_transform(ds)
         # ds = self._preprocessor.fit_transform(ds)
         # self.kmers = self._preprocessor.preprocessors[1].stats_['cols_keep']
-        self._reductor = TensorTruncatedSVDReduction(self.kmers)
+        self._reductor = TensorTruncatedSVDDecomposition(self.kmers)
         self._reductor.fit(ds)
 
         # Labels mapping
