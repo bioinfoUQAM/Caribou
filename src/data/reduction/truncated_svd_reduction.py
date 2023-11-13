@@ -36,33 +36,11 @@ class TensorTruncatedSVDReduction(Preprocessor):
     def _fit(self, ds: Dataset) -> Preprocessor:
         # Parallel
         """
-        def svd_batch(arr: np.array):
-            df = arr[TENSOR_COLUMN_NAME]
-            df = _unwrap_ndarray_object_type_if_needed(df)
-            U, Sigma, VT = randomized_svd(
-                df,
-                n_components = self._nb_components,
-                n_iter = 1,
-                power_iteration_normalizer = 'LU',
-                random_state = None
-            )
-
-            return {'VT': [VT]}
-
-        if self._nb_features > self._nb_components:
-            # Exec svd
-            components = []
-            svd_vt = ds.map_batches(svd_batch, batch_format = 'numpy')
-
-            for row in svd_vt.iter_rows():
-                components.append(row['VT'])
-
-            components = np.concatenate(components, axis = 0)
-
-            self.stats_ = {'components' : components}
+        # TODO: implement parallel computation for svd
+        # https://docs.scipy.org/doc/scipy/reference/generated/scipy.linalg.svd.html#scipy.linalg.svd
+        # https://github.com/scipy/scipy/blob/v1.11.3/scipy/linalg/_decomp_svd.py#L13-L138
         """
         # Incremental
-        # If too long to exec, will have to parallelise internal SVD computations
         components = None
         singular_values = None
         if self._nb_features > self._nb_components:

@@ -22,12 +22,19 @@ class TensorOccurenceExclusion(Preprocessor):
         self._num_features = int(self._nb_features - num_features)
 
     def _fit(self, ds: Dataset) -> Preprocessor:
+        def get_occurences(batch):
+            batch = batch[TENSOR_COLUMN_NAME]
+            return {'occurences' : np.count_nonzero(batch, axis = 0)}
+
         # Nb of occurences
         occurences = np.zeros(self._nb_features)
-        for batch in ds.iter_batches(batch_format = 'numpy'):
-            batch = batch[TENSOR_COLUMN_NAME]
-            occurences += np.count_nonzero(batch, axis = 0)
-        
+        occur = ds.map_batches(get_occurences, batch_format = 'numpy')
+        # for batch in ds.iter_batches(batch_format = 'numpy'):
+        #     batch = batch[TENSOR_COLUMN_NAME]
+        #     occurences += np.count_nonzero(batch, axis = 0)
+        for row in occur.iter_rows():
+            occurences += row['occurences']
+
         # Include / Exclude by sorted position
         cols_keep = pd.Series(occurences, index = self.features)
         cols_keep = cols_keep.sort_values(ascending = True) # Long operation
