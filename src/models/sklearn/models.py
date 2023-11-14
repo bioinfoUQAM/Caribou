@@ -8,12 +8,12 @@ from glob import glob
 from shutil import rmtree
 
 # Dimensions reduction
+from data.reduction.count_hashing import TensorCountHashing
 from models.preprocessors.tfidf_transformer import TensorTfIdfTransformer
 from data.reduction.rdf_features_selection import TensorRDFFeaturesSelection
 from data.reduction.truncated_svd_decomposition import TensorTruncatedSVDDecomposition
 
 # Preprocessing
-from ray.data.preprocessors import Chain
 from models.encoders.model_label_encoder import ModelLabelEncoder
 from models.preprocessors.min_max_scaler import TensorMinMaxScaler
 from models.encoders.onesvm_label_encoder import OneClassSVMLabelEncoder
@@ -98,7 +98,7 @@ class SklearnModel(ModelsUtils):
         # Computes
         self._build()
 
-    def preprocess(self, ds):
+    def preprocess(self, ds, reductor_file):
         print('preprocess')
         if self.classifier == 'onesvm':
             self._encoder = OneClassSVMLabelEncoder(self.taxa)
@@ -109,15 +109,10 @@ class SklearnModel(ModelsUtils):
         
         self._scaler = TensorTfIdfTransformer(self.kmers)
 
-        # self._preprocessor = Chain(
-        #     TensorTfIdfTransformer(self.kmers),
-        #     TensorRDFFeaturesSelection(self.kmers, self.taxa),
-        # )
         self._encoder.fit(ds)
         ds = self._scaler.fit_transform(ds)
-        # ds = self._preprocessor.fit_transform(ds)
-        # self.kmers = self._preprocessor.preprocessors[1].stats_['cols_keep']
-        self._reductor = TensorTruncatedSVDDecomposition(self.kmers)
+
+        self._reductor = TensorCountHashing(self.kmers, 10000)
         self._reductor.fit(ds)
 
         # Labels mapping

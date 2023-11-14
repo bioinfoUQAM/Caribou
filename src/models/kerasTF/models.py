@@ -9,6 +9,7 @@ from glob import glob
 from shutil import rmtree
 
 # Dimensions reduction
+from data.reduction.count_hashing import TensorCountHashing
 from models.preprocessors.tfidf_transformer import TensorTfIdfTransformer
 from data.reduction.rdf_features_selection import TensorRDFFeaturesSelection
 from data.reduction.truncated_svd_decomposition import TensorTruncatedSVDDecomposition
@@ -133,7 +134,7 @@ class KerasTFModel(ModelsUtils):
         elif self.classifier == 'widecnn':
             print('Training multiclass classifier based on Wide CNN Network')
 
-    def preprocess(self, ds):
+    def preprocess(self, ds, reductor_file):
         print('preprocess')
         labels = []
         encoded = []
@@ -143,25 +144,16 @@ class KerasTFModel(ModelsUtils):
         if self._nb_classes == 2:
             self._encoder = ModelLabelEncoder(self.taxa)
             self._scaler = TensorTfIdfTransformer(self.kmers)
-            # self._preprocessor = Chain(
-            #     TensorTfIdfTransformer(self.kmers),
-            #     TensorRDFFeaturesSelection(self.kmers, self.taxa),
-            # )
         else:
             self._encoder = Chain(
                 LabelEncoder(self.taxa),
                 OneHotTensorEncoder(self.taxa)
             )
             self._scaler = TensorTfIdfTransformer(self.kmers)
-            # self._preprocessor = Chain(
-            #     TensorTfIdfTransformer(self.kmers),
-            #     TensorRDFFeaturesSelection(self.kmers, self.taxa),
-            # )
-        
+            
         self._encoder.fit(ds)
         ds = self._scaler.fit_transform(ds)
-        # ds = self._preprocessor.fit_transform(ds)
-        self._reductor = TensorTruncatedSVDDecomposition(self.kmers)
+        self._reductor = TensorCountHashing(self.kmers, 10000)
         self._reductor.fit(ds)
         # Labels mapping
         if self._nb_classes == 2:

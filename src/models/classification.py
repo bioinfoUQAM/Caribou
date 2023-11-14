@@ -203,7 +203,7 @@ class ClassificationMethods():
                 taxa,
                 self._database_data['kmers']
             )
-        model.preprocess(datasets[TRAINING_DATASET_NAME])
+        model.preprocess(datasets[TRAINING_DATASET_NAME], os.path.join(self._outdirs['models_dir'], f'TruncatedSVD_components.npz'))
         model.fit(datasets)
 
         self._save_model(model, file)
@@ -228,7 +228,7 @@ class ClassificationMethods():
                 taxa,
                 self._database_data['kmers']
             )
-        model.preprocess(datasets[TRAINING_DATASET_NAME])
+        model.preprocess(datasets[TRAINING_DATASET_NAME], os.path.join(self._outdirs['models_dir'], f'TruncatedSVD_components.npz'))
         model.fit(datasets)
 
         self._save_model(model, file)

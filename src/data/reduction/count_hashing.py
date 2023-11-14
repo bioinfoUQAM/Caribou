@@ -19,7 +19,7 @@ class TensorCountHashing(Preprocessor):
     """
     _is_fittable = False
 
-    def __init__(self, features: List[str], num_features: int):
+    def __init__(self, features: List[str], num_features: int = 1000):
         self.features = features
         self.num_features = num_features
 

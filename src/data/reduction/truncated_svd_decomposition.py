@@ -1,3 +1,5 @@
+import os
+
 import numpy as np
 import pandas as pd
 
@@ -5,6 +7,7 @@ from tqdm import tqdm
 from typing import List
 from warnings import warn
 from ray.data import Dataset
+from utils import save_Xy_data, load_Xy_data
 
 from sklearn.utils.extmath import randomized_svd
 
@@ -23,17 +26,15 @@ class TensorTruncatedSVDDecomposition(Preprocessor):
     https://scikit-learn.org/stable/modules/generated/sklearn.decomposition.TruncatedSVD.html#sklearn.decomposition.TruncatedSVD
     https://scikit-learn.org/stable/modules/generated/sklearn.decomposition.IncrementalPCA.html#sklearn.decomposition.IncrementalPCA
     """
-    def __init__(self, features: List[str], nb_components: int = 10000):
+    def __init__(self, features: List[str], nb_components: int = 100, file: str = ''):
         # Parameters
         self.features = features
         self._nb_features = len(features)
         self._nb_components = nb_components
-        self._n_samples_seen = 0
-        self._mean = 0.0
-        self._var = 0.0
-
+        self._file = file
+        
     def _fit(self, ds: Dataset) -> Preprocessor:
-        # Parallel MiniBatchPCA
+        # Parallel
         """
         Possibilities for parallel TruncatedSVD
         * sklearn minibatch PCA -> PCA / SVD mostly equivalent
@@ -51,20 +52,28 @@ class TensorTruncatedSVDDecomposition(Preprocessor):
         def batch_svd(batch):
             batch = batch[TENSOR_COLUMN_NAME]
             batch = _unwrap_ndarray_object_type_if_needed(batch)
-            
-            U, Sigma, VT = randomized_svd(
-                    batch,
-                    n_components = self._nb_components,
-                    n_iter = 1,
-                    power_iteration_normalizer = 'LU',
-                )
-            return {'VT' : VT}
+            U, S, V = randomized_svd(
+                batch,
+                n_components = self._nb_components,
+                n_iter = 1,
+                power_iteration_normalizer = 'LU',
+            )
+            print(V.shape)
+            return {'V' : V}
 
         if self._nb_features > self._nb_components:
-            svd = ds.map_batches(batch_svd, batch_format = 'numpy')
-            for row in svd.iter_rows():
-                components.append(row['VT'])
-            components = np.sum(components, axis = 0)
+            if os.path.isfile(self._file):
+                components = np.array(load_Xy_data(self._file))
+            else:
+                # sampl = ds.random_sample(0.1)
+                # svd = sampl.map_batches(batch_svd, batch_format = 'numpy')
+                svd = ds.map_batches(batch_svd, batch_format = 'numpy')
+                print(svd.to_pandas())
+                for row in svd.iter_rows():
+                    components.append(row['V'])
+                # components = np.vstack(components)
+                components = np.sum(components, axis = 0)
+                save_Xy_data(components, self._file)
 
         # Incremental
         # components = None
@@ -108,7 +117,7 @@ class TensorTruncatedSVDDecomposition(Preprocessor):
             tensor_col = df[TENSOR_COLUMN_NAME]
             tensor_col = _unwrap_ndarray_object_type_if_needed(tensor_col)
             tensor_col = np.dot(tensor_col, components.T)
-            df[TENSOR_COLUMN_NAME] = pd.Series(list(tensor_col))        
+            df[TENSOR_COLUMN_NAME] = pd.Series(list(tensor_col))
 
         return df
 
