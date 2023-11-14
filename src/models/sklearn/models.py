@@ -110,7 +110,7 @@ class SklearnModel(ModelsUtils):
         self._scaler = TensorTfIdfTransformer(self.kmers)
 
         self._encoder.fit(ds)
-        ds = self._scaler.fit_transform(ds)
+        self._scaler.fit(ds)
 
         self._reductor = TensorCountHashing(self.kmers, 10000)
         self._reductor.fit(ds)
