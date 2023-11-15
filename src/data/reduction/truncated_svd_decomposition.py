@@ -10,6 +10,7 @@ from ray.data import Dataset
 from utils import save_Xy_data, load_Xy_data
 
 from sklearn.utils.extmath import randomized_svd
+from sklearn.decomposition import DictionaryLearning
 
 from ray.data.preprocessor import Preprocessor
 from ray.air.util.data_batch_conversion import _unwrap_ndarray_object_type_if_needed
@@ -26,7 +27,7 @@ class TensorTruncatedSVDDecomposition(Preprocessor):
     https://scikit-learn.org/stable/modules/generated/sklearn.decomposition.TruncatedSVD.html#sklearn.decomposition.TruncatedSVD
     https://scikit-learn.org/stable/modules/generated/sklearn.decomposition.IncrementalPCA.html#sklearn.decomposition.IncrementalPCA
     """
-    def __init__(self, features: List[str], nb_components: int = 100, file: str = ''):
+    def __init__(self, features: List[str], nb_components: int = 10000, file: str = ''):
         # Parameters
         self.features = features
         self._nb_features = len(features)
@@ -48,33 +49,61 @@ class TensorTruncatedSVDDecomposition(Preprocessor):
         2- Sparse PCA (sparse SVD?) -> construct a PCA from sparsely encoded data
         It is possible to parallelize batches computation by applying the logic from MiniBatchDictionaryLearning and MiniBatchSparsePCA
         """
-        components = []
+        # Parallel
+        
         def batch_svd(batch):
             batch = batch[TENSOR_COLUMN_NAME]
             batch = _unwrap_ndarray_object_type_if_needed(batch)
             U, S, V = randomized_svd(
                 batch,
                 n_components = self._nb_components,
-                n_iter = 1,
+                n_iter = 2,
                 power_iteration_normalizer = 'LU',
             )
-            print(V.shape)
             return {'V' : V}
 
+        components = []
         if self._nb_features > self._nb_components:
             if os.path.isfile(self._file):
                 components = np.array(load_Xy_data(self._file))
             else:
                 # sampl = ds.random_sample(0.1)
                 # svd = sampl.map_batches(batch_svd, batch_format = 'numpy')
+                svd = ds.map_batches(batch_svd, batch_size = 1, batch_format = 'numpy')
+                components = svd.random_shuffle().limit(self._nb_components).to_pandas()['V']
+                components = _unwrap_ndarray_object_type_if_needed(components)
+
+                save_Xy_data(components, self._file)
+
+            self.stats_ = {'components' : components}
+        else:
+            warn('No features reduction to do because the number of features is already lower than the required number of components')
+            self.stats_ = {'components' : False}
+        """
+        # Parallel multiple MiniBatchDictionaryLearning
+        def batch_svd(batch):
+            batch = batch[TENSOR_COLUMN_NAME]
+            batch = _unwrap_ndarray_object_type_if_needed(batch)
+            dict = DictionaryLearning(
+                n_components = self._nb_components,
+                max_iter = 10,
+                transform_algorithm = 'lasso_lars',
+            )
+            dict.fit(batch)
+            return {'dictonnary' : [dict.components_]}
+        components = []
+        if self._nb_features > self._nb_components:
+            if os.path.isfile(self._file):
+                components = np.array(load_Xy_data(self._file))
+            else:
                 svd = ds.map_batches(batch_svd, batch_format = 'numpy')
                 print(svd.to_pandas())
                 for row in svd.iter_rows():
-                    components.append(row['V'])
-                # components = np.vstack(components)
-                components = np.sum(components, axis = 0)
+                    components.append(row['dictonnary'])
+                components = np.mean(components, axis = 0)
+                print(components.shape)
                 save_Xy_data(components, self._file)
-
+        """
         # Incremental
         # components = None
         # singular_values = None
@@ -102,10 +131,6 @@ class TensorTruncatedSVDDecomposition(Preprocessor):
         #         components = VT
         #         singular_values = Sigma
                 
-            self.stats_ = {'components' : components}
-        else:
-            warn('No features reduction to do because the number of features is already lower than the required number of components')
-            self.stats_ = {'components' : False}
 
         return self
 

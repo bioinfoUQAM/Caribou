@@ -21,27 +21,33 @@ class TensorCountHashing(Preprocessor):
 
     def __init__(self, features: List[str], num_features: int = 1000):
         self.features = features
-        self.num_features = num_features
+        self._nb_features = len(features)
+        self._num_features = num_features
 
     def _transform_pandas(self, df: pd.DataFrame):
         def row_feature_hasher(row):
             hash_counts = collections.defaultdict(int)
             for feature in self.features:
-                hashed_value = simple_hash(feature, self.num_features)
+                hashed_value = simple_hash(feature, self._num_features)
                 hash_counts[hashed_value] += row[feature]
-            return {f"hash_{i}": hash_counts[i] for i in range(self.num_features)}
+            return {f"hash_{i}": hash_counts[i] for i in range(self._num_features)}
 
-        tensor_col = df[TENSOR_COLUMN_NAME]
-        tensor_col = _unwrap_ndarray_object_type_if_needed(tensor_col)
-        tensor_col = pd.DataFrame(tensor_col, columns = self.features)
+        if self._nb_features > self._num_features:
+            tensor_col = df[TENSOR_COLUMN_NAME]
+            tensor_col = _unwrap_ndarray_object_type_if_needed(tensor_col)
+            tensor_col = pd.DataFrame(tensor_col, columns = self.features)
 
-        tensor_col = tensor_col.apply(
-            row_feature_hasher, axis=1, result_type="expand"
-        )
-        
-        tensor_col = tensor_col.to_numpy()
+            tensor_col = tensor_col.apply(
+                row_feature_hasher, axis=1, result_type="expand"
+            )
+            
+            self.stats_ = {'nb_features' : self._num_features}
 
-        df[TENSOR_COLUMN_NAME] = pd.Series(list(tensor_col))
+            tensor_col = tensor_col.to_numpy()
+
+            df[TENSOR_COLUMN_NAME] = pd.Series(list(tensor_col))
+
+        self.stats_ = {'nb_features' : self._nb_features}
 
         return df
 

@@ -152,8 +152,9 @@ class KerasTFModel(ModelsUtils):
             self._scaler = TensorTfIdfTransformer(self.kmers)
             
         self._encoder.fit(ds)
-        self._scaler.fit(ds)
-        self._reductor = TensorCountHashing(self.kmers, 10000)
+        ds = self._scaler.fit_transform(ds)
+        self._reductor = TensorTruncatedSVDDecomposition(self.kmers, 10000, reductor_file)
+        # self._reductor = TensorCountHashing(self.kmers, 10000)
         self._reductor.fit(ds)
         # Labels mapping
         if self._nb_classes == 2:
@@ -182,6 +183,7 @@ class KerasTFModel(ModelsUtils):
             ds = self._scaler.transform(ds)
             # ds = self._preprocessor.transform(ds)
             ds = self._reductor.transform(ds)
+            self._nb_features = self._reductor._nb_components
             # Trigger the preprocessing computations before ingest in trainer
             # Otherwise, it would be executed at each epoch
             ds = ds.materialize()
@@ -191,7 +193,7 @@ class KerasTFModel(ModelsUtils):
         self._train_params = {
             'batch_size': self.batch_size,
             'epochs': self._training_epochs,
-            'size': self._nb_kmers,
+            'size': self._nb_features,
             'nb_cls': self._nb_classes,
             'model': self.classifier
         }
@@ -228,12 +230,12 @@ class KerasTFModel(ModelsUtils):
 
             # Preprocess
             ds = self._scaler.transform(ds)
-            # ds = self._preprocessor.transform(ds)
+            ds = self._reductor.transform(ds)
 
             self._predictor = BatchPredictor.from_checkpoint(
                 self._model_ckpt,
                 TensorflowPredictor,
-                model_definition = lambda: build_model(self.classifier, self._nb_classes, len(self.kmers))
+                model_definition = lambda: build_model(self.classifier, self._nb_classes, self._nb_features)
             )
             predictions = self._predictor.predict(
                 data = ds,

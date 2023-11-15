@@ -7,6 +7,7 @@ from warnings import warn, simplefilter
 
 import numpy as np
 import pandas as pd
+from tqdm import tqdm
 from joblib import parallel_backend
 from sklearn.metrics import check_scoring
 
@@ -201,18 +202,18 @@ class SklearnPartialTrainer(SklearnTrainer):
 
         _set_cpu_params(self.estimator, num_cpus)
 
-        for epoch_X, epoch_y in zip(X_train.iter_epochs(), y_train.iter_epochs()):
+        for epoch_X, epoch_y in tqdm(zip(X_train.iter_epochs(), y_train.iter_epochs())):
             with parallel_backend("ray", n_jobs=num_cpus):
                 start_time = time()
                 for batch_X, batch_y in zip(
                     epoch_X.iter_batches(
-                        # batch_size = self._batch_size,
-                        batch_size = 1,
+                        batch_size = self._batch_size,
+                        # batch_size = 1,
                         batch_format = 'numpy'
                     ),
                     epoch_y.iter_batches(
-                        # batch_size = self._batch_size,
-                        batch_size = 1,
+                        batch_size = self._batch_size,
+                        # batch_size = 1,
                         batch_format = 'numpy'
                     )
                 ):  

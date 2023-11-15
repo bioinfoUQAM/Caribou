@@ -110,9 +110,10 @@ class SklearnModel(ModelsUtils):
         self._scaler = TensorTfIdfTransformer(self.kmers)
 
         self._encoder.fit(ds)
-        self._scaler.fit(ds)
+        ds = self._scaler.fit_transform(ds)
 
-        self._reductor = TensorCountHashing(self.kmers, 10000)
+        self._reductor = TensorTruncatedSVDDecomposition(self.kmers, 10000, reductor_file)
+        # self._reductor = TensorCountHashing(self.kmers, 10000)
         self._reductor.fit(ds)
 
         # Labels mapping
@@ -179,6 +180,7 @@ class SklearnModel(ModelsUtils):
             ds = self._scaler.transform(ds)
             # ds = self._preprocessor.transform(ds)
             ds = self._reductor.transform(ds)
+            self._nb_features = self._reductor._nb_components
             # Trigger the preprocessing computations before ingest in trainer
             # Otherwise, it would be executed at each epoch
             ds = ds.materialize()
@@ -218,7 +220,6 @@ class SklearnModel(ModelsUtils):
         print('predict')
         if ds.count() > 0:
             ds = self._scaler.transform(ds)
-            # ds = self._preprocessor.transform(ds)
             ds = self._reductor.transform(ds)
             predict_kwargs = {'features':self.kmers, 'num_estimator_cpus':-1}
             self._predictor = BatchPredictor.from_checkpoint(self._model_ckpt, SklearnTensorPredictor)

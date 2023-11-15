@@ -68,12 +68,12 @@ class ModelsUtils(ABC):
         self._training_epochs = training_epochs
         # Initialize empty
         self._labels_map = None
-        # Initialize Ray variables
         self._clf = None
         self._encoder = None
         self._scaler = None
         self._preprocessor = None
         self._reductor = None
+        self._nb_features = None
         self._model_ckpt = None
         self._trainer = None
         self._train_params = {}
