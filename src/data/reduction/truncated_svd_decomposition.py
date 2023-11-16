@@ -69,8 +69,8 @@ class TensorTruncatedSVDDecomposition(Preprocessor):
             else:
                 # sampl = ds.random_sample(0.1)
                 # svd = sampl.map_batches(batch_svd, batch_format = 'numpy')
-                svd = ds.map_batches(batch_svd, batch_size = 1, batch_format = 'numpy')
-                components = svd.random_shuffle().limit(self._nb_components).to_pandas()['V']
+                svd = ds.map_batches(batch_svd, batch_format = 'numpy')
+                components = svd.limit(self._nb_components).to_pandas()['V']
                 components = _unwrap_ndarray_object_type_if_needed(components)
 
                 save_Xy_data(components, self._file)
