@@ -1,24 +1,18 @@
 import os
 import gc
-import ray
 import warnings
 import numpy as np
 import pandas as pd
 
-from glob import glob
-from shutil import rmtree
-
 # Dimensions reduction
-from data.reduction.count_hashing import TensorCountHashing
 from models.preprocessors.tfidf_transformer import TensorTfIdfTransformer
-from data.reduction.rdf_features_selection import TensorRDFFeaturesSelection
 from data.reduction.truncated_svd_decomposition import TensorTruncatedSVDDecomposition
 
 # Preprocessing
 from ray.data.preprocessors import LabelEncoder, Chain
-from models.preprocessors.min_max_scaler import TensorMinMaxScaler
 from models.encoders.model_label_encoder import ModelLabelEncoder
 from models.encoders.one_hot_tensor_encoder import OneHotTensorEncoder
+from models.preprocessors.compute_class_weights import ComputeClassWeights
 
 # Parent class / models
 from models.models_utils import ModelsUtils
@@ -27,11 +21,10 @@ from models.kerasTF.build_neural_networks import *
 # Training
 import tensorflow as tf
 from ray.air import session
-from ray.train import DataConfig
 # from ray.air.integrations.keras import Callback
+from ray.air.config import ScalingConfig
 from ray.air.integrations.keras import ReportCheckpointCallback
-from ray.air.config import ScalingConfig #DatasetConfig
-from ray.train.tensorflow import TensorflowTrainer, TensorflowCheckpoint, prepare_dataset_shard
+from ray.train.tensorflow import TensorflowTrainer, TensorflowCheckpoint
 
 # Tuning
 from ray.air.config import RunConfig
@@ -152,6 +145,11 @@ class KerasTFModel(ModelsUtils):
             self._scaler = TensorTfIdfTransformer(self.kmers)
             
         self._encoder.fit(ds)
+
+        self._weights = ComputeClassWeights(LABELS_COLUMN_NAME)
+        self._weights.fit(ds)
+        self._weights = self._weights.stats_
+        
         ds = self._scaler.fit_transform(ds)
         self._reductor = TensorTruncatedSVDDecomposition(self.kmers, 10000, reductor_file)
         # self._reductor = TensorCountHashing(self.kmers, 10000)
@@ -183,7 +181,7 @@ class KerasTFModel(ModelsUtils):
             ds = self._scaler.transform(ds)
             # ds = self._preprocessor.transform(ds)
             ds = self._reductor.transform(ds)
-            self._nb_features = self._reductor._nb_components
+            self._nb_features = self._reductor._nb_components if self._reductor._nb_components < self._nb_kmers else self._nb_kmers
             # Trigger the preprocessing computations before ingest in trainer
             # Otherwise, it would be executed at each epoch
             ds = ds.materialize()
@@ -231,6 +229,7 @@ class KerasTFModel(ModelsUtils):
             # Preprocess
             ds = self._scaler.transform(ds)
             ds = self._reductor.transform(ds)
+            ds = ds.materialize()
 
             self._predictor = BatchPredictor.from_checkpoint(
                 self._model_ckpt,

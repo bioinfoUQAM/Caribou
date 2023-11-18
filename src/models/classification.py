@@ -103,19 +103,19 @@ class ClassificationMethods():
         """
         Public function to call the cross-validation method after validation of parameters
         Executes cross-validation of a model by fitting it and predicting over a test dataset
-        """
-        
+        """        
         if isinstance(self._taxas, str):
             self._valid_assign_taxas()
             tax_map = self._verify_model_trained()
 
             test_ds = datasets.pop(TEST_DATASET_NAME)
             y_true, test_ds = self._get_true_classif(test_ds, self._taxas)
-
+            
             self._fit(datasets, tax_map)
 
             model_mapping = self._verify_load_model()
             y_pred = self._cv_predict(test_ds, model_mapping)
+
             cv_scores = self._score_cv(y_true, y_pred, self._taxas[0])
             
             return cv_scores
@@ -168,7 +168,7 @@ class ClassificationMethods():
         """
         mapping = {}
         for taxa, model in model_map.items():
-                mapping[taxa] = model.predict(ds) # np.array
+            mapping[taxa] = model.predict(ds) # np.array
         return mapping
 
     # Private training secondary functions

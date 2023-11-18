@@ -9,7 +9,7 @@ import pandas.api.types
 
 from ray.data import Dataset
 from ray.data.preprocessor import Preprocessor
-from ray.data.preprocessors.encoder import _get_unique_value_indices, _validate_df
+from ray.data.preprocessors.encoder import _get_unique_value_indices
 
 LABELS_COLUMN_NAME = 'labels'
 
@@ -25,8 +25,6 @@ class ModelLabelEncoder(Preprocessor):
         return self
 
     def _transform_pandas(self, df: pd.DataFrame):
-        _validate_df(df, self.label_column)
-
         def column_label_encoder(s: pd.Series):
             s_values = self.stats_[f"unique_values({s.name})"]
             return s.map(s_values)

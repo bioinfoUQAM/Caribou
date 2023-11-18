@@ -67,6 +67,7 @@ class ModelsUtils(ABC):
         self._nb_kmers = len(kmers_list)
         self._training_epochs = training_epochs
         # Initialize empty
+        self._weights = []
         self._labels_map = None
         self._clf = None
         self._encoder = None
