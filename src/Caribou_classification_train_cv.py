@@ -53,8 +53,8 @@ def bacteria_classification_train_cv(opt):
     
     for taxa in lst_taxas:
 
-        test_ds, test_data = split_sim_dataset(db_ds, db_data, TEST_DATASET_NAME)
-        val_ds, val_data = split_sim_dataset(db_ds, db_data, VALIDATION_DATASET_NAME)
+        test_ds, test_data = split_sim_dataset(db_ds, db_data, f"{TEST_DATASET_NAME}_{opt['database_name']}")
+        val_ds, val_data = split_sim_dataset(db_ds, db_data, f"{VALIDATION_DATASET_NAME}_{opt['database_name']}")
 
         datasets = {
             TRAINING_DATASET_NAME : db_ds,
