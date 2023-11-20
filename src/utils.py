@@ -33,6 +33,7 @@ __all__ = [
     'verify_kmers_list_length',
     'verify_load_data',
     'verify_concordance_klength',
+    'verify_need_scaling',
     'verify_taxas',
     'verify_load_preclassified',
     'merge_save_data',
@@ -162,6 +163,9 @@ def verify_concordance_klength(klen1 : int, klen2 : int):
         raise ValueError("K length between datasets is inconsistent ! Exiting\n" +
                 f"K length of bacteria dataset is {klen1} while K length from host is {klen2}")
 
+def verify_need_scaling(data : dict):
+    return False if 'decomposed' in data['profile'] else True
+
 # Verif + handling
 #########################################################################################################
 
@@ -199,10 +203,6 @@ def verify_load_data(data_file: Path):
     verify_file(data_file)
     data = load_Xy_data(data_file)
     verify_data_path(data['profile'])
-    if not isinstance(data['ids'], list):
-        raise ValueError("Invalid data file !")
-    elif not isinstance(data['kmers'], list):
-        raise ValueError("Invalid data file !")
     return data
 
 def verify_taxas(taxas : str, db_taxas : list):
@@ -249,7 +249,7 @@ def merge_classified_data(
     clf_ids.extend(clf_data['unknown_ids'])
     clf_data['unknown_ids'] = list(np.unique(clf_ids))
     # classes
-    dct_diff = {k : v for k,v in db_data.items() if k not in clf_data.keys()}
+    dct_diff = {k : v for k, v in db_data.items() if k not in clf_data.keys()}
     clf_data = {**clf_data,**dct_diff}
 
     return clf_data

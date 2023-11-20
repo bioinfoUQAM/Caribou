@@ -52,6 +52,9 @@ def bacteria_extraction_train_cv(opt):
         db_data, db_ds = verify_load_db(opt['data_bacteria'])
         db_name = opt['database_name']
 
+    # Verify need for scaling
+    scaling = verify_need_scaling(db_data)
+
     datasets = {
         TRAINING_DATASET_NAME : db_ds,
         TEST_DATASET_NAME : test_ds,
@@ -69,7 +72,8 @@ def bacteria_extraction_train_cv(opt):
         clf_binary = opt['model_type'],
         taxa = 'domain',
         batch_size = opt['batch_size'],
-        training_epochs = opt['training_epochs']
+        training_epochs = opt['training_epochs'],
+        scaling = scaling
     )
 
     t_s = time()

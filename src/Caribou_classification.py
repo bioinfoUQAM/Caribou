@@ -47,6 +47,9 @@ def bacteria_classification(opt):
     if 'domain' in lst_taxas:
         lst_taxas.remove('domain')
 
+    # Verify need for scaling
+    scaling = verify_need_scaling(db_data)
+
     val_ds, val_data = split_sim_dataset(db_ds, db_data, f"{VALIDATION_DATASET_NAME}_{opt['database_name']}")
 
     datasets = {
@@ -66,7 +69,8 @@ def bacteria_classification(opt):
         clf_multiclass = opt['model_type'],
         taxa = 'domain',
         batch_size = opt['batch_size'],
-        training_epochs = opt['training_epochs']
+        training_epochs = opt['training_epochs'],
+        scaling = scaling
     )
     
 # Execution of bacteria taxonomic classification on metagenome + save results

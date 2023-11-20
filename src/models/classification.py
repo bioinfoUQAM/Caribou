@@ -48,18 +48,20 @@ class ClassificationMethods():
         clf_multiclass: str = None,
         taxa: [str, List] = None,
         batch_size: int = 32,
-        training_epochs: int = 100
+        training_epochs: int = 100,
+        scaling = False
     ):
         # Parameters
         self._taxas = taxa
         self._outdirs = outdirs
+        self._scaling = scaling
         self._database = db_name
         self._database_data = db_data
         self._classifier_binary = clf_binary
         self._classifier_multiclass = clf_multiclass
         self._batch_size = batch_size
         self._training_epochs = training_epochs
-        # Init not fitted
+        # Init False
         self.is_fitted = False
 
     # Public functions
@@ -130,6 +132,7 @@ class ClassificationMethods():
         """
         Fit the given model to the training dataset
         """
+
         for taxa, file in tax_map.items():
             if taxa in ['domain','bacteria','host']:
                 self._binary_training(datasets, taxa, file)
@@ -183,7 +186,8 @@ class ClassificationMethods():
                 self._batch_size,
                 self._training_epochs,
                 taxa,
-                self._database_data['kmers']
+                self._database_data['kmers'],
+                self._database_data['csv']
             )
         elif self._classifier_binary == 'linearsvm':
             model = SklearnModel(
@@ -192,7 +196,8 @@ class ClassificationMethods():
                 self._batch_size,
                 self._training_epochs,
                 taxa,
-                self._database_data['kmers']
+                self._database_data['kmers'],
+                self._database_data['csv']
             )
         else:
             model = KerasTFModel(
@@ -201,9 +206,10 @@ class ClassificationMethods():
                 self._batch_size,
                 self._training_epochs,
                 taxa,
-                self._database_data['kmers']
+                self._database_data['kmers'],
+                self._database_data['csv']
             )
-        model.preprocess(datasets[TRAINING_DATASET_NAME], os.path.join(self._outdirs['models_dir'], f'TruncatedSVD_components.npz'))
+        model.preprocess(datasets[TRAINING_DATASET_NAME], self._scaling)
         model.fit(datasets)
 
         self._save_model(model, file)
@@ -217,7 +223,8 @@ class ClassificationMethods():
                 self._batch_size,
                 self._training_epochs,
                 taxa,
-                self._database_data['kmers']
+                self._database_data['kmers'],
+                self._database_data['csv']
             )
         else:
             model = KerasTFModel(
@@ -226,9 +233,10 @@ class ClassificationMethods():
                 self._batch_size,
                 self._training_epochs,
                 taxa,
-                self._database_data['kmers']
+                self._database_data['kmers'],
+                self._database_data['csv']
             )
-        model.preprocess(datasets[TRAINING_DATASET_NAME], os.path.join(self._outdirs['models_dir'], f'TruncatedSVD_components.npz'))
+        model.preprocess(datasets[TRAINING_DATASET_NAME], self._scaling)
         model.fit(datasets)
 
         self._save_model(model, file)
@@ -425,3 +433,4 @@ class ClassificationMethods():
         file = os.path.join(self._outdirs['results'], f'data_classified_{model}_{taxa}.parquet')
         ds.write_parquet(file)
         return file
+    

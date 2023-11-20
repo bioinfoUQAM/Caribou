@@ -58,35 +58,39 @@ def features_reduction(opt):
         2. TruncatedSVD decomposition (map the features to 10 000 decomposed features if there is still more)
     """
 
-    # Load data 
-    files_lst = glob(os.path.join(data['profile'],'*.parquet'))
-    export_ds = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
-    train_ds = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
-    # Time the computation of transformations
-    t_start = time()
-    # Features scaling
-    train_ds = tfidf_transform(train_ds, kmers)
-    # Brute force features exclusion
-    train_ds, export_ds, kmers = occurence_exclusion(train_ds, export_ds, kmers)
-    train_ds, export_ds, kmers = low_var_selection(train_ds, export_ds, kmers)
-    # Statistical features selection
-    train_ds, export_ds, data['kmers'] = features_selection(train_ds, export_ds, kmers, opt['taxa'])
-    # Time the computation of transformations
-    t_end = time()
-    t_reduction = t_end - t_start
-    # Save reduced dataset
-    data['profile'] = f"{data['profile']}_reduced"
-    export_ds.write_parquet(data['profile'])
-    # Save reduced K-mers
-    with open(os.path.join(outdirs["data_dir"],'kmers_list_reduced.txt'),'w') as handle:
-        handle.writelines("%s\n" % item for item in data['kmers'])
-    # Save reduced data
+    # Define new file
     path, ext = os.path.splitext(opt['dataset'])
     data_file = f'{path}_reduced{ext}'
-    save_Xy_data(data, data_file)
 
-    print(f"Caribou finished reducing k-mers features of {opt['dataset_name']} in {t_reduction} seconds.")
+    if not os.path.exists(data_file):
+        # Load data 
+        files_lst = glob(os.path.join(data['profile'],'*.parquet'))
+        export_ds = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
+        train_ds = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
+        # Time the computation of transformations
+        t_start = time()
+        # Features scaling
+        train_ds = tfidf_transform(train_ds, kmers)
+        # Brute force features exclusion
+        train_ds, export_ds, kmers = occurence_exclusion(train_ds, export_ds, kmers)
+        train_ds, export_ds, kmers = low_var_selection(train_ds, export_ds, kmers)
+        # Statistical features selection
+        train_ds, export_ds, data['kmers'] = features_selection(train_ds, export_ds, kmers, opt['taxa'])
+        # Time the computation of transformations
+        t_end = time()
+        t_reduction = t_end - t_start
+        # Save reduced dataset
+        data['profile'] = f"{data['profile']}_reduced"
+        export_ds.write_parquet(data['profile'])
+        # Save reduced K-mers
+        with open(os.path.join(outdirs["data_dir"],'kmers_list_reduced.txt'),'w') as handle:
+            handle.writelines("%s\n" % item for item in data['kmers'])
+        # Save reduced data
+        save_Xy_data(data, data_file)
 
+        print(f"Caribou finished reducing k-mers features of {opt['dataset_name']} in {t_reduction} seconds.")
+    else:
+        print("Caribou did not reduce features because the file already exists")
 # TF-IDF scaling of the features
 def tfidf_transform(ds, kmers):
     preprocessor = TensorTfIdfTransformer(

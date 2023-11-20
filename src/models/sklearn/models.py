@@ -4,14 +4,10 @@ import warnings
 import numpy as np
 import pandas as pd
 
-# Dimensions reduction
-from models.preprocessors.tfidf_transformer import TensorTfIdfTransformer
-from data.reduction.truncated_svd_decomposition import TensorTruncatedSVDDecomposition
-
 # Preprocessing
 from models.encoders.model_label_encoder import ModelLabelEncoder
 from models.encoders.onesvm_label_encoder import OneClassSVMLabelEncoder
-from models.preprocessors.compute_class_weights import ComputeClassWeights
+from models.preprocessors.tfidf_transformer import TensorTfIdfTransformer
 
 # Training
 from ray.air.config import ScalingConfig
@@ -77,7 +73,8 @@ class SklearnModel(ModelsUtils):
         batch_size,
         training_epochs,
         taxa,
-        kmers_list
+        kmers_list,
+        csv
     ):
         super().__init__(
             classifier,
@@ -85,12 +82,13 @@ class SklearnModel(ModelsUtils):
             batch_size,
             training_epochs,
             taxa,
-            kmers_list
+            kmers_list,
+            csv
         )
         # Parameters
         self._encoded = []
 
-    def preprocess(self, ds, reductor_file):
+    def preprocess(self, ds, scaling = False):
         print('preprocess')
         if self.classifier == 'onesvm':
             self._encoder = OneClassSVMLabelEncoder(self.taxa)
@@ -99,19 +97,11 @@ class SklearnModel(ModelsUtils):
         else:
             self._encoder = ModelLabelEncoder(self.taxa)
         
-        self._scaler = TensorTfIdfTransformer(self.kmers)
+        self._encoder.fit(ds)
 
-        ds = self._encoder.fit_transform(ds)
-        
-        self._weights = ComputeClassWeights(LABELS_COLUMN_NAME)
-        self._weights.fit(ds)
-        self._weights = self._weights.stats_
-        
-        ds = self._scaler.fit_transform(ds)
-
-        self._reductor = TensorTruncatedSVDDecomposition(self.kmers, 10000, reductor_file)
-        # self._reductor = TensorCountHashing(self.kmers, 10000)
-        self._reductor.fit(ds)
+        if scaling:
+            self._scaler = TensorTfIdfTransformer(self.kmers)
+            self._scaler.fit(ds)
 
         # Labels mapping
         if self.classifier != 'onesvm':
@@ -120,6 +110,7 @@ class SklearnModel(ModelsUtils):
             labels = np.append(labels, 'unknown')
             self._encoded = np.append(self._encoded, -1)
         self._labels_map = zip(labels, self._encoded)
+        self._compute_weights()
         
     def _label_decode(self, predict):
         print('_label_decode')
@@ -178,9 +169,8 @@ class SklearnModel(ModelsUtils):
         for name, ds in datasets.items():
             ds = ds.drop_columns(['id'])
             ds = self._encoder.transform(ds)
-            ds = self._scaler.transform(ds)
-            ds = self._reductor.transform(ds)
-            self._nb_features = self._reductor._nb_components if self._reductor._nb_components < self._nb_kmers else self._nb_kmers
+            if self._scaler is not None:
+                ds = self._scaler.transform(ds)
             # Trigger the preprocessing computations before ingest in trainer
             # Otherwise, it would be executed at each epoch
             ds = ds.materialize()
@@ -220,8 +210,8 @@ class SklearnModel(ModelsUtils):
     def predict(self, ds, threshold = 0.8):
         print('predict')
         if ds.count() > 0:
-            ds = self._scaler.transform(ds)
-            ds = self._reductor.transform(ds)
+            if self._scaler is not None:
+                ds = self._scaler.transform(ds)
             ds = ds.materialize()
             predict_kwargs = {'features':self.kmers, 'num_estimator_cpus':-1}
             self._predictor = BatchPredictor.from_checkpoint(self._model_ckpt, SklearnTensorPredictor)

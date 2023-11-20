@@ -51,6 +51,9 @@ def bacteria_classification_train_cv(opt):
     if 'domain' in lst_taxas:
         lst_taxas.remove('domain')
     
+    # Verify need for scaling
+    scaling = verify_need_scaling(db_data)
+    
     for taxa in lst_taxas:
 
         test_ds, test_data = split_sim_dataset(db_ds, db_data, f"{TEST_DATASET_NAME}_{opt['database_name']}")
@@ -72,7 +75,8 @@ def bacteria_classification_train_cv(opt):
             clf_multiclass = opt['model_type'],
             taxa = taxa,
             batch_size = opt['batch_size'],
-            training_epochs = opt['training_epochs']
+            training_epochs = opt['training_epochs'],
+            scaling = scaling
         )
 
         t_s = time()
