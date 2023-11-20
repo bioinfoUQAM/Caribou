@@ -78,7 +78,7 @@ def dimensions_decomposition(opt):
             # Save decomposed data
             save_Xy_data(data, data_file)
 
-            print(f"Caribou finished decomposing the features of {opt['dataset_name']} in {t_decomposition} seconds.")
+            print(f"Caribou finished decomposing the features in {t_decomposition} seconds.")
         else:
             print('Caribou did not decompose the features because the number to extract is bigger than the actual number of features')
     else:
@@ -91,7 +91,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='This script computes features reduction to a given K-mers dataset and then applies it.')
     # Dataset
     parser.add_argument('-db','--dataset', required=True, type=Path, help='PATH to a npz file containing the data corresponding to the k-mers profile for the bacteria database')
-    parser.add_argument('-dt','--dataset_name', default='dataset', help='Name of the dataset used to name files')
     parser.add_argument('-l','--kmers_list', default=None, type=Path, help='PATH to a file containing a list of k-mers that will be reduced')
     # Parameters
     parser.add_argument('-n','--nb_components', default=1000, type=int, help='Number of components to decompose data into')
