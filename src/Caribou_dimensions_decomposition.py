@@ -48,7 +48,7 @@ def dimensions_decomposition(opt):
     data_file = f'{path}_decomposed{ext}'
 
     if not os.path.exists(data_file):
-        if opt['nb_features'] < len(kmers):
+        if opt['nb_components'] < len(kmers):
             # Load data 
             files_lst = glob(os.path.join(data['profile'],'*.parquet'))
             ds = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
@@ -72,7 +72,7 @@ def dimensions_decomposition(opt):
 
             # Save decomposed dataset
             data['profile'] = f"{data['profile']}_decomposed"
-            data['kmers'] = [f'feature_{i}' for i in np.arange(preprocessor._nb_components)]
+            data['kmers'] = [f'feature_{i}' for i in np.arange(preprocessor.preprocessors[1]._nb_components)]
             ds.write_parquet(data['profile'])
 
             # Save decomposed data
@@ -88,7 +88,7 @@ def dimensions_decomposition(opt):
 ################################################################################
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='This script computes features reduction to a given K-mers dataset and then applies it.')
+    parser = argparse.ArgumentParser(description='This script computes features decomposition to a given K-mers dataset and then applies it.')
     # Dataset
     parser.add_argument('-db','--dataset', required=True, type=Path, help='PATH to a npz file containing the data corresponding to the k-mers profile for the bacteria database')
     parser.add_argument('-l','--kmers_list', default=None, type=Path, help='PATH to a file containing a list of k-mers that will be reduced')
