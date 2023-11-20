@@ -30,6 +30,7 @@ class TensorTfIdfTransformer(Preprocessor):
         occurences = np.zeros(self._nb_features)
         for batch in ds.iter_batches(batch_format = 'numpy'):
             batch = batch[TENSOR_COLUMN_NAME]
+            batch = _unwrap_ndarray_object_type_if_needed(batch)
             occurences += np.count_nonzero(batch, axis = 0)
 
         idf = np.log(nb_samples / occurences) + 1
