@@ -209,7 +209,11 @@ class ClassificationMethods():
                 self._database_data['kmers'],
                 self._database_data['csv']
             )
-        model.preprocess(datasets[TRAINING_DATASET_NAME], self._scaling)
+        model.preprocess(
+            datasets[TRAINING_DATASET_NAME],
+            self._scaling,
+            os.path.join(self._outdirs['models_dir'], 'TF-IDF_diag.npz')
+        )
         model.fit(datasets)
 
         self._save_model(model, file)
@@ -236,7 +240,11 @@ class ClassificationMethods():
                 self._database_data['kmers'],
                 self._database_data['csv']
             )
-        model.preprocess(datasets[TRAINING_DATASET_NAME], self._scaling)
+        model.preprocess(
+            datasets[TRAINING_DATASET_NAME],
+            self._scaling,
+            os.path.join(self._outdirs['models_dir'], 'TF-IDF_diag.npz')
+        )
         model.fit(datasets)
 
         self._save_model(model, file)

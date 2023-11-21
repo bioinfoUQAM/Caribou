@@ -1,4 +1,3 @@
-import os
 
 import numpy as np
 import pandas as pd
@@ -6,6 +5,7 @@ import pandas as pd
 from tqdm import tqdm
 from typing import List
 from warnings import warn
+from os.path import isfile
 from ray.data import Dataset
 from utils import save_Xy_data, load_Xy_data
 
@@ -64,7 +64,7 @@ class TensorTruncatedSVDDecomposition(Preprocessor):
 
         components = []
         if self._nb_features > self._nb_components:
-            if os.path.isfile(self._file):
+            if isfile(self._file):
                 components = np.array(load_Xy_data(self._file))
             else:
                 # sampl = ds.random_sample(0.1)
@@ -147,7 +147,7 @@ class TensorTruncatedSVDDecomposition(Preprocessor):
         return df
 
     def __repr__(self):
-        return (f"{self.__class__.__name__}(features={self._nb_features!r}, taxa={self.taxa!r}, threshold={self.threshold!r})")
+        return (f"{self.__class__.__name__}(features={self._nb_features!r}, file={self._file!r})")
 
 def _validate_df(df: pd.DataFrame, column: str, nb_features: int) -> None:
     if len(df.loc[0, column]) != nb_features:

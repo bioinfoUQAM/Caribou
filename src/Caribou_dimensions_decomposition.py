@@ -36,7 +36,7 @@ def dimensions_decomposition(opt):
     k_length, kmers = verify_kmers_list_length(k_length, opt['kmers_list'])
 
     outdirs = define_create_outdirs(opt['outdir'])
-    
+
     # Initialize cluster
     init_ray_cluster(opt['workdir'])
 
@@ -53,12 +53,14 @@ def dimensions_decomposition(opt):
             files_lst = glob(os.path.join(data['profile'],'*.parquet'))
             ds = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
 
+            scaler_file = os.path.join(outdirs['models_dir'], 'TF-IDF_diag.npz')
             reductor_file = os.path.join(outdirs['models_dir'], 'TruncatedSVD_components.npz')
 
             # Compute the decomposition
             preprocessor = Chain(
                 TensorTfIdfTransformer(
-                    features = kmers
+                    features = kmers,
+                    file = scaler_file
                 ),
                 TensorTruncatedSVDDecomposition(
                     features = kmers,
@@ -101,3 +103,12 @@ if __name__ == "__main__":
     opt = vars(args)
 
     dimensions_decomposition(opt)
+
+# Test params
+opt = {
+    'dataset':'/home/nicdemon/results/data/Xy_genome_cucurbita_data_K10.npz',
+    'kmers_list':'/home/nicdemon/results/data/kmers_list_reduced.txt',
+    'nb_components':10000,
+    'outdir':'/home/nicdemon/results/',
+    'workdir':'/home/nicdemon/ray/',
+}

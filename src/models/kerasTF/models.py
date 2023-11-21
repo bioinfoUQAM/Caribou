@@ -125,7 +125,7 @@ class KerasTFModel(ModelsUtils):
         elif self.classifier == 'widecnn':
             print('Training multiclass classifier based on Wide CNN Network')
 
-    def preprocess(self, ds, scaling = False):
+    def preprocess(self, ds, scaling = False, scaler_file = None):
         print('preprocess')
         labels = []
         encoded = []
@@ -135,14 +135,14 @@ class KerasTFModel(ModelsUtils):
         if self._nb_classes == 2:
             self._encoder = ModelLabelEncoder(self.taxa)
             if scaling:
-                self._scaler = TensorTfIdfTransformer(self.kmers)
+                self._scaler = TensorTfIdfTransformer(self.kmers, scaler_file)
         else:
             self._encoder = Chain(
                 LabelEncoder(self.taxa),
                 OneHotTensorEncoder(self.taxa)
             )
             if scaling:
-                self._scaler = TensorTfIdfTransformer(self.kmers)
+                self._scaler = TensorTfIdfTransformer(self.kmers, scaler_file)
             
         self._encoder.fit(ds)
         if scaling:

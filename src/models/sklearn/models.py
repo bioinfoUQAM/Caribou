@@ -88,7 +88,7 @@ class SklearnModel(ModelsUtils):
         # Parameters
         self._encoded = []
 
-    def preprocess(self, ds, scaling = False):
+    def preprocess(self, ds, scaling = False, scaler_file = None):
         print('preprocess')
         if self.classifier == 'onesvm':
             self._encoder = OneClassSVMLabelEncoder(self.taxa)
@@ -100,7 +100,7 @@ class SklearnModel(ModelsUtils):
         self._encoder.fit(ds)
 
         if scaling:
-            self._scaler = TensorTfIdfTransformer(self.kmers)
+            self._scaler = TensorTfIdfTransformer(self.kmers, scaler_file)
             self._scaler.fit(ds)
 
         # Labels mapping

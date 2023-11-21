@@ -75,7 +75,7 @@ def features_reduction(opt):
         train_ds, export_ds, kmers = occurence_exclusion(train_ds, export_ds, kmers)
         train_ds, export_ds, kmers = low_var_selection(train_ds, export_ds, kmers)
         # Statistical features selection
-        train_ds, export_ds, data['kmers'] = features_selection(train_ds, export_ds, kmers, opt['taxa'])
+        train_ds, export_ds, kmers = features_selection(train_ds, export_ds, kmers, opt['taxa'])
         # Time the computation of transformations
         t_end = time()
         t_reduction = t_end - t_start
@@ -83,6 +83,7 @@ def features_reduction(opt):
         data['profile'] = f"{data['profile']}_reduced"
         export_ds.write_parquet(data['profile'])
         # Save reduced K-mers
+        data['kmers'] = kmers
         with open(os.path.join(outdirs["data_dir"],'kmers_list_reduced.txt'),'w') as handle:
             handle.writelines("%s\n" % item for item in data['kmers'])
         # Save reduced data
