@@ -50,7 +50,10 @@ def bacteria_classification(opt):
     # Verify need for scaling
     scaling = verify_need_scaling(db_data)
 
-    val_ds, val_data = split_sim_dataset(db_ds, db_data, f"{VALIDATION_DATASET_NAME}_{opt['database_name']}")
+    if opt['validation'] is not None:
+        val_data, val_ds = verify_load_metagenome(opt['validation'])
+    else:
+        val_data, val_ds = split_sim_dataset(db_ds, db_data, f"{VALIDATION_DATASET_NAME}_{opt['database_name']}")
 
     datasets = {
         TRAINING_DATASET_NAME : db_ds,
@@ -102,9 +105,11 @@ if __name__ == "__main__":
     # Dataset
     parser.add_argument('-mg','--data_metagenome', required=True, type=Path, help='PATH to a npz file containing the data corresponding to the k-mers profile for the metagenome to classify')
     parser.add_argument('-mn','--metagenome_name', required=True, help='Name of the metagenome to classify used to name files')
+    # Optional datasets
+    parser.add_argument('-v','--validation', default=None, type=Path, help='PATH to a npz file containing the k-mers profile for the validation dataset')
     # Parameters
     parser.add_argument('-model','--model_type', default='lstm_attention', choices=['sgd','mnb','lstm_attention','cnn','widecnn'], help='The type of model to train')
-    parser.add_argument('-t','--taxa', default=None, help='The taxonomic level to use for the classification, defaults to species. Can be one level or a list of levels separated by commas.')
+    parser.add_argument('-tx','--taxa', default=None, help='The taxonomic level to use for the classification, defaults to species. Can be one level or a list of levels separated by commas.')
     parser.add_argument('-bs','--batch_size', default=32, type=int, help='Size of the batch size to use, defaults to 32')
     parser.add_argument('-e','--training_epochs', default=100, type=int, help='The number of training iterations for the neural networks models if one ise chosen, defaults to 100')
     parser.add_argument('-o','--outdir', required=True, type=Path, help='PATH to a directory on file where outputs will be saved')

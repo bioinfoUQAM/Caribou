@@ -280,7 +280,7 @@ class ClassificationMethods():
         Extract the true classification of the dataset used for cross-validation
         """
         classif = {taxa : [] for taxa in taxas}
-        
+
         cols2drop = [col for col in ds.schema().names if col not in ['id', taxas[0]]]
         classif_ds = ds.drop_columns(cols2drop)
 
@@ -304,13 +304,10 @@ class ClassificationMethods():
 
         cv_csv = os.path.join(self._outdirs['results_dir'],f'{self._database}_{model}_{taxa}_cv_scores.csv')
 
-
         y_compare = pd.DataFrame({
             'y_true': y_true[taxa],
             'y_pred': y_pred[taxa]
         })
-        y_compare['y_true'] = y_compare['y_true'].str.lower()
-        y_compare['y_pred'] = y_compare['y_pred'].str.lower()
         y_compare.to_csv(os.path.join(self._outdirs['models_dir'], f'y_compare_{self._database}_{model}_{taxa}.csv'))
 
         support = precision_recall_fscore_support(

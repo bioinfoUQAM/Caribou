@@ -35,7 +35,6 @@ class TensorTruncatedSVDDecomposition(Preprocessor):
         self._file = file
         
     def _fit(self, ds: Dataset) -> Preprocessor:
-        # Parallel
         """
         Possibilities for parallel TruncatedSVD
         * sklearn minibatch PCA -> PCA / SVD mostly equivalent
@@ -93,7 +92,7 @@ class TensorTruncatedSVDDecomposition(Preprocessor):
             return {'dictonnary' : [dict.components_]}
         components = []
         if self._nb_features > self._nb_components:
-            if os.path.isfile(self._file):
+            if isfile(self._file):
                 components = np.array(load_Xy_data(self._file))
             else:
                 svd = ds.map_batches(batch_svd, batch_format = 'numpy')

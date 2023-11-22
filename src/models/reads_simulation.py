@@ -218,7 +218,7 @@ class readsSimulation():
 
 def split_sim_dataset(ds, data, name):
     splitted_path = os.path.join(os.path.dirname(data['profile']), f'Xy_genome_simulation_{name}_data_K{len(data["kmers"][0])}.npz')
-    if os.path.exists(splitted_path):
+    if os.path.isfile(splitted_path):
         warnings.warn(f'The {name} dataset already exists, skipping simulation and loading the dataset')
         splitted_data = load_Xy_data(splitted_path)
         files_lst = glob(os.path.join(splitted_data['profile'],'*.parquet'))
@@ -229,8 +229,8 @@ def split_sim_dataset(ds, data, name):
         if splitted_ds.count() == 0:
             nb_samples = round(ds.count() * 0.1)
             splitted_ds = ds.random_shuffle().limit(nb_samples)
-        splitted_ds, splitted_data = sim_dataset(splitted_ds, data, name)
-        return splitted_ds, splitted_data
+        splitted_data, splitted_ds = sim_dataset(splitted_ds, data, name)
+        return splitted_data, splitted_ds 
 
 def sim_dataset(ds, data, name):
     """
@@ -247,4 +247,4 @@ def sim_dataset(ds, data, name):
     sim_data = cv_sim.simulation(k, data['kmers'])
     files_lst = glob(os.path.join(sim_data['profile'], '*.parquet'))
     sim_ds = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
-    return sim_ds, sim_data
+    return sim_data, sim_ds

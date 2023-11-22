@@ -127,8 +127,6 @@ class KerasTFModel(ModelsUtils):
 
     def preprocess(self, ds, scaling = False, scaler_file = None):
         print('preprocess')
-        labels = []
-        encoded = []
         for row in ds.iter_rows():
             labels.append(row[self.taxa])
         self._nb_classes = len(np.unique(labels))
@@ -152,16 +150,17 @@ class KerasTFModel(ModelsUtils):
             labels = list(self._encoder.stats_[f'unique_values({self.taxa})'].keys())
         else:
             labels = list(self._encoder.preprocessors[0].stats_[f'unique_values({self.taxa})'].keys())
-        encoded = np.arange(len(labels))
+        self._encoded = np.arange(len(labels))
         labels = np.append(labels, 'unknown')
-        encoded = np.append(encoded, -1)
-        self._labels_map = zip(labels, encoded)
+        self._encoded = np.append(self._encoded, -1)
+        for (label, encoded) in zip(labels, self._encoded):
+            self._labels_map[label] = encoded
         self._compute_weights()
 
     def _label_decode(self, predict):
         print('_label_decode')
         decoded = pd.Series(np.empty(len(predict), dtype=object))
-        for label, encoded in self._labels_map:
+        for label, encoded in self._labels_map.items():
             decoded[predict == encoded] = label
 
         return np.array(decoded)

@@ -25,8 +25,8 @@ class ModelLabelEncoder(Preprocessor):
         return self
 
     def _transform_pandas(self, df: pd.DataFrame):
-        s_values = self.stats_
         def column_label_encoder(s: pd.Series):
+            s_values = self.stats_[f"unique_values({s.name})"]
             return s.map(s_values)
 
         df[self.label_column] = df[self.label_column].transform(column_label_encoder)

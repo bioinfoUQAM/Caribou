@@ -85,9 +85,7 @@ class SklearnModel(ModelsUtils):
             kmers_list,
             csv
         )
-        # Parameters
-        self._encoded = []
-
+        
     def preprocess(self, ds, scaling = False, scaler_file = None):
         print('preprocess')
         if self.classifier == 'onesvm':
@@ -109,13 +107,15 @@ class SklearnModel(ModelsUtils):
             self._encoded = np.arange(len(labels))
             labels = np.append(labels, 'unknown')
             self._encoded = np.append(self._encoded, -1)
-        self._labels_map = zip(labels, self._encoded)
-        self._compute_weights()
+        for (label, encoded) in zip(labels, self._encoded):
+            self._labels_map[label] = encoded
+        if self.classifier != 'onesvm':
+            self._compute_weights()
         
     def _label_decode(self, predict):
         print('_label_decode')
         decoded = pd.Series(np.empty(len(predict), dtype=object))
-        for label, encoded in self._labels_map:
+        for label, encoded in self._labels_map.items():
             decoded[predict == encoded] = label
 
         return np.array(decoded)

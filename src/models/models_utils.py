@@ -76,11 +76,12 @@ class ModelsUtils(ABC):
         self._clf = None
         self._weights = {}
         self._scaler = None
+        self._encoded = []
         self._encoder = None
         self._trainer = None
         self._reductor = None
         self._predictor = None
-        self._labels_map = None
+        self._labels_map = {}
         self._model_ckpt = None
         self._train_params = {}
         self._preprocessor = None
@@ -115,12 +116,18 @@ class ModelsUtils(ABC):
         """
         Set class weights depending on their abundance in data-associated classes csv
         """
+        if isinstance(self._csv, tuple):
+            cls = pd.concat([pd.read_csv(self._csv[0]),pd.read_csv(self._csv[1])], axis = 0, join = 'inner', ignore_index = True)
         cls = pd.read_csv(self._csv)
+        if self.taxa == 'domain':
+            cls.loc[cls['domain'].str.lower() == 'archaea', 'domain'] = 'Bacteria'
         classes = list(cls[self.taxa].unique())
         weights = compute_class_weight(
             class_weight = 'balanced',
             classes = classes,
             y = cls[self.taxa]
         )
-        for lab, encoded in self._labels_map:
-            self._weights[encoded] = weights[classes.index(lab)]
+        
+        for lab, encoded in self._labels_map.items():
+            if lab != 'unknown':
+                self._weights[encoded] = weights[classes.index(lab)]

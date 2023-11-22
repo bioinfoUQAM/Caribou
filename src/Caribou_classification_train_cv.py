@@ -56,8 +56,14 @@ def bacteria_classification_train_cv(opt):
     
     for taxa in lst_taxas:
 
-        test_ds, test_data = split_sim_dataset(db_ds, db_data, f"{TEST_DATASET_NAME}_{opt['database_name']}")
-        val_ds, val_data = split_sim_dataset(db_ds, db_data, f"{VALIDATION_DATASET_NAME}_{opt['database_name']}")
+        if opt['test'] is not None:
+            test_data, test_ds = verify_load_metagenome(opt['test'])
+        else:
+            test_data, test_ds = split_sim_dataset(db_ds, db_data, f"{TEST_DATASET_NAME}_{opt['database_name']}")
+        if opt['validation'] is not None:
+            val_data, val_ds = verify_load_metagenome(opt['validation'])
+        else:
+            val_data, val_ds = split_sim_dataset(db_ds, db_data, f"{VALIDATION_DATASET_NAME}_{opt['database_name']}")
 
         datasets = {
             TRAINING_DATASET_NAME : db_ds,
@@ -94,9 +100,12 @@ if __name__ == "__main__":
     # Database
     parser.add_argument('-db','--data_bacteria', required=True, type=Path, help='PATH to a npz file containing the data corresponding to the k-mers profile for the bacteria database')
     parser.add_argument('-dn','--database_name', required=True, help='Name of the bacteria database used to name files')
+    # Optional datasets
+    parser.add_argument('-v','--validation', default=None, type=Path, help='PATH to a npz file containing the k-mers profile for the validation dataset')
+    parser.add_argument('-t','--test', default=None, type=Path, help='PATH to a npz file containing the k-mers profile for the test dataset')
     # Parameters
     parser.add_argument('-model','--model_type', default='lstm_attention', choices=['sgd','mnb','lstm_attention','cnn','widecnn'], help='The type of model to train')
-    parser.add_argument('-t','--taxa', default=None, help='The taxonomic level to use for the classification, defaults to None. Can be one level or a list of levels separated by commas.')
+    parser.add_argument('-tx','--taxa', default=None, help='The taxonomic level to use for the classification, defaults to None. Can be one level or a list of levels separated by commas.')
     parser.add_argument('-bs','--batch_size', default=32, type=int, help='Size of the batch size to use, defaults to 32')
     parser.add_argument('-e','--training_epochs', default=100, type=int, help='The number of training iterations for the neural networks models if one ise chosen, defaults to 100')
     parser.add_argument('-o','--outdir', required=True, type=Path, help='PATH to a directory on file where outputs will be saved')

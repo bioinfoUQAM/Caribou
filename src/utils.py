@@ -86,20 +86,20 @@ def save_Xy_data(data, Xy_file):
 #########################################################################################################
 
 def verify_file(file : Path):
-    if file is not None and not os.path.exists(file):
+    if file is not None and not os.path.isfile(file):
         raise ValueError(f'Cannot find file {file} !')
 
 def verify_fasta(file : Path):
-    if not os.path.isfile(file) and not os.path.isdir(file):
+    if not os.path.exists(file):
         raise ValueError('Fasta must be an interleaved fasta file or a directory containing fasta files.')
 
 def verify_data_path(dir : Path):
-    if not os.path.exists(dir):
+    if not os.path.isdir(dir):
         raise ValueError(f"Cannot find data folder {dir} ! Exiting")
 
 def verify_saving_path(dir : Path):
     path, folder = os.path.split(dir)
-    if not os.path.exists(path):
+    if not os.path.isdir(path):
         raise ValueError("Cannot find where to create output folder !")
 
 def verify_host(host : str):
@@ -341,7 +341,7 @@ def merge_db_host(db_data, host_data):
     merged_db_host = {}
     merged_db_host_file = f"{db_data['profile']}_host_merged.npz"
 
-    if os.path.exists(merged_db_host_file):
+    if os.path.isfile(merged_db_host_file):
         merged_db_host = load_Xy_data(merged_db_host_file)
         files_lst = glob(os.path.join(merged_db_host['profile'], '*.parquet'))
         merged_ds = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
@@ -366,7 +366,8 @@ def merge_db_host(db_data, host_data):
     merged_db_host['kmers'] = db_data['kmers']  # Features
     merged_db_host['taxas'] = ['domain']  # Known taxas for classification
     merged_db_host['fasta'] = (db_data['fasta'], host_data['fasta'])  # Fasta file needed for reads simulation
-    
+    merged_db_host['csv'] = (db_data['csv'], host_data['csv'])  # csv file needed for classes weights
+        
     save_Xy_data(merged_db_host, merged_db_host_file)
 
     return merged_db_host, merged_ds

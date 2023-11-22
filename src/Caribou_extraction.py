@@ -40,18 +40,30 @@ def bacteria_extraction(opt):
 
     if opt['model_type'] != 'onesvm':
         if opt['data_host'] is not None:
-            db_data, db_ds = verify_load_host_merge(opt['data_bacteria'], opt['data_host'])
+            if opt['merged'] is not None:
+                db_data, db_ds = verify_load_db(opt['merged'])
+            else:
+                db_data, db_ds = verify_load_host_merge(opt['data_bacteria'], opt['data_host'])
             db_name = 'host_merged'
         else:
             db_data, db_ds = verify_load_db(opt['data_bacteria'])
             db_name = opt['dataset_name']
 
-        val_ds, val_data = split_sim_dataset(db_ds, db_data, f'{VALIDATION_DATASET_NAME}_{db_name}')
+        if opt['validation'] is not None:
+            val_data, val_ds = verify_load_db(opt['validation'])
+        else:
+            val_data, val_ds = split_sim_dataset(db_ds, db_data, f'{VALIDATION_DATASET_NAME}_{db_name}')
     else:
-        db_data, db_ds = verify_load_host_merge(opt['data_bacteria'], opt['data_host'])
+        if opt['merged'] is not None:
+            db_data, db_ds = verify_load_db(opt['merged'])
+        else:
+            db_data, db_ds = verify_load_host_merge(opt['data_bacteria'], opt['data_host'])
         db_name = 'host_merged'
 
-        val_ds, val_data = split_sim_dataset(db_ds, db_data, f'{VALIDATION_DATASET_NAME}_{db_name}')
+        if opt['validation'] is not None:
+            val_data, val_ds = verify_load_db(opt['validation'])
+        else:
+            val_data, val_ds = split_sim_dataset(db_ds, db_data, f'{VALIDATION_DATASET_NAME}_{db_name}')
 
         db_data, db_ds = verify_load_db(opt['data_bacteria'])
         db_name = opt['dataset_name']
@@ -111,6 +123,9 @@ if __name__ == "__main__":
     # Dataset
     parser.add_argument('-dm','--data_metagenome', required=True, type=Path, help='PATH to a npz file containing the data corresponding to the k-mers profile for the metagenome to classify')
     parser.add_argument('-mn','--metagenome_name', required=True, help='Name of the metagenome to classify used to name files')
+    # Optional datasets
+    parser.add_argument('-m','--merged', default=None, type=Path, help='PATH to a npz file containing the k-mers profile for the merged bacteria and host databases')
+    parser.add_argument('-v','--validation', default=None, type=Path, help='PATH to a npz file containing the k-mers profile for the validation dataset')
     # Parameters
     parser.add_argument('-model','--model_type', default=None, choices=[None,'onesvm','linearsvm','attention','lstm','deeplstm'], help='The type of model to train')
     parser.add_argument('-bs','--batch_size', default=32, type=int, help='Size of the batch size to use, defaults to 32')
