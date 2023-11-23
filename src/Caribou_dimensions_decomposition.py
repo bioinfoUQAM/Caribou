@@ -56,7 +56,7 @@ def dimensions_decomposition(opt):
             ds = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
 
             scaler_file = os.path.join(outdirs['models_dir'], 'TF-IDF_diag.npz')
-            reductor_file = os.path.join(outdirs['models_dir'], 'decomposed_components.npz')
+            reductor_file = os.path.join(outdirs['models_dir'], 'TruncatedSVD_components.npz')
 
             # Compute the decomposition
             preprocessor = Chain(
@@ -64,7 +64,7 @@ def dimensions_decomposition(opt):
                     features = kmers,
                     file = scaler_file
                 ),
-                TensorNMFDecomposition(
+                TensorTruncatedSVDDecomposition(
                     features = kmers,
                     nb_components = opt['nb_components'],
                     file = reductor_file

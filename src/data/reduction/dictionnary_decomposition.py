@@ -8,9 +8,7 @@ from os.path import isfile
 from ray.data import Dataset
 from utils import save_Xy_data, load_Xy_data
 
-from sklearn.utils.extmath import randomized_svd
-from sklearn.decomposition import DictionaryLearning
-from sklearn.decomposition._dict_learning import _sparse_encode
+from sklearn.decomposition import DictionaryLearning, MiniBatchDictionaryLearning
 
 from ray.data.preprocessor import Preprocessor
 from ray.air.util.data_batch_conversion import _unwrap_ndarray_object_type_if_needed
@@ -37,10 +35,14 @@ class TensorDictionnaryDecomposition(Preprocessor):
         def batch_dict(batch):
             batch = batch[TENSOR_COLUMN_NAME]
             batch = _unwrap_ndarray_object_type_if_needed(batch)
-            dict = DictionaryLearning(
+            dict = MiniBatchDictionaryLearning(
                 n_components = self._nb_components,
                 max_iter = 10,
-                transform_algorithm = 'cd',
+                fit_algorithm = 'cd',
+                transform_algorithm = 'lars',
+                positive_code = True,
+                positive_dict = True,
+                batch_size = 10
             )
             dict.fit(batch)
             return {'components' : [dict.components_]}
