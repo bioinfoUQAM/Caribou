@@ -289,7 +289,10 @@ class ClassificationMethods():
 
         for row in classif_ds.iter_rows():
             for taxa in taxas:
-                classif[taxa].append(row[taxa])
+                if self._classifier_binary == 'onesvm' and row[taxa] not in ['Bacteria','bacteria','bact']:
+                    classif[taxa].append('Unknown')
+                else:
+                    classif[taxa].append(row[taxa])
 
         return classif, ds
 

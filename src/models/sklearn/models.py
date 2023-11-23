@@ -91,7 +91,7 @@ class SklearnModel(ModelsUtils):
         if self.classifier == 'onesvm':
             self._encoder = OneClassSVMLabelEncoder(self.taxa)
             self._encoded = np.array([1,-1], dtype = np.int32)
-            labels = np.array(['bacteria', 'unknown'], dtype = object)
+            labels = np.array(['Bacteria', 'Unknown'], dtype = object)
         else:
             self._encoder = ModelLabelEncoder(self.taxa)
         
@@ -105,7 +105,7 @@ class SklearnModel(ModelsUtils):
         if self.classifier != 'onesvm':
             labels = list(self._encoder.stats_[f'unique_values({self.taxa})'].keys())
             self._encoded = np.arange(len(labels))
-            labels = np.append(labels, 'unknown')
+            labels = np.append(labels, 'Unknown')
             self._encoded = np.append(self._encoded, -1)
         for (label, encoded) in zip(labels, self._encoded):
             self._labels_map[label] = encoded

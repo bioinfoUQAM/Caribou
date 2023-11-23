@@ -20,14 +20,14 @@ class OneClassSVMLabelEncoder(LabelEncoder):
     def _fit(self, dataset : Dataset) -> Preprocessor:
         self.stats_ = OrderedDict()
         self.stats_[f"unique_values({self.label_column})"] = {
-            'bacteria' : 1,
+            'Bacteria' : 1
         }
         return self
 
     def _transform_pandas(self, df: pd.DataFrame):
         _validate_df(df, self.label_column)
         mapping = self.stats_[f"unique_values({self.label_column})"]
-        df[self.label_column] = df[self.label_column].str.lower()
+        df[self.label_column] = df[self.label_column]
         df[self.label_column] = df[self.label_column].map(mapping)
         df[self.label_column] = df[self.label_column].fillna(-1)
 
