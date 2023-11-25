@@ -51,9 +51,8 @@ def dimensions_decomposition(opt):
 
     if not os.path.exists(data_file):
         if opt['nb_components'] < len(kmers):
-            # Load data 
-            files_lst = glob(os.path.join(data['profile'],'*.parquet'))
-            ds = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
+            # Load data
+            ds = read_parquet_files(data['profile'])
 
             scaler_file = os.path.join(outdirs['models_dir'], 'TF-IDF_diag.npz')
             reductor_file = os.path.join(outdirs['models_dir'], 'TruncatedSVD_components.npz')

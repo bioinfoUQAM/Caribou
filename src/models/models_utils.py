@@ -129,5 +129,5 @@ class ModelsUtils(ABC):
         )
         
         for lab, encoded in self._labels_map.items():
-            if lab != 'unknown':
+            if lab.lower() != 'unknown':
                 self._weights[encoded] = weights[classes.index(lab)]

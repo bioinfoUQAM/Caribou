@@ -64,9 +64,8 @@ def features_reduction(opt):
 
     if not os.path.exists(data_file):
         # Load data 
-        files_lst = glob(os.path.join(data['profile'],'*.parquet'))
-        export_ds = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
-        train_ds = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
+        export_ds = read_parquet_files(data['profile'])
+        train_ds = read_parquet_files(data['profile'])
         # Time the computation of transformations
         t_start = time()
         # Features scaling
