@@ -19,19 +19,19 @@ def build_attention(nb_features):
     VirNet package [Abdelkareem et al. 2018]
     https://github.com/alyosama/virnet/blob/master/NNClassifier.py
     """
-    inputs = Input(shape = (nb_features,))
-    x = Embedding(nb_features, 128)(inputs)
+    inputs = Input(shape = (nb_features,1))
+    # x = Embedding(nb_features, 128)(inputs)
 
-    x = LSTM(128, return_sequences = True, dropout = 0.1, recurrent_dropout = 0.1 )(x)
+    x = LSTM(128, return_sequences = True, dropout = 0.1, recurrent_dropout = 0.1 )(inputs)
     x = LSTM(128, return_sequences = True, dropout = 0.1, recurrent_dropout = 0.1 )(x)
     x = AttentionWeightedAverage()(x)
 
     x = Dense(128, activation = "relu")(x)
     x = Dropout(0.1)(x)
-    x = Dense(1, activation = "tanh")(x)
+    x = Dense(1, activation = "sigmoid")(x)
 
     model = Model(inputs = inputs, outputs = x)
-    model.compile(loss = BinaryCrossentropy(from_logits = False), optimizer = 'adam', metrics = ['accuracy'], jit_compile = True)
+    model.compile(loss = 'binary_crossentropy', optimizer = 'adam', metrics = ['accuracy'], jit_compile = True)
 
     return model
 
@@ -43,15 +43,15 @@ def build_LSTM(nb_features):
     https://github.com/gussow/seeker/blob/master/train_model/train_model.py
     """
     
-    inputs = Input(shape = (nb_features,))
-    x = Embedding(nb_features, 128)(inputs)
+    inputs = Input(shape = (nb_features,1))
+    # x = Embedding(nb_features, 128)(inputs)
 
-    x = LSTM(128, recurrent_dropout = 0.1, dropout = 0.1)(x)
+    x = LSTM(128, recurrent_dropout = 0.1, dropout = 0.1)(inputs)
 
     x = Dense(1, activation = 'tanh')(x)
     
     model = Model(inputs = inputs, outputs = x)
-    model.compile(loss=BinaryCrossentropy(from_logits = False), optimizer='adam', metrics=['accuracy'], jit_compile = True)
+    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'], jit_compile = True)
 
     return model
 
@@ -63,10 +63,10 @@ def build_deepLSTM(nb_features):
     https://github.com/wandreopoulos/deeplasmid/blob/docker/classifier/dl/DL_Model.py
     """
 
-    inputs = Input(shape=(nb_features,))
+    inputs = Input(shape=(nb_features,1))
 
-    netA = Embedding(nb_features, 128)(inputs)
-    netA = LSTM(40, activation='tanh',recurrent_dropout=0.05,dropout=0.1,name='A_%d'%40,return_sequences=True) (netA)
+    # netA = Embedding(nb_features, 128)(inputs)
+    netA = LSTM(40, activation='tanh',recurrent_dropout=0.05,dropout=0.1,name='A_%d'%40,return_sequences=True) (inputs)
     netA = LSTM(40, activation='tanh',recurrent_dropout=0.05,dropout=0.1,name='B_%d'%40) (netA)
 
     netB = Dense(100, activation='tanh',name='G_%d'%40) (inputs)
@@ -82,7 +82,7 @@ def build_deepLSTM(nb_features):
 
     outputs = Dense(1, activation='sigmoid', name='score')(net)
     model = Model(inputs=inputs, outputs=outputs)
-    model.compile(loss=BinaryCrossentropy(from_logits = False), optimizer='adam', metrics=['accuracy'], jit_compile = True)
+    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'], jit_compile = True)
 
     return model
 
@@ -95,9 +95,9 @@ def build_LSTM_attention(nb_features, nb_classes):
     https://github.com/MicrobeLab/DeepMicrobes/blob/master/models/embed_lstm_attention.py
     """
 
-    inputs = Input(shape = (nb_features,))
-    net = Embedding(nb_features, 100)(inputs)
-    net = Bidirectional(LSTM(300, return_sequences=True))(net)
+    inputs = Input(shape = (nb_features,1))
+    # net = Embedding(nb_features, 100)(inputs)
+    net = Bidirectional(LSTM(300, return_sequences=True))(inputs)
     net = Attention(dropout = 0.2)([net,net])
     # MLP
     net = Dense((nb_features * 300 * 2), activation = 'relu')(net)
@@ -108,7 +108,7 @@ def build_LSTM_attention(nb_features, nb_classes):
     net = Dense(nb_classes)(net)
     outputs = Activation('softmax')(net)
     model = Model(inputs = inputs, outputs = outputs)
-    model.compile(loss=CategoricalCrossentropy(), optimizer='adam', metrics=['accuracy'], jit_compile = True)
+    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'], jit_compile = True)
 
     return model
 
@@ -134,7 +134,7 @@ def build_CNN(nb_features, nb_classes):
     model.add(Dropout(0.5))
     model.add(Dense(nb_classes))
     model.add(Activation('softmax'))
-    model.compile(loss=CategoricalCrossentropy(), optimizer='adam', metrics=['accuracy'], jit_compile = True)
+    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'], jit_compile = True)
 
     return model
 
@@ -146,20 +146,20 @@ def build_wideCNN(nb_features, nb_classes):
     https://github.com/KennthShang/CHEER/blob/master/Classifier/model/Wcnn.py
     """
 
-    inputs = Input(shape = (nb_features,))
-    embed = Embedding(248, 100)(inputs)
-    embed = Reshape((nb_features, -1, 1))(embed)
+    inputs = Input(shape = (nb_features,1))
+    # embed = Embedding(248, 100)(inputs)
+    # embed = Reshape((nb_features, -1, 1))(embed)
 
-    conv1 = Conv2D(256, 3, activation = 'relu')(embed)
+    conv1 = Conv2D(256, 3, activation = 'relu')(inputs)
     conv1 = MaxPooling2D(pool_size = (1,1), strides = nb_features)(conv1)
 
-    conv2 = Conv2D(256, 7, activation = 'relu')(embed)
+    conv2 = Conv2D(256, 7, activation = 'relu')(inputs)
     conv2 = MaxPooling2D(pool_size = (1,1), strides = nb_features)(conv2)
 
-    conv3 = Conv2D(256, 11, activation = 'relu')(embed)
+    conv3 = Conv2D(256, 11, activation = 'relu')(inputs)
     conv3 = MaxPooling2D(pool_size = (1,1), strides = nb_features)(conv3)
 
-    conv4 = Conv2D(256, 15, activation = 'relu')(embed)
+    conv4 = Conv2D(256, 15, activation = 'relu')(inputs)
     conv4 = MaxPooling2D(pool_size = (1,1), strides = nb_features)(conv4)
 
     net = Concatenate(axis = 1)([conv1,conv2,conv3,conv4])
@@ -172,6 +172,6 @@ def build_wideCNN(nb_features, nb_classes):
     net = Dense(nb_classes)(net)
     outputs = Activation('softmax')(net)
     model = Model(inputs = inputs, outputs = outputs)
-    model.compile(loss=CategoricalCrossentropy(), optimizer='adam', metrics=['accuracy'], jit_compile = True)
+    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'], jit_compile = True)
 
     return model

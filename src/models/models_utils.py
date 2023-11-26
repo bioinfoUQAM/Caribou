@@ -130,4 +130,4 @@ class ModelsUtils(ABC):
         
         for lab, encoded in self._labels_map.items():
             if lab.lower() != 'unknown':
-                self._weights[encoded] = weights[classes.index(lab)]
+                self._weights[int(encoded)] = weights[classes.index(lab)]

@@ -172,6 +172,7 @@ class ClassificationMethods():
         mapping = {}
         for taxa, model in model_map.items():
             mapping[taxa] = model.predict(ds) # np.array
+        
         return mapping
 
     # Private training secondary functions
@@ -311,6 +312,7 @@ class ClassificationMethods():
             'y_true': y_true[taxa],
             'y_pred': y_pred[taxa]
         })
+        
         y_compare.to_csv(os.path.join(self._outdirs['models_dir'], f'y_compare_{self._database}_{model}_{taxa}.csv'))
 
         support = precision_recall_fscore_support(

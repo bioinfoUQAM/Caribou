@@ -11,7 +11,7 @@ from glob import glob
 from pathlib import Path
 from warnings import warn
 from psutil import virtual_memory
-
+from tensorflow.config import list_physical_devices
 
 __author__ = "Nicolas de Montigny"
 
@@ -49,6 +49,8 @@ __all__ = [
     'merge_db_host'
 ]
 
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+
 # Constants
 #########################################################################################################
 
@@ -59,19 +61,40 @@ TENSOR_COLUMN_NAME = '__value__'
 
 # Initialize ray cluster
 def init_ray_cluster(workdir):
-    mem = virtual_memory().total
-    frac = 0.8
-    while not ray.is_initialized():
-        try:
-            ray.init(
-                object_store_memory = mem * frac,
-                _temp_dir = str(workdir),
-            )
-            logging.getLogger("ray").setLevel(logging.WARNING)
-            ray.data.DataContext.get_current().execution_options.verbose_progress = True
-        except ValueError :
-            ray.shutdown()
-            frac -= 0.05
+    """
+    1. Get physical material available
+        Number of available CPUs and GPUs
+    2. Get host IP from OS
+        Defaults to 172.24.94.34
+    3. Start the ray cluster at OS level
+    """
+    nb_CPU = os.cpu_count()
+    nb_GPU = len(list_physical_devices('GPU'))
+
+    try:
+        host_ip = os.environ['HOST_IP']
+    except KeyError:
+        host_ip = '172.24.94.34'
+
+    cmd = f'ray start --head --node-ip-address {host_ip} --port 34567 --num-cpus {nb_CPU} --num-gpus {nb_GPU} --temp-dir {workdir}'
+    os.system(cmd)
+
+    ray.init()
+    logging.getLogger("ray").setLevel(logging.WARNING)
+    ray.data.DataContext.get_current().execution_options.verbose_progress = True
+    # mem = virtual_memory().total
+    # frac = 0.8
+    # while not ray.is_initialized():
+    #     try:
+    #         ray.init(
+    #             object_store_memory = mem * frac,
+    #             _temp_dir = str(workdir),
+    #         )
+    #         logging.getLogger("ray").setLevel(logging.WARNING)
+    #         ray.data.DataContext.get_current().execution_options.verbose_progress = True
+    #     except ValueError :
+    #         ray.shutdown()
+    #         frac -= 0.05
 
 # Data I/O
 #########################################################################################################

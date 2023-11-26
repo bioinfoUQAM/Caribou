@@ -127,31 +127,22 @@ class KerasTFModel(ModelsUtils):
 
     def preprocess(self, ds, scaling = False, scaler_file = None):
         print('preprocess')
-        for row in ds.iter_rows():
-            labels.append(row[self.taxa])
-        self._nb_classes = len(np.unique(labels))
-        if self._nb_classes == 2:
-            self._encoder = ModelLabelEncoder(self.taxa)
-            if scaling:
-                self._scaler = TensorTfIdfTransformer(self.kmers, scaler_file)
-        else:
+        self._encoder = ModelLabelEncoder(self.taxa)
+        if scaling:
+            self._scaler = TensorTfIdfTransformer(self.kmers, scaler_file)
+            self._scaler.fit(ds)
+        self._encoder.fit(ds)
+        labels = list(self._encoder.stats_[f'unique_values({self.taxa})'].keys())
+        self._nb_classes = len(self._encoder.stats_[f'unique_values({self.taxa})'])
+        if self._nb_classes > 2 :
             self._encoder = Chain(
-                LabelEncoder(self.taxa),
+                self._encoder,
                 OneHotTensorEncoder(self.taxa)
             )
-            if scaling:
-                self._scaler = TensorTfIdfTransformer(self.kmers, scaler_file)
-            
-        self._encoder.fit(ds)
-        if scaling:
-            self._scaler.fit(ds)
-        # Labels mapping
-        if self._nb_classes == 2:
-            labels = list(self._encoder.stats_[f'unique_values({self.taxa})'].keys())
-        else:
-            labels = list(self._encoder.preprocessors[0].stats_[f'unique_values({self.taxa})'].keys())
+            self._encoder.fit(ds)
+        
         self._encoded = np.arange(len(labels))
-        labels = np.append(labels, 'unknown')
+        labels = np.append(labels, 'Unknown')
         self._encoded = np.append(self._encoded, -1)
         for (label, encoded) in zip(labels, self._encoded):
             self._labels_map[label] = encoded
@@ -161,6 +152,7 @@ class KerasTFModel(ModelsUtils):
         print('_label_decode')
         decoded = pd.Series(np.empty(len(predict), dtype=object))
         for label, encoded in self._labels_map.items():
+            print(predict == encoded)
             decoded[predict == encoded] = label
 
         return np.array(decoded)
@@ -207,7 +199,7 @@ class KerasTFModel(ModelsUtils):
             ),
             datasets=datasets,
         )
-        
+
         training_result = self._trainer.fit()
         self._model_ckpt = training_result.best_checkpoints[0][0]
 
@@ -217,6 +209,7 @@ class KerasTFModel(ModelsUtils):
             if len(ds.schema().names) > 1:
                 col_2_drop = [col for col in ds.schema().names if col != TENSOR_COLUMN_NAME]
                 ds = ds.drop_columns(col_2_drop)
+
 
             # Preprocess
             if self._scaler is not None:
@@ -230,12 +223,15 @@ class KerasTFModel(ModelsUtils):
             )
             predictions = self._predictor.predict(
                 data = ds,
-                batch_size = self.batch_size
+                feature_columns = [TENSOR_COLUMN_NAME],
+                batch_size = self.batch_size,
+                num_cpus_per_worker = self._nb_CPU_per_worker,
+                num_gpus_per_worker = self._nb_GPU_per_worker
             )
 
             # Convert predictions to labels
             predictions = self._prob_2_cls(predictions, threshold)
-                
+
             return self._label_decode(predictions)
         else:
             raise ValueError('No data to predict')
@@ -245,8 +241,8 @@ class KerasTFModel(ModelsUtils):
         print('_prob_2_cls')
         def map_predicted_label_binary(ds, threshold):
             ds = np.ravel(ds['predictions'])
-            lower_threshold = 0.5 - (threshold * 0.5)
-            upper_threshold = 0.5 + (threshold * 0.5)
+            lower_threshold = 0.5 #- (threshold * 0.5)
+            upper_threshold = 0.5 #+ (threshold * 0.5)
             predict = pd.DataFrame({
                 'proba': ds,
                 'predicted_label': np.full(len(ds), -1)
@@ -265,12 +261,12 @@ class KerasTFModel(ModelsUtils):
 
             return {'predictions' : pred['predicted_label'].to_numpy(dtype = np.int32)}
         
-        if self._nb_classes == 2:
-            print('map_predicted_label_binary')
-            fn = map_predicted_label_binary
-        else:
+        if self._nb_classes > 2:
             print('map_predicted_label_multiclass')
             fn = map_predicted_label_multiclass
+        else:
+            print('map_predicted_label_binary')
+            fn = map_predicted_label_binary
 
         predict = []
         predictions = predictions.map_batches(
