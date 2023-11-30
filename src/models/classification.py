@@ -7,8 +7,11 @@ import pandas as pd
 
 from warnings import warn
 from typing import Dict, List
-from models.sklearn.models import SklearnModel
-from models.kerasTF.models import KerasTFModel
+from models.kerasTF.models import KerasTFModels
+from models.sklearn.binary_models import SklearnBinaryModels
+# from models.kerasTF.binary_models import KerasTFBinaryModels
+from models.sklearn.multiclass_models import SklearnMulticlassModels
+# from models.kerasTF.multiclass_models import KerasTFMulticlassModels
 
 # CV metrics
 from sklearn.metrics import precision_recall_fscore_support
@@ -149,7 +152,7 @@ class ClassificationMethods():
         if self.is_fitted:
             try:
                 for taxa, model in model_map.items():
-                    predictions = model.predict(ds) # np.array
+                    predictions = model.predict_proba(ds) # np.array
                     ds, predictions, ids = self._remove_unknown(ds, predictions)
                     file = self._save_dataset(ds, taxa)
                     mapping[taxa] = {
@@ -181,7 +184,7 @@ class ClassificationMethods():
     def _binary_training(self, datasets, taxa, file):
         print('_binary_training')
         if self._classifier_binary == 'onesvm':
-            model = SklearnModel(
+            model = SklearnBinaryModels(
                 self._classifier_binary,
                 self._outdirs['models_dir'],
                 self._batch_size,
@@ -191,7 +194,7 @@ class ClassificationMethods():
                 self._database_data['csv']
             )
         elif self._classifier_binary == 'linearsvm':
-            model = SklearnModel(
+            model = SklearnBinaryModels(
                 self._classifier_binary,
                 self._outdirs['models_dir'],
                 self._batch_size,
@@ -201,7 +204,7 @@ class ClassificationMethods():
                 self._database_data['csv']
             )
         else:
-            model = KerasTFModel(
+            model = KerasTFModels(
                 self._classifier_binary,
                 self._outdirs['models_dir'],
                 self._batch_size,
@@ -222,7 +225,7 @@ class ClassificationMethods():
     def _multiclass_training(self, datasets, taxa, file):
         print('_multiclass_training')
         if self._classifier_multiclass in ['sgd','mnb']:
-            model = SklearnModel(
+            model = SklearnMulticlassModels(
                 self._classifier_multiclass,
                 self._outdirs['models_dir'],
                 self._batch_size,
@@ -232,7 +235,7 @@ class ClassificationMethods():
                 self._database_data['csv']
             )
         else:
-            model = KerasTFModel(
+            model = KerasTFModels(
                 self._classifier_multiclass,
                 self._outdirs['models_dir'],
                 self._batch_size,

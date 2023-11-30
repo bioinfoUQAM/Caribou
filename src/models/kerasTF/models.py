@@ -4,6 +4,9 @@ import warnings
 import numpy as np
 import pandas as pd
 
+# Class construction
+from abc import ABC, abstractmethod
+
 # Preprocessing
 from ray.data.preprocessors import LabelEncoder, Chain
 from models.encoders.model_label_encoder import ModelLabelEncoder
@@ -40,7 +43,7 @@ LABELS_COLUMN_NAME = 'labels'
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 warnings.filterwarnings('ignore')
 
-class KerasTFModel(ModelsUtils):
+class KerasTFModels(ModelsUtils):
     """
     Class used to build, train and predict models using Ray with Keras Tensorflow backend
 
@@ -70,7 +73,6 @@ class KerasTFModel(ModelsUtils):
             Minimum percentage of probability to effectively classify.
             Sequences will be classified as 'unknown' if the probability is under this threshold.
             Defaults to 80%
-
     """
 
     def __init__(
@@ -152,7 +154,6 @@ class KerasTFModel(ModelsUtils):
         print('_label_decode')
         decoded = pd.Series(np.empty(len(predict), dtype=object))
         for label, encoded in self._labels_map.items():
-            print(predict == encoded)
             decoded[predict == encoded] = label
 
         return np.array(decoded)
@@ -203,13 +204,33 @@ class KerasTFModel(ModelsUtils):
         training_result = self._trainer.fit()
         self._model_ckpt = training_result.best_checkpoints[0][0]
 
-    def predict(self, ds, threshold=0.8):
+    def predict(self, ds):
         print('predict')
+        # Predict with model
+        predictions = self._make_predictions(ds)
+
+        # Convert predictions to labels for cross-validation of classification
+        predictions = self._get_abs_pred(predictions)
+
+        # Return decoded labels
+        return self._label_decode(predictions)
+
+    def predict_proba(self, ds, threshold = 0.8):
+        print('predict_proba')
+        # Predict with model
+        predictions = self._make_predictions(ds)
+
+        # Convert predictions to labels with threshold for top-down classification
+        predictions = self._get_threshold_pred(predictions, threshold)
+
+        # Return decoded labels
+        return self._label_decode(predictions)
+        
+    def _make_predictions(self, ds):
         if ds.count() > 0:
             if len(ds.schema().names) > 1:
                 col_2_drop = [col for col in ds.schema().names if col != TENSOR_COLUMN_NAME]
                 ds = ds.drop_columns(col_2_drop)
-
 
             # Preprocess
             if self._scaler is not None:
@@ -228,21 +249,57 @@ class KerasTFModel(ModelsUtils):
                 num_cpus_per_worker = self._nb_CPU_per_worker,
                 num_gpus_per_worker = self._nb_GPU_per_worker
             )
-
-            # Convert predictions to labels
-            predictions = self._prob_2_cls(predictions, threshold)
-
-            return self._label_decode(predictions)
+            return predictions
         else:
             raise ValueError('No data to predict')
+    
+    def _get_abs_pred(self, predictions):
+        print('_get_abs_pred')
+        def map_predicted_label_binary(ds):
+            ds = np.ravel(ds['predictions'])
+            lower_threshold = 0.5
+            upper_threshold = 0.5
+            predict = pd.DataFrame({
+                'proba': ds,
+                'predicted_label': np.full(len(ds), -1)
+            })
+            predict.loc[predict['proba'] >= upper_threshold, 'predicted_label'] = 1
+            predict.loc[predict['proba'] <= lower_threshold, 'predicted_label'] = 0
+            return {'predictions' : predict['predicted_label'].to_numpy(dtype = np.int32)}
+        
+        def map_predicted_label_multiclass(ds):
+            ds = ds['predictions']
+            pred = pd.DataFrame({
+                'best_proba': [np.max(arr) for arr in ds],
+                'predicted_label' : [np.argmax(arr) for arr in ds]
+            })
 
-    # Iterate over batches of predictions to transform probabilities to labels without mapping
-    def _prob_2_cls(self, predictions, threshold):
-        print('_prob_2_cls')
+            return {'predictions' : pred['predicted_label'].to_numpy(dtype = np.int32)}
+        
+        if self._nb_classes > 2:
+            print('map_predicted_label_multiclass')
+            fn = map_predicted_label_multiclass
+        else:
+            print('map_predicted_label_binary')
+            fn = map_predicted_label_binary
+
+        predict = []
+        predictions = predictions.map_batches(
+            lambda batch : fn(batch),
+            batch_format = 'numpy',
+            batch_size = self.batch_size
+        )
+        for row in predictions.iter_rows():
+            predict.append(row['predictions'])
+
+        return predict
+
+    def _get_threshold_pred(self, predictions, threshold):
+        print('_get_threshold_pred')
         def map_predicted_label_binary(ds, threshold):
             ds = np.ravel(ds['predictions'])
-            lower_threshold = 0.5 #- (threshold * 0.5)
-            upper_threshold = 0.5 #+ (threshold * 0.5)
+            lower_threshold = 0.5 - (threshold * 0.5)
+            upper_threshold = 0.5 + (threshold * 0.5)
             predict = pd.DataFrame({
                 'proba': ds,
                 'predicted_label': np.full(len(ds), -1)

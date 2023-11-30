@@ -19,7 +19,7 @@ warnings.filterwarnings('ignore')
 
 class ModelsUtils(ABC):
     """
-    Utilities for preprocessing data and doing cross validation using ray
+    Abstract class for both frameworks to initialize their attributes.
 
     ----------
     Attributes
@@ -103,7 +103,7 @@ class ModelsUtils(ABC):
         """
 
     @abstractmethod
-    def _prob_2_cls(self):
+    def _get_threshold_pred(self):
         """
         """
 
@@ -116,13 +116,14 @@ class ModelsUtils(ABC):
         """
         Set class weights depending on their abundance in data-associated classes csv
         """
+        weights = {}
         if isinstance(self._csv, tuple):
             cls = pd.concat([pd.read_csv(self._csv[0]),pd.read_csv(self._csv[1])], axis = 0, join = 'inner', ignore_index = True)
         cls = pd.read_csv(self._csv)
         if self.taxa == 'domain':
             cls.loc[cls['domain'].str.lower() == 'archaea', 'domain'] = 'Bacteria'
         classes = list(cls[self.taxa].unique())
-        weights = compute_class_weight(
+        cls_weights = compute_class_weight(
             class_weight = 'balanced',
             classes = classes,
             y = cls[self.taxa]
@@ -130,4 +131,5 @@ class ModelsUtils(ABC):
         
         for lab, encoded in self._labels_map.items():
             if lab.lower() != 'unknown':
-                self._weights[int(encoded)] = weights[classes.index(lab)]
+                weights[int(encoded)] = cls_weights[classes.index(lab)]
+        return weights

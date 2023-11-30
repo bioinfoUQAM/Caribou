@@ -36,6 +36,9 @@ class TensorTruncatedSVDDecomposition(Preprocessor):
         
     def _fit(self, ds: Dataset) -> Preprocessor:
         """
+        TODO: adapt by using the metho from PySpark SVD
+        https://spark.apache.org/docs/latest/api/python/reference/api/pyspark.mllib.linalg.distributed.SingularValueDecomposition.html?highlight=svd
+
         Possibilities for parallel TruncatedSVD
         * sklearn minibatch PCA -> PCA / SVD mostly equivalent
         * implement parallel based on other library
