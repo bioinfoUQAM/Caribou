@@ -18,7 +18,18 @@ TENSOR_COLUMN_NAME = '__value__'
 class MulticlassUtils(ABC):
     """
     Abstract class to provide utilities for multiclass classification models.
+    
     These methods are meant to be used when decomposing data into taxonomic groups before training one model per group
+    
+    -----------------------
+    Ray data GroupBy
+    -----------------------
+    https://www.anyscale.com/blog/training-one-million-machine-learning-models-in-record-time-with-ray#approach-2:-using-ray-data-(grouping-data-by-key)
+    1. GroupBy previous taxa
+    2. Fx for model training (train_fx)
+    3. ds.map_groups(train_fx) to exec the training of models in parallel
+    4. Write results to file / save models
+    
     -----------------------
     Mixture-of-Experts (MoE)
     -----------------------
@@ -50,54 +61,36 @@ class MulticlassUtils(ABC):
     Tutel PyTorch : https://www.microsoft.com/en-us/research/blog/tutel-an-efficient-mixture-of-experts-implementation-for-large-dnn-model-training/
     """
 
-    def _split_dataset(self, ds, taxa, csv):
+    def _get_count_previous_taxa(self, taxa, csv):
+        """
+        Fetch the previous taxa and computes the number of classes in it
+
+        Makes assumption that classes are ordered ``specific -> broad`` in csv columns
+        
+        Used to determine if the dataset should be splitted according to the previous taxonomic level labels
+        """
+        prev_taxa = None
+        cls = pd.read_csv(csv)
+        cols = list(cls.columns)
+        prev_taxa = cols[cols.index(taxa) + 1]
+
+        return prev_taxa, len(cls[prev_taxa].unique())
+
+    def _prev_taxa_split_dataset(self, ds, prev_taxa):
         """
         Splits the dataset's taxa column into a collection of smaller datasets according to the previous taxonomic level labels
+        """
+        return ds.groupby(prev_taxa)
+    
+    def _random_split_dataset(self, ds):
+        """
+        Assigns random numbers to a new column and group samples by it to form a collection of smaller random datasets
         
-        Makes assumption that classes are order specific -> broad in csv columns
-
-        Ray data GroupBy https://www.anyscale.com/blog/training-one-million-machine-learning-models-in-record-time-with-ray#approach-2:-using-ray-data-(grouping-data-by-key)
-        1. GroupBy previous taxa
-        2. Fx for model training (train_fx)
-        3. ds.map_groups(train_fx) to exec the training of models in parallel
-        4. Write results to file / save models
+        Used when there is not enough labels in previous taxa for splitting according to the previous taxonomic level labels
         """
-        ds_collection = {}
-        # cls = pd.read_csv(csv)
-        # prev_tax = list(cls.columns)
-        # prev_tax = prev_tax[prev_tax.index(taxa) + 1]
-        # unique_labs = cls[prev_tax].unique()
-
-
-        # for lab in unique_labs:
-            
-        # def map_split(ds):
-        #     logging.getLogger("ray").info(ds[ds[prev_tax] == lab])
-        #     return ds[ds[prev_tax] == lab]
-
-        # test = ds.map(map_split)
-
-        # partial_ds = ds.map_batches(map_split, batch_format = 'pandas')
-        # file = '/home/nick/github/test'
-        # partial_ds.write_parquet(file)
-        # ds_collection[lab] = partial_ds
-
-        # for k, v in ds_collection.items():
-        #     # print(v.to_pandas())
-        #     print(v)
-        """
-        for lab in unique_labs:
-            ds_collection[lab] = []
-
-        for batch in ds.iter_batches(batch_format = 'pandas'):
-            labs_batch = batch[prev_tax].unique()
-            for lab in labs_batch:
-                ds_collection[lab].append(batch[batch[prev_tax] == lab])
-
-        for lab in unique_labs:
-            ds_collection[lab] = pd.concat(ds_collection[lab])
-        """
-        return ds_collection
+        nb_clusters = int(ds.count() / 10)
+        ds = ds.repartition(nb_clusters).add_column('cluster', lambda df: df.index % nb_clusters)
+        return ds.groupby('cluster')
 
     def _predictions_cv(self, predictions):
         """
@@ -110,8 +103,8 @@ class MulticlassUtils(ABC):
         ----------
         * We know the classes from the previous taxa, can make each model CV on their subpart
         * Metrics for CV overall per taxa ~k-fold strategy (mean / mode)
+        TODO : WRITE THE CONCATENATION METHODS AND TEST ALL STAGES \W ds.GroupBy()
         """
-
     
     def _predictions_classif(self, predictions):
         """
@@ -124,4 +117,5 @@ class MulticlassUtils(ABC):
         ----------
         * Since we know the previous taxa classified per sequence, we can run this specific model to classify at the current level
         * See multi-stage classification
+        TODO : WRITE THE CONCATENATION METHODS AND TEST ALL STAGES \W ds.GroupBy()
         """

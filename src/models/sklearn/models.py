@@ -75,11 +75,6 @@ class SklearnModels(ModelsUtils, ABC):
         """
         
     @abstractmethod
-    def _build(self):
-        """
-        """
-
-    @abstractmethod
     def fit(self, datasets):
         """
         """

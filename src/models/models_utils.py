@@ -73,6 +73,7 @@ class ModelsUtils(ABC):
         self._nb_kmers = len(kmers_list)
         self._training_epochs = training_epochs
         # Initialize empty
+    # TODO: remove the variable that are not required to be kept throughout the classes
         self._clf = None
         self._weights = {}
         self._scaler = None
@@ -86,6 +87,8 @@ class ModelsUtils(ABC):
         self._train_params = {}
         self._preprocessor = None
         self._workdir = outdir_model
+
+
 
     @abstractmethod
     def preprocess(self, ds):
