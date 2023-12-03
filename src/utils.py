@@ -71,12 +71,12 @@ def init_ray_cluster(workdir):
     nb_CPU = os.cpu_count()
     nb_GPU = len(list_physical_devices('GPU'))
 
-    try:
-        host_ip = os.environ['HOST_IP']
-    except KeyError:
-        host_ip = '172.24.94.34'
+    # try:
+    #     host_ip = os.environ['HOST_IP']
+    # except KeyError:
+    #     host_ip = '$(hostname -i)'
 
-    cmd = f'ray start --head --node-ip-address {host_ip} --port 34567 --num-cpus {nb_CPU} --num-gpus {nb_GPU} --temp-dir {workdir}'
+    cmd = f'ray start --head --node-ip-address $(hostname -i) --num-cpus {nb_CPU} --num-gpus {nb_GPU} --temp-dir {workdir}'
     os.system(cmd)
 
     ray.init()
