@@ -6,6 +6,7 @@ import pandas as pd
 
 # Class construction
 from abc import ABC, abstractmethod
+from models.models_utils import ModelsUtils
 
 from ray.air.util.data_batch_conversion import _unwrap_ndarray_object_type_if_needed
 
@@ -15,7 +16,7 @@ __all__ = ['ModelsUtils']
 
 TENSOR_COLUMN_NAME = '__value__'
 
-class MulticlassUtils(ABC):
+class MulticlassUtils(ModelsUtils, ABC):
     """
     Abstract class to provide utilities for multiclass classification models.
     
@@ -76,10 +77,12 @@ class MulticlassUtils(ABC):
 
         return prev_taxa, len(cls[prev_taxa].unique())
 
-    def _prev_taxa_split_dataset(self, ds, prev_taxa):
+    def _prev_taxa_split_dataset(self, ds, prev_taxa = None):
         """
         Splits the dataset's taxa column into a collection of smaller datasets according to the previous taxonomic level labels
         """
+        if prev_taxa is None:
+            prev_taxa, nb_classes = self._get_count_previous_taxa(self.taxa,self._csv)
         return ds.groupby(prev_taxa)
     
     def _random_split_dataset(self, ds):
@@ -88,34 +91,8 @@ class MulticlassUtils(ABC):
         
         Used when there is not enough labels in previous taxa for splitting according to the previous taxonomic level labels
         """
-        nb_clusters = int(ds.count() / 10)
+        nb_clusters = int(ds.count() / 100)
         ds = ds.repartition(nb_clusters).add_column('cluster', lambda df: df.index % nb_clusters)
         return ds.groupby('cluster')
-
-    def _predictions_cv(self, predictions):
-        """
-        Brings back together the predictions made by multiple models trained on subclasses of the original dataset
-        
-        If multiple sub-models classify a sample with same probability, use a soft voting logic to determine which one to classify to
-        
-        ----------
-        Cross-validation
-        ----------
-        * We know the classes from the previous taxa, can make each model CV on their subpart
-        * Metrics for CV overall per taxa ~k-fold strategy (mean / mode)
-        TODO : WRITE THE CONCATENATION METHODS AND TEST ALL STAGES \W ds.GroupBy()
-        """
     
-    def _predictions_classif(self, predictions):
-        """
-        Brings back together the predictions made by multiple models trained on subclasses of the original dataset
-        
-        If multiple sub-models classify a sample with same probability, use a soft voting logic to determine which one to classify to
-        
-        ----------
-        Classification
-        ----------
-        * Since we know the previous taxa classified per sequence, we can run this specific model to classify at the current level
-        * See multi-stage classification
-        TODO : WRITE THE CONCATENATION METHODS AND TEST ALL STAGES \W ds.GroupBy()
-        """
+    

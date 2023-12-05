@@ -145,7 +145,7 @@ class SklearnMulticlassModels(SklearnModels, MulticlassUtils):
                 learning_rate = 'optimal',
                 loss = 'modified_huber',
                 penalty = 'l2',
-                # 'class_weight' : self._weights,
+                # class_weight = self._weights,
             )
             model.fit(X, y)
 
@@ -168,7 +168,7 @@ class SklearnMulticlassModels(SklearnModels, MulticlassUtils):
                 learning_rate = 'optimal',
                 loss = 'modified_huber',
                 penalty = 'l2',
-                # 'class_weight' : self._weights,
+                # class_weight = self._weights,
             )
             model.fit(X, y)
 
@@ -226,6 +226,8 @@ class SklearnMulticlassModels(SklearnModels, MulticlassUtils):
 
             probabilities = ds.map_batches(predict_func, batch_format = 'numpy')
             probabilities = _unwrap_ndarray_object_type_if_needed(probabilities.to_pandas()['predictions'])
+        else:
+            raise ValueError('Empty dataset, cannot execute predictions!')
 
         return probabilities
 
