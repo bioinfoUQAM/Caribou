@@ -76,10 +76,10 @@ def init_ray_cluster(workdir):
     # except KeyError:
     #     host_ip = '$(hostname -i)'
 
-    cmd = f'ray start --head --node-ip-address $(hostname -i) --num-cpus {nb_CPU} --num-gpus {nb_GPU} --temp-dir {workdir}'
+    cmd = f'ray start --head --node-ip-address $(hostname -i) --num-cpus {nb_CPU} --num-gpus {nb_GPU} --temp-dir {workdir} --storage {workdir}'
     os.system(cmd)
 
-    ray.init()
+    ray.init(_temp_dir = str(workdir))
     logging.getLogger("ray").setLevel(logging.WARNING)
     ray.data.DataContext.get_current().execution_options.verbose_progress = True
     # mem = virtual_memory().total
