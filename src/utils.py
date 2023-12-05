@@ -1,5 +1,6 @@
 import os
 import ray
+import json
 import logging
 
 import numpy as np
@@ -71,15 +72,48 @@ def init_ray_cluster(workdir):
     nb_CPU = os.cpu_count()
     nb_GPU = len(list_physical_devices('GPU'))
 
-    # try:
-    #     host_ip = os.environ['HOST_IP']
-    # except KeyError:
-    #     host_ip = '$(hostname -i)'
+    mem = ray._private.utils.get_shared_memory_bytes() - 10
 
-    cmd = f'ray start --head --node-ip-address $(hostname -i) --num-cpus {nb_CPU} --num-gpus {nb_GPU} --temp-dir {workdir} --storage {workdir}'
-    os.system(cmd)
+    workdir='/home/nicdemon/ray/'
 
-    ray.init(_temp_dir = str(workdir))
+    if 'HOST_IP' in list(os.environ.keys()):
+        ray.init(
+            _node_ip_address = os.environ['HOST_IP'],
+            num_cpus = nb_CPU,
+            num_gpus = nb_GPU,
+            _temp_dir = str(workdir),
+            object_store_memory = mem,
+            _system_config={    
+                "object_spilling_config": json.dumps({
+                    "type": "filesystem",
+                    "params": {
+                        "directory_path": str(workdir)
+                    },
+                })
+            },
+        )
+        # cmd = f"ray start --head --node-ip-address {os.environ['HOST_IP']} --num-cpus {nb_CPU} --num-gpus {nb_GPU} --temp-dir {workdir} --object-store-memory {mem}"
+    else:
+        ray.init(
+            num_cpus = nb_CPU,
+            num_gpus = nb_GPU,
+            _temp_dir = str(workdir),
+            object_store_memory = mem,
+            _system_config={
+                "object_spilling_config": json.dumps({
+                    "type": "filesystem",
+                    "params": {
+                        "directory_path": str(workdir)
+                    },
+                })
+            },
+        )
+
+    # cmd = f"ray start --head --num-cpus {nb_CPU} --num-gpus {nb_GPU} --temp-dir {workdir} --object-store-memory {mem}"
+
+    # os.system(cmd)
+
+    # ray.init()
     logging.getLogger("ray").setLevel(logging.WARNING)
     ray.data.DataContext.get_current().execution_options.verbose_progress = True
     # mem = virtual_memory().total
