@@ -116,7 +116,7 @@ class SklearnMulticlassModels(SklearnModels, MulticlassUtils):
         for (label, encode) in zip(labels, encoded):
             self._labels_map[label] = encode
         
-        # self._weights = self._compute_weights()
+        self._weights = self._compute_weights()
 
     def fit(self, datasets):
         print('fit')
@@ -145,7 +145,7 @@ class SklearnMulticlassModels(SklearnModels, MulticlassUtils):
                 learning_rate = 'optimal',
                 loss = 'modified_huber',
                 penalty = 'l2',
-                # class_weight = self._weights,
+                class_weight = self._weights,
             )
             model.fit(X, y)
 
@@ -168,7 +168,7 @@ class SklearnMulticlassModels(SklearnModels, MulticlassUtils):
                 learning_rate = 'optimal',
                 loss = 'modified_huber',
                 penalty = 'l2',
-                # class_weight = self._weights,
+                class_weight = self._weights,
             )
             model.fit(X, y)
 
@@ -221,15 +221,16 @@ class SklearnMulticlassModels(SklearnModels, MulticlassUtils):
                     proba = model.predict_proba(X)
                     for i, cls in enumerate(model.classes_):
                         pred[:, cls] += proba[:, i]
-                pred = pred / len(self._model_ckpt)
+                # pred = pred / len(self._model_ckpt)
                 return {'predictions' : pred}
 
             probabilities = ds.map_batches(predict_func, batch_format = 'numpy')
             probabilities = _unwrap_ndarray_object_type_if_needed(probabilities.to_pandas()['predictions'])
+            
+            return probabilities
         else:
             raise ValueError('Empty dataset, cannot execute predictions!')
 
-        return probabilities
 
     def _get_threshold_pred(self, predict, threshold):
         print('_get_threshold_pred')

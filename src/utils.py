@@ -74,8 +74,6 @@ def init_ray_cluster(workdir):
 
     mem = ray._private.utils.get_shared_memory_bytes() - 10
 
-    workdir='/home/nicdemon/ray/'
-
     if 'HOST_IP' in list(os.environ.keys()):
         ray.init(
             _node_ip_address = os.environ['HOST_IP'],
