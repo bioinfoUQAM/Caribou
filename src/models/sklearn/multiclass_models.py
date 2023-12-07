@@ -128,10 +128,12 @@ class SklearnMulticlassModels(SklearnModels, MulticlassUtils):
         if self._scaler is not None:
             ds = self._scaler.transform(ds)
 
+
         # One sub-model per artificial cluster of samples
         ds = self._random_split_dataset(ds)
+        
         # checkpointing directory
-        model_dir = os.path.join(self._workdir, self.classifier)
+        model_dir = os.path.join(self._workdir, f'{self.classifier}_{self.taxa}')
         if not os.path.isdir(model_dir):
             os.mkdir(model_dir)
 
@@ -139,9 +141,9 @@ class SklearnMulticlassModels(SklearnModels, MulticlassUtils):
         def build_fit_sgd(data):
             X = data[TENSOR_COLUMN_NAME]
             y = data[LABELS_COLUMN_NAME]
-            prev_label = data['cluster'][0]
+            cluster = data['cluster'][0]
             model = SGDClassifier(
-                alpha = 173.5667373,
+                # alpha = 173.5667373,
                 learning_rate = 'optimal',
                 loss = 'modified_huber',
                 penalty = 'l2',
@@ -149,36 +151,30 @@ class SklearnMulticlassModels(SklearnModels, MulticlassUtils):
             )
             model.fit(X, y)
 
-            model_file = os.path.join(model_dir, f'{prev_label}.pkl')
+            model_file = os.path.join(model_dir, f'{cluster}.pkl')
 
             with open(model_file, "wb") as file:
                 cpickle.dump(model, file)
 
             return {
-                'cluster' : [prev_label],
+                'cluster' : [cluster],
                 'file' : [model_file]
             }
 
         def build_fit_mnb(data):
             X = data[TENSOR_COLUMN_NAME]
             y = data[LABELS_COLUMN_NAME]
-            prev_label = data['cluster'][0]
-            model = SGDClassifier(
-                alpha = 173.5667373,
-                learning_rate = 'optimal',
-                loss = 'modified_huber',
-                penalty = 'l2',
-                class_weight = self._weights,
-            )
+            cluster = data['cluster'][0]
+            model = MultinomialNB()
             model.fit(X, y)
 
-            model_file = os.path.join(model_dir, f'{prev_label}.pkl')
+            model_file = os.path.join(model_dir, f'{cluster}.pkl')
 
             with open(model_file, "wb") as file:
                 cpickle.dump(model, file)
 
             return {
-                'cluster' : [prev_label],
+                'cluster' : [cluster],
                 'file' : [model_file]
             }
         

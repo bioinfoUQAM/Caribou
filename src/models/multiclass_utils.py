@@ -3,6 +3,7 @@ import ray
 import warnings
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 
 # Class construction
 from abc import ABC, abstractmethod
@@ -91,8 +92,14 @@ class MulticlassUtils(ModelsUtils, ABC):
         
         Used when there is not enough labels in previous taxa for splitting according to the previous taxonomic level labels
         """
+        def map_clusters(batch):
+            clusters = np.arange(len(batch))
+            batch['cluster'] = clusters
+            return batch
+
         nb_clusters = int(ds.count() / 100)
-        ds = ds.repartition(nb_clusters).add_column('cluster', lambda df: df.index % nb_clusters)
+
+        ds = ds.repartition(100)
+        ds = ds.map_batches(map_clusters, batch_size = nb_clusters, batch_format = 'pandas')
+
         return ds.groupby('cluster')
-    
-    
