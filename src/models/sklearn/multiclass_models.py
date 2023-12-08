@@ -14,6 +14,7 @@ import ray.cloudpickle as cpickle
 from ray.air.config import ScalingConfig
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.linear_model import SGDClassifier
+from sklearn.calibration import CalibratedClassifierCV
 from models.sklearn.partial_trainer import SklearnPartialTrainer
 from models.sklearn.scoring_one_svm import ScoringSGDOneClassSVM
 
@@ -96,13 +97,12 @@ class SklearnMulticlassModels(SklearnModels, MulticlassUtils):
         self._model_ckpt = {}
         self._predictor = {}
 
+    # Data preprocessing
+    #########################################################################################################
+
     def preprocess(self, ds, scaling = False, scaler_file = None):
         print('preprocess')
-
-        if scaling:
-            self._scaler = TensorTfIdfTransformer(self.kmers, scaler_file)
-            self._scaler.fit(ds)
-        
+        # Labels encoding
         self._encoder = ModelLabelEncoder(self.taxa)
         self._encoder.fit(ds)
 
@@ -112,49 +112,70 @@ class SklearnMulticlassModels(SklearnModels, MulticlassUtils):
         labels = np.append(labels, 'Unknown')
         encoded = np.append(encoded, -1)
         
-        self._labels_map = {}
         for (label, encode) in zip(labels, encoded):
             self._labels_map[label] = encode
         
+        # Class weights
         self._weights = self._compute_weights()
+        
+        # Scaling
+        if scaling:
+            self._scaler = TensorTfIdfTransformer(self.kmers, scaler_file)
+            self._scaler.fit(ds)
+
+    # Models training
+    #########################################################################################################
 
     def fit(self, datasets):
         print('fit')
-    # TODO: remove validation from datasets
-    # train / val on training ds, CV on test ds
-        ds = datasets['train']
-        ds = ds.drop_columns(['id'])
-        ds = self._encoder.transform(ds)
-        if self._scaler is not None:
-            ds = self._scaler.transform(ds)
-
+        for name, ds in datasets.items():
+            # ds = ds.drop_columns(['id'])
+            ds = self._encoder.transform(ds)
+            if self._scaler is not None:
+                ds = self._scaler.transform(ds)
+            datasets[name] = ds
 
         # One sub-model per artificial cluster of samples
-        ds = self._random_split_dataset(ds)
+        ds_train = self._random_split_dataset(datasets['train'])
+        ds_val = datasets['validation']
         
-        # checkpointing directory
+        # Checkpointing directory
         model_dir = os.path.join(self._workdir, f'{self.classifier}_{self.taxa}')
         if not os.path.isdir(model_dir):
             os.mkdir(model_dir)
 
         # Model-specific training functions
         def build_fit_sgd(data):
-            X = data[TENSOR_COLUMN_NAME]
-            y = data[LABELS_COLUMN_NAME]
+            # Training data
+            X_train = _unwrap_ndarray_object_type_if_needed(data[TENSOR_COLUMN_NAME])
+            y_train = np.array(data[LABELS_COLUMN_NAME])
+            # Validation data
+            X_val = ds_val.to_pandas()[TENSOR_COLUMN_NAME]
+            y_val = ds_val.to_pandas()[LABELS_COLUMN_NAME]
+            msk_val = y_val.isin(np.unique(y_train))
+            X_val = _unwrap_ndarray_object_type_if_needed(X_val[msk_val])
+            y_val = np.array(y_val[msk_val])
             cluster = data['cluster'][0]
             model = SGDClassifier(
-                # alpha = 173.5667373,
                 learning_rate = 'optimal',
                 loss = 'modified_huber',
                 penalty = 'l2',
                 class_weight = self._weights,
             )
-            model.fit(X, y)
+            model.fit(X_train, y_train)
+
+            calibrator = CalibratedClassifierCV(
+                estimator = model,
+                method = 'isotonic',
+                cv = 'prefit',     
+            )
+
+            calibrator.fit(X_val,y_val)
 
             model_file = os.path.join(model_dir, f'{cluster}.pkl')
 
             with open(model_file, "wb") as file:
-                cpickle.dump(model, file)
+                cpickle.dump(calibrator, file)
 
             return {
                 'cluster' : [cluster],
@@ -162,16 +183,31 @@ class SklearnMulticlassModels(SklearnModels, MulticlassUtils):
             }
 
         def build_fit_mnb(data):
-            X = data[TENSOR_COLUMN_NAME]
-            y = data[LABELS_COLUMN_NAME]
+            # Training data
+            X_train = _unwrap_ndarray_object_type_if_needed(data[TENSOR_COLUMN_NAME])
+            y_train = np.array(data[LABELS_COLUMN_NAME])
+            # Validation data
+            X_val = ds_val.to_pandas()[TENSOR_COLUMN_NAME]
+            y_val = ds_val.to_pandas()[LABELS_COLUMN_NAME]
+            msk_val = y_val.isin(np.unique(y_train))
+            X_val = _unwrap_ndarray_object_type_if_needed(X_val[msk_val])
+            y_val = np.array(y_val[msk_val])
             cluster = data['cluster'][0]
             model = MultinomialNB()
-            model.fit(X, y)
+            model.fit(X_train, y_train)
 
             model_file = os.path.join(model_dir, f'{cluster}.pkl')
 
+            calibrator = CalibratedClassifierCV(
+                estimator = model,
+                method = 'isotonic',
+                cv = 'prefit',     
+            )
+
+            calibrator.fit(X_val,y_val)
+
             with open(model_file, "wb") as file:
-                cpickle.dump(model, file)
+                cpickle.dump(calibrator, file)
 
             return {
                 'cluster' : [cluster],
@@ -180,15 +216,18 @@ class SklearnMulticlassModels(SklearnModels, MulticlassUtils):
         
         if self.classifier == 'sgd':
             print('Training multiclass SGD classifier')
-            training_result = ds.map_groups(build_fit_sgd, batch_format = 'numpy')
+            training_result = ds_train.map_groups(build_fit_sgd, batch_format = 'numpy')
         elif self.classifier == 'mnb':
             print('Training multiclass Multinomial Naive Bayes classifier')
-            training_result = ds.map_groups(build_fit_mnb, batch_format = 'numpy')
+            training_result = ds_train.map_groups(build_fit_mnb, batch_format = 'numpy')
 
         training_result = training_result.to_pandas().to_dict('records')
         for record in training_result:
             self._model_ckpt[record['cluster']] = record['file']
         
+    # Models predicting
+    #########################################################################################################
+
     def predict(self, ds):
         print('predict')
         probabilities = self._predict_proba(ds)
@@ -226,7 +265,6 @@ class SklearnMulticlassModels(SklearnModels, MulticlassUtils):
             return probabilities
         else:
             raise ValueError('Empty dataset, cannot execute predictions!')
-
 
     def _get_threshold_pred(self, predict, threshold):
         print('_get_threshold_pred')

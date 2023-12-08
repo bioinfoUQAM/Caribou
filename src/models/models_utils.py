@@ -137,3 +137,11 @@ class ModelsUtils(ABC):
                 weights[int(encoded)] = cls_weights[classes.index(lab)]
         
         return weights
+    
+    def _label_decode(self, predict):
+        print('_label_decode')
+        decoded = pd.Series(np.empty(len(predict), dtype=object))
+        for label, encoded in self._labels_map.items():
+            decoded[predict == encoded] = label
+
+        return np.array(decoded)

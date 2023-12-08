@@ -86,8 +86,12 @@ class SklearnBinaryModels(SklearnModels):
             csv
         )
 
+    # Data preprocessing
+    #########################################################################################################
+
     def preprocess(self, ds, scaling = False, scaler_file = None):
         print('preprocess')
+        # Labels encoding + mapping
         if self.classifier == 'onesvm':
             self._encoder = OneClassSVMLabelEncoder(self.taxa)
             self._encoded = np.array([1,-1], dtype = np.int32)
@@ -100,52 +104,31 @@ class SklearnBinaryModels(SklearnModels):
             self._encoded = np.arange(len(labels))
             labels = np.append(labels, 'Unknown')
             self._encoded = np.append(self._encoded, -1)
+            # Class weights
             self._weights = self._compute_weights()
-
-        if scaling:
-            self._scaler = TensorTfIdfTransformer(self.kmers, scaler_file)
-            self._scaler.fit(ds)
 
         # Labels mapping
         for (label, encoded) in zip(labels, self._encoded):
             self._labels_map[label] = encoded
 
-    def _build(self):
-        print('_build')
-        if self.classifier == 'onesvm':
-            print('Training bacterial extractor with One Class SVM')
-            self._clf = ScoringSGDOneClassSVM()
-            self._train_params = {
-                'nu' : 0.026441491,
-                'learning_rate' : 'constant',
-                'tol' : 1e-3,
-                'eta0' : 0.001
-            }
-        else :
-            print('Training bacterial / host classifier with SGD')
-            self._clf = SGDClassifier()
-            self._train_params = {
-                'loss' : 'hinge',
-                'penalty' : 'elasticnet',
-                'alpha' : 141.6146176,
-                'learning_rate' : 'adaptive',
-                'class_weight' : self._weights,
-                'eta0' : 0.001,
-                'n_jobs' : -1
-            }
-    
+        # Scaling
+        if scaling:
+            self._scaler = TensorTfIdfTransformer(self.kmers, scaler_file)
+            self._scaler.fit(ds)
+
+
+    # Model training
+    #########################################################################################################
+
     def fit(self, datasets):
         print('_fit_model')
         # Define model
         self._build()
         for name, ds in datasets.items():
-            ds = ds.drop_columns(['id'])
+            # ds = ds.drop_columns(['id'])
             ds = self._encoder.transform(ds)
             if self._scaler is not None:
                 ds = self._scaler.transform(ds)
-            # Trigger the preprocessing computations before ingest in trainer
-            # Otherwise, it would be executed at each epoch
-            ds = ds.materialize()
             datasets[name] = ray.put(ds)
         
         try:
@@ -179,6 +162,28 @@ class SklearnBinaryModels(SklearnModels):
         training_result = self._trainer.fit()
         self._model_ckpt = training_result.checkpoint
     
+    def _build(self):
+        print('_build')
+        if self.classifier == 'onesvm':
+            print('Training bacterial extractor with One Class SVM')
+            self._clf = ScoringSGDOneClassSVM()
+            self._train_params = {
+                'learning_rate' : 'optimal'
+            }
+        else :
+            print('Training bacterial / host classifier with SGD')
+            self._clf = SGDClassifier()
+            self._train_params = {
+                'loss' : 'hinge',
+                'penalty' : 'elasticnet',
+                'learning_rate' : 'optimal',
+                'class_weight' : self._weights,
+                'n_jobs' : -1
+            }
+
+    # Model predicting
+    #########################################################################################################
+
     def predict(self, ds):
         print('predict')
         if ds.count() > 0:
@@ -195,6 +200,7 @@ class SklearnBinaryModels(SklearnModels):
     
     def predict_proba(self, ds, threshold = 0.8):
         print('predict_proba')
+        # No predict_proba methods implemented for these models
         return self.predict(ds)
 
     def _get_threshold_pred(self, predict, nb_cls, threshold):

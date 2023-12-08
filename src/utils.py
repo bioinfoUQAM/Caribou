@@ -65,9 +65,9 @@ def init_ray_cluster(workdir):
     """
     1. Get physical material available
         Number of available CPUs and GPUs
-    2. Get host IP from OS
+    2. Get host IP from OS if available
         Defaults to 172.24.94.34
-    3. Start the ray cluster at OS level
+    3. Start the ray cluster with parameters
     """
     nb_CPU = os.cpu_count()
     nb_GPU = len(list_physical_devices('GPU'))
@@ -90,7 +90,6 @@ def init_ray_cluster(workdir):
                 })
             },
         )
-        # cmd = f"ray start --head --node-ip-address {os.environ['HOST_IP']} --num-cpus {nb_CPU} --num-gpus {nb_GPU} --temp-dir {workdir} --object-store-memory {mem}"
     else:
         ray.init(
             num_cpus = nb_CPU,
@@ -107,11 +106,6 @@ def init_ray_cluster(workdir):
             },
         )
 
-    # cmd = f"ray start --head --num-cpus {nb_CPU} --num-gpus {nb_GPU} --temp-dir {workdir} --object-store-memory {mem}"
-
-    # os.system(cmd)
-
-    # ray.init()
     logging.getLogger("ray").setLevel(logging.WARNING)
     ray.data.DataContext.get_current().execution_options.verbose_progress = True
     # mem = virtual_memory().total
