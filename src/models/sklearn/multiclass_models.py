@@ -136,8 +136,8 @@ class SklearnMulticlassModels(SklearnModels, MulticlassUtils):
             datasets[name] = ds
 
         # One sub-model per artificial cluster of samples
-        ds_train = self._random_split_dataset(datasets['train'])
-        ds_val = datasets['validation']
+        train_ds = self._random_split_dataset(datasets['train'])
+        val_ds = datasets['validation'].to_pandas()
         
         # Checkpointing directory
         model_dir = os.path.join(self._workdir, f'{self.classifier}_{self.taxa}')
@@ -145,17 +145,17 @@ class SklearnMulticlassModels(SklearnModels, MulticlassUtils):
             os.mkdir(model_dir)
 
         # Model-specific training functions
-        def build_fit_sgd(data):
+        def build_fit_sgd(train_data, val_data):
             # Training data
-            X_train = _unwrap_ndarray_object_type_if_needed(data[TENSOR_COLUMN_NAME])
-            y_train = np.array(data[LABELS_COLUMN_NAME])
+            X_train = _unwrap_ndarray_object_type_if_needed(train_data[TENSOR_COLUMN_NAME])
+            y_train = np.array(train_data[LABELS_COLUMN_NAME])
             # Validation data
-            X_val = ds_val.to_pandas()[TENSOR_COLUMN_NAME]
-            y_val = ds_val.to_pandas()[LABELS_COLUMN_NAME]
+            X_val = val_data[TENSOR_COLUMN_NAME]
+            y_val = val_data[LABELS_COLUMN_NAME]
             msk_val = y_val.isin(np.unique(y_train))
             X_val = _unwrap_ndarray_object_type_if_needed(X_val[msk_val])
             y_val = np.array(y_val[msk_val])
-            cluster = data['cluster'][0]
+            cluster = train_data['cluster'][0]
             model = SGDClassifier(
                 learning_rate = 'optimal',
                 loss = 'modified_huber',
@@ -182,17 +182,17 @@ class SklearnMulticlassModels(SklearnModels, MulticlassUtils):
                 'file' : [model_file]
             }
 
-        def build_fit_mnb(data):
+        def build_fit_mnb(train_data, val_data):
             # Training data
-            X_train = _unwrap_ndarray_object_type_if_needed(data[TENSOR_COLUMN_NAME])
-            y_train = np.array(data[LABELS_COLUMN_NAME])
+            X_train = _unwrap_ndarray_object_type_if_needed(train_data[TENSOR_COLUMN_NAME])
+            y_train = np.array(train_data[LABELS_COLUMN_NAME])
             # Validation data
-            X_val = ds_val.to_pandas()[TENSOR_COLUMN_NAME]
-            y_val = ds_val.to_pandas()[LABELS_COLUMN_NAME]
+            X_val = val_data[TENSOR_COLUMN_NAME]
+            y_val = val_data[LABELS_COLUMN_NAME]
             msk_val = y_val.isin(np.unique(y_train))
             X_val = _unwrap_ndarray_object_type_if_needed(X_val[msk_val])
             y_val = np.array(y_val[msk_val])
-            cluster = data['cluster'][0]
+            cluster = train_data['cluster'][0]
             model = MultinomialNB()
             model.fit(X_train, y_train)
 
@@ -216,10 +216,10 @@ class SklearnMulticlassModels(SklearnModels, MulticlassUtils):
         
         if self.classifier == 'sgd':
             print('Training multiclass SGD classifier')
-            training_result = ds_train.map_groups(build_fit_sgd, batch_format = 'numpy')
+            training_result = train_ds.map_groups(lambda ds: build_fit_sgd(ds, val_ds), batch_format = 'numpy')
         elif self.classifier == 'mnb':
             print('Training multiclass Multinomial Naive Bayes classifier')
-            training_result = ds_train.map_groups(build_fit_mnb, batch_format = 'numpy')
+            training_result = train_ds.map_groups(lambda ds: build_fit_mnb(ds, val_ds), batch_format = 'numpy')
 
         training_result = training_result.to_pandas().to_dict('records')
         for record in training_result:

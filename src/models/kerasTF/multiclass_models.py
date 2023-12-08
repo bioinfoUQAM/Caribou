@@ -119,14 +119,15 @@ class KerasTFMulticlassModels(KerasTFModels, MulticlassUtils):
     def preprocess(self, ds, scaling = False, scaler_file = None):
         print('preprocess')
         # Labels encoding
-        self._encoder = Chain(
-            ModelLabelEncoder(self.taxa),
-            OneHotTensorEncoder(LABELS_COLUMN_NAME)
-        )
+        # self._encoder = Chain(
+        #     ModelLabelEncoder(self.taxa),
+        #     OneHotTensorEncoder(LABELS_COLUMN_NAME)
+        # )
+        self._encoder = ModelLabelEncoder(self.taxa)
         self._encoder.fit(ds)
 
         # Labels mapping
-        labels = list(self._encoder.preprocessors[0].stats_[f'unique_values({self.taxa})'].keys())
+        labels = list(self._encoder.stats_[f'unique_values({self.taxa})'].keys())
         self._nb_classes = len(labels)
         self._encoded = np.arange(len(labels))
         labels = np.append(labels, 'Unknown')

@@ -108,7 +108,7 @@ def build_LSTM_attention(nb_features, nb_classes):
     net = Dense(nb_classes)(net)
     outputs = Activation('softmax')(net)
     model = Model(inputs = inputs, outputs = outputs)
-    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'], jit_compile = True)
+    model.compile(loss='sparse_categorical_crossentropy', optimizer='adam', metrics=['accuracy'], jit_compile = True)
 
     return model
 
@@ -134,7 +134,7 @@ def build_CNN(nb_features, nb_classes):
     model.add(Dropout(0.5))
     model.add(Dense(nb_classes))
     model.add(Activation('softmax'))
-    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'], jit_compile = True)
+    model.compile(loss='sparse_categorical_crossentropy', optimizer='adam', metrics=['accuracy'], jit_compile = True)
 
     return model
 
@@ -172,6 +172,6 @@ def build_wideCNN(nb_features, nb_classes):
     net = Dense(nb_classes)(net)
     outputs = Activation('softmax')(net)
     model = Model(inputs = inputs, outputs = outputs)
-    model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'], jit_compile = True)
+    model.compile(loss='sparse_categorical_crossentropy', optimizer='adam', metrics=['accuracy'], jit_compile = True)
 
     return model
