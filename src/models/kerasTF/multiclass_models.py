@@ -20,7 +20,7 @@ import tensorflow as tf
 from ray.air import session
 # from ray.air.integrations.keras import Callback
 from ray.air.config import ScalingConfig
-from models.kerasTF.models import train_func
+from models.kerasTF.models import train_func, build_model
 from ray.air.integrations.keras import ReportCheckpointCallback
 from ray.train.tensorflow import TensorflowTrainer, TensorflowCheckpoint
 
@@ -119,10 +119,6 @@ class KerasTFMulticlassModels(KerasTFModels, MulticlassUtils):
     def preprocess(self, ds, scaling = False, scaler_file = None):
         print('preprocess')
         # Labels encoding
-        # self._encoder = Chain(
-        #     ModelLabelEncoder(self.taxa),
-        #     OneHotTensorEncoder(LABELS_COLUMN_NAME)
-        # )
         self._encoder = ModelLabelEncoder(self.taxa)
         self._encoder.fit(ds)
 
@@ -149,6 +145,10 @@ class KerasTFMulticlassModels(KerasTFModels, MulticlassUtils):
 
     def fit(self, datasets):
         print('fit')
+        """
+        TODO: If Ray AIR training is too long, try using the datasets groupby / Tune for multimodel training
+        TODO: train_func per model
+        TODO: Confirm how it works in Jupyter Notebook
         # Preprocessing loop
         for name, ds in datasets.items():
             # ds = ds.drop_columns(['id'])
@@ -166,8 +166,6 @@ class KerasTFMulticlassModels(KerasTFModels, MulticlassUtils):
         if not os.path.isdir(model_dir):
             os.mkdir(model_dir)
 
-# TODO: train_func per model
-# TODO: Confirm how it works in Jupyter Notebook
         # Distributed building & training
         if self.classifier == 'lstm_attention':
             print('Training multiclass classifier based on Deep Neural Network hybrid between LSTM and Attention')
@@ -182,26 +180,89 @@ class KerasTFMulticlassModels(KerasTFModels, MulticlassUtils):
         training_result = training_result.to_pandas().to_dict('records')
         for record in training_result:
             self._model_ckpt[record['cluster']] = record['file']
+        """
+
+        # Preprocessing loop
+        for name, ds in datasets.items():
+            # ds = ds.drop_columns(['id'])
+            ds = self._encoder.transform(ds)
+            if self._scaler is not None:
+                ds = self._scaler.transform(ds)
+            ds = ds.materialize()
+            datasets[name] = ds
+
+        # Training parameters
+        train_params = {
+            'batch_size': self.batch_size,
+            'epochs': self._training_epochs,
+            'size': self._nb_kmers,
+            'nb_cls': self._nb_classes,
+            'model': self.classifier,
+            'weights': self._weights
+        }
+
+        # Define trainer / tuner
+        self._trainer = TensorflowTrainer(
+            train_loop_per_worker=train_func,
+            train_loop_config=train_params,
+            scaling_config=ScalingConfig(
+                trainer_resources={'CPU': self._nb_CPU_data},
+                num_workers=self._n_workers,
+                use_gpu=self._use_gpu,
+                resources_per_worker={
+                    'CPU': self._nb_CPU_per_worker,
+                    'GPU': self._nb_GPU_per_worker
+                }
+            ),
+            run_config=RunConfig(
+                name=self.classifier,
+                local_dir=self._workdir,
+            ),
+            datasets=datasets,
+        )
+
+        training_result = self._trainer.fit()
+        self._model_ckpt = training_result.best_checkpoints[0][0]
 
     # Models predicting
     #########################################################################################################
 
     def predict(self, ds):
         print('predict')
+        """
+        TODO: If Ray AIR training is too long, try using the datasets groupby / Tune for multimodel training
         probabilities = self._predict_proba(ds)
         predictions = np.argmax(probabilities, axis = 1)
         predictions = self._label_decode(predictions)
         return predictions
+        """
+        # Predict with model
+        predictions = self._predict_proba(ds)
+        # Convert predictions to labels
+        predictions = self._get_abs_pred(predictions)
+        # Return decoded labels
+        return self._label_decode(predictions)
     
     def predict_proba(self, ds, threshold = 0.8):
         print('predict_proba')
+        """
+        TODO: If Ray AIR training is too long, try using the datasets groupby / Tune for multimodel training
         probabilities = self._predict_proba(ds)
         predictions = self._get_threshold_pred(probabilities, threshold)
+        return self._label_decode(predictions)
+        """
+        # Predict with model
+        predictions = self._predict_proba(ds)
+        # Convert predictions to labels with threshold
+        predictions = self._get_threshold_pred(predictions, threshold)
+        # Return decoded labels
         return self._label_decode(predictions)
 
 # TODO: Confirm how it works in Jupyter Notebook
     def _predict_proba(self, ds):
         print('_predict_proba')
+        """
+        TODO: If Ray AIR training is too long, try using the datasets groupby / Tune for multimodel training
         if ds.count() > 0:
             if self._scaler is not None:
                 ds = self._scaler.transform(ds)
@@ -225,6 +286,32 @@ class KerasTFMulticlassModels(KerasTFModels, MulticlassUtils):
             return probabilities
         else:
             raise ValueError('Empty dataset, cannot execute predictions!')
+        """
+        if ds.count() > 0:
+            if len(ds.schema().names) > 1:
+                col_2_drop = [col for col in ds.schema().names if col != TENSOR_COLUMN_NAME]
+                ds = ds.drop_columns(col_2_drop)
+
+            # Preprocess
+            if self._scaler is not None:
+                ds = self._scaler.transform(ds)
+            ds = ds.materialize()
+
+            self._predictor = BatchPredictor.from_checkpoint(
+                self._model_ckpt,
+                TensorflowPredictor,
+                model_definition = lambda: build_model(self.classifier, self._nb_classes, self._nb_kmers)
+            )
+            predictions = self._predictor.predict(
+                data = ds,
+                feature_columns = [TENSOR_COLUMN_NAME],
+                batch_size = self.batch_size,
+                num_cpus_per_worker = self._nb_CPU_per_worker,
+                num_gpus_per_worker = self._nb_GPU_per_worker
+            )
+            return predictions
+        else:
+            raise ValueError('No data to predict')
 
     def _get_abs_pred(self, predictions):
         print('_get_abs_pred')

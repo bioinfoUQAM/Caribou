@@ -122,7 +122,8 @@ class ModelsUtils(ABC):
         weights = {}
         if isinstance(self._csv, tuple):
             cls = pd.concat([pd.read_csv(self._csv[0]),pd.read_csv(self._csv[1])], axis = 0, join = 'inner', ignore_index = True)
-        cls = pd.read_csv(self._csv)
+        else:
+            cls = pd.read_csv(self._csv)
         if self.taxa == 'domain':
             cls.loc[cls['domain'].str.lower() == 'archaea', 'domain'] = 'Bacteria'
         classes = list(cls[self.taxa].unique())

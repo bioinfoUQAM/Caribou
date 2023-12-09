@@ -72,7 +72,10 @@ def build_deepLSTM(nb_features):
     netB = Dense(100, activation='tanh',name='G_%d'%40) (inputs)
     netB = Dense(40, activation='tanh',name='H_%d'%40) (netB)
 
-    net = Concatenate()([netA,netB]) # A `Concatenate` layer requires inputs with matching shapes except for the concatenation axis. Received: input_shape=[(None, 40), (None, 1000, 40)]
+    # TODO: Debug error caught in local and on Narval
+    # TODO: Finish testing NNs
+    # A `Concatenate` layer requires inputs with matching shapes except for the concatenation axis. Received: input_shape=[(None, 40), (None, 100, 40)]
+    net = Concatenate()([netA,netB])
 
     net = Dense(200, activation='relu', name='C_%d'%(10*2))(net)
     net = Dropout(0.1,name='fr_%.1f'%0.1)(net)

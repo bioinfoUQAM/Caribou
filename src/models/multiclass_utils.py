@@ -68,9 +68,9 @@ class MulticlassUtils(ModelsUtils, ABC):
             batch['cluster'] = clusters
             return batch
 
-        nb_clusters = int(ds.count() / 100)
+        nb_clusters = int(ds.count() / self.batch_size)
 
-        ds = ds.repartition(100)
+        ds = ds.repartition(self.batch_size)
         ds = ds.map_batches(map_clusters, batch_size = nb_clusters, batch_format = 'pandas')
 
         return ds.groupby('cluster')

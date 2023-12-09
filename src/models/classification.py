@@ -7,11 +7,10 @@ import pandas as pd
 
 from warnings import warn
 from typing import Dict, List
-from models.kerasTF.models import KerasTFModels
 from models.sklearn.binary_models import SklearnBinaryModels
-# from models.kerasTF.binary_models import KerasTFBinaryModels
+from models.kerasTF.binary_models import KerasTFBinaryModels
 from models.sklearn.multiclass_models import SklearnMulticlassModels
-# from models.kerasTF.multiclass_models import KerasTFMulticlassModels
+from models.kerasTF.multiclass_models import KerasTFMulticlassModels
 
 # CV metrics
 from sklearn.metrics import precision_recall_fscore_support
@@ -204,7 +203,7 @@ class ClassificationMethods():
                 self._database_data['csv']
             )
         else:
-            model = KerasTFModels(
+            model = KerasTFBinaryModels(
                 self._classifier_binary,
                 self._outdirs['models_dir'],
                 self._batch_size,
@@ -235,7 +234,7 @@ class ClassificationMethods():
                 self._database_data['csv']
             )
         else:
-            model = KerasTFModels(
+            model = KerasTFMulticlassModels(
                 self._classifier_multiclass,
                 self._outdirs['models_dir'],
                 self._batch_size,

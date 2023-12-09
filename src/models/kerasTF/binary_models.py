@@ -200,10 +200,8 @@ class KerasTFBinaryModels(KerasTFModels):
         print('predict')
         # Predict with model
         predictions = self._predict_proba(ds)
-
         # Convert predictions to labels
         predictions = self._get_abs_pred(predictions)
-
         # Return decoded labels
         return self._label_decode(predictions)
 
@@ -211,10 +209,8 @@ class KerasTFBinaryModels(KerasTFModels):
         print('predict_proba')
         # Predict with model
         predictions = self._predict_proba(ds)
-
         # Convert predictions to labels with threshold
         predictions = self._get_threshold_pred(predictions, threshold)
-
         # Return decoded labels
         return self._label_decode(predictions)
     
