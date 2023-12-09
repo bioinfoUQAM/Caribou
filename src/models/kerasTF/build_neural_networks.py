@@ -2,7 +2,7 @@
 from keras.models import Model, Sequential
 from tensorflow.keras import mixed_precision
 from tensorflow.keras.losses import BinaryCrossentropy, CategoricalCrossentropy
-from keras.layers import Dense, Input, LSTM, Embedding, Dropout, Conv1D, Conv2D, MaxPooling1D, MaxPooling2D, Concatenate, Flatten, Attention, Activation, Bidirectional, Reshape
+from keras.layers import Dense, Input, LSTM, Embedding, Dropout, Conv1D, Conv2D, MaxPooling1D, MaxPooling2D, Concatenate, Flatten, Attention, Activation, Bidirectional, Reshape, AveragePooling1D
 
 
 
@@ -70,11 +70,10 @@ def build_deepLSTM(nb_features):
     netA = LSTM(40, activation='tanh',recurrent_dropout=0.05,dropout=0.1,name='B_%d'%40) (netA)
 
     netB = Dense(100, activation='tanh',name='G_%d'%40) (inputs)
-    netB = Dense(40, activation='tanh',name='H_%d'%40) (netB)
+    netB = Dense(100, activation='tanh',name='H_%d'%40) (netB)
+    netB = AveragePooling1D(100) (netB)
+    netB = Flatten() (netB)
 
-    # TODO: Debug error caught in local and on Narval
-    # TODO: Finish testing NNs
-    # A `Concatenate` layer requires inputs with matching shapes except for the concatenation axis. Received: input_shape=[(None, 40), (None, 100, 40)]
     net = Concatenate()([netA,netB])
 
     net = Dense(200, activation='relu', name='C_%d'%(10*2))(net)
@@ -149,21 +148,21 @@ def build_wideCNN(nb_features, nb_classes):
     https://github.com/KennthShang/CHEER/blob/master/Classifier/model/Wcnn.py
     """
 
-    inputs = Input(shape = (nb_features,1))
+    inputs = Input(shape = (nb_features, 1))
     # embed = Embedding(248, 100)(inputs)
-    # embed = Reshape((nb_features, -1, 1))(embed)
+    # inputs = Reshape((nb_features, -1, 1))(inputs)
 
-    conv1 = Conv2D(256, 3, activation = 'relu')(inputs)
-    conv1 = MaxPooling2D(pool_size = (1,1), strides = nb_features)(conv1)
+    conv1 = Conv1D(256, 3, activation = 'relu')(inputs)
+    conv1 = MaxPooling1D(pool_size = 1, strides = nb_features)(conv1)
 
-    conv2 = Conv2D(256, 7, activation = 'relu')(inputs)
-    conv2 = MaxPooling2D(pool_size = (1,1), strides = nb_features)(conv2)
+    conv2 = Conv1D(256, 7, activation = 'relu')(inputs)
+    conv2 = MaxPooling1D(pool_size = 1, strides = nb_features)(conv2)
 
-    conv3 = Conv2D(256, 11, activation = 'relu')(inputs)
-    conv3 = MaxPooling2D(pool_size = (1,1), strides = nb_features)(conv3)
+    conv3 = Conv1D(256, 11, activation = 'relu')(inputs)
+    conv3 = MaxPooling1D(pool_size = 1, strides = nb_features)(conv3)
 
-    conv4 = Conv2D(256, 15, activation = 'relu')(inputs)
-    conv4 = MaxPooling2D(pool_size = (1,1), strides = nb_features)(conv4)
+    conv4 = Conv1D(256, 15, activation = 'relu')(inputs)
+    conv4 = MaxPooling1D(pool_size = 1, strides = nb_features)(conv4)
 
     net = Concatenate(axis = 1)([conv1,conv2,conv3,conv4])
     net = Flatten()(net)
