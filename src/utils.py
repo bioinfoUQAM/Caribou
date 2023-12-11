@@ -75,21 +75,7 @@ def init_ray_cluster(workdir):
     mem = ray._private.utils.get_shared_memory_bytes() - 10
 
     if 'HOST_IP' in list(os.environ.keys()):
-        ray.init(
-            _node_ip_address = os.environ['HOST_IP'],
-            num_cpus = nb_CPU,
-            num_gpus = nb_GPU,
-            _temp_dir = str(workdir),
-            object_store_memory = mem,
-            _system_config={    
-                "object_spilling_config": json.dumps({
-                    "type": "filesystem",
-                    "params": {
-                        "directory_path": str(workdir)
-                    },
-                })
-            },
-        )
+        ray.init(address = f"{os.environ['HOST_IP']}:{os.environ['RAY_PORT']}", _node_ip_address = os.environ['HOST_IP'])
     else:
         ray.init(
             num_cpus = nb_CPU,
