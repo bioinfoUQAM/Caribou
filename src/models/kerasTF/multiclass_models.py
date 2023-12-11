@@ -7,6 +7,7 @@ import pandas as pd
 # Preprocessing
 from ray.data.preprocessors import LabelEncoder, Chain
 from models.encoders.model_label_encoder import ModelLabelEncoder
+from models.preprocessors.min_max_scaler import TensorMinMaxScaler
 from models.encoders.one_hot_tensor_encoder import OneHotTensorEncoder
 from models.preprocessors.tfidf_transformer import TensorTfIdfTransformer
 
@@ -136,9 +137,8 @@ class KerasTFMulticlassModels(KerasTFModels, MulticlassUtils):
         self._weights = self._compute_weights()
         
         # Scaling
-        if scaling:
-            self._scaler = TensorTfIdfTransformer(self.kmers, scaler_file)
-            self._scaler.fit(ds)
+        self._scaler = TensorMinMaxScaler(self._nb_kmers)
+        self._scaler.fit(ds)
 
     # Models training
     #########################################################################################################
@@ -186,8 +186,7 @@ class KerasTFMulticlassModels(KerasTFModels, MulticlassUtils):
         for name, ds in datasets.items():
             # ds = ds.drop_columns(['id'])
             ds = self._encoder.transform(ds)
-            if self._scaler is not None:
-                ds = self._scaler.transform(ds)
+            ds = self._scaler.transform(ds)
             ds = ds.materialize()
             datasets[name] = ds
 
@@ -293,8 +292,7 @@ class KerasTFMulticlassModels(KerasTFModels, MulticlassUtils):
                 ds = ds.drop_columns(col_2_drop)
 
             # Preprocess
-            if self._scaler is not None:
-                ds = self._scaler.transform(ds)
+            ds = self._scaler.transform(ds)
             ds = ds.materialize()
 
             self._predictor = BatchPredictor.from_checkpoint(

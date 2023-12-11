@@ -6,6 +6,7 @@ import pandas as pd
 
 # Preprocessing
 from models.encoders.model_label_encoder import ModelLabelEncoder
+from models.preprocessors.min_max_scaler import TensorMinMaxScaler
 from models.encoders.onesvm_label_encoder import OneClassSVMLabelEncoder
 from models.preprocessors.tfidf_transformer import TensorTfIdfTransformer
 
@@ -119,10 +120,9 @@ class SklearnMulticlassModels(SklearnModels, MulticlassUtils):
         self._weights = self._compute_weights()
         
         # Scaling
-        if scaling:
-            self._scaler = TensorTfIdfTransformer(self.kmers, scaler_file)
-            self._scaler.fit(ds)
-
+        self._scaler = TensorMinMaxScaler(self._nb_kmers)
+        self._scaler.fit(ds)
+        
     # Models training
     #########################################################################################################
 
@@ -132,8 +132,7 @@ class SklearnMulticlassModels(SklearnModels, MulticlassUtils):
             # ds = ds.drop_columns(['id'])
         train_ds = datasets['train']
         train_ds = self._encoder.transform(train_ds)
-        if self._scaler is not None:
-            train_ds = self._scaler.transform(train_ds)
+        train_ds = self._scaler.transform(train_ds)
         # datasets[name] = ds
 
         # One sub-model per artificial cluster of samples
@@ -246,8 +245,7 @@ class SklearnMulticlassModels(SklearnModels, MulticlassUtils):
 
     def _predict_proba(self, ds):
         if ds.count() > 0:
-            if self._scaler is not None:
-                ds = self._scaler.transform(ds)
+            ds = self._scaler.transform(ds)
             # ds = ds.materialize()
 
             def predict_func(data):
