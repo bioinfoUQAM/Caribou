@@ -6,6 +6,7 @@ import pandas as pd
 
 # Preprocessing
 from models.encoders.model_label_encoder import ModelLabelEncoder
+from models.preprocessors.min_max_scaler import TensorMinMaxScaler
 from models.encoders.onesvm_label_encoder import OneClassSVMLabelEncoder
 from models.preprocessors.tfidf_transformer import TensorTfIdfTransformer
 
@@ -112,9 +113,8 @@ class SklearnBinaryModels(SklearnModels):
             self._labels_map[label] = encoded
 
         # Scaling
-        if scaling:
-            self._scaler = TensorTfIdfTransformer(self.kmers, scaler_file)
-            self._scaler.fit(ds)
+        self._scaler = TensorMinMaxScaler(self._nb_kmers)
+        self._scaler.fit(ds)
 
 
     # Model training
@@ -127,8 +127,7 @@ class SklearnBinaryModels(SklearnModels):
         for name, ds in datasets.items():
             # ds = ds.drop_columns(['id'])
             ds = self._encoder.transform(ds)
-            if self._scaler is not None:
-                ds = self._scaler.transform(ds)
+            ds = self._scaler.transform(ds)
             datasets[name] = ray.put(ds)
         
         try:
@@ -187,8 +186,7 @@ class SklearnBinaryModels(SklearnModels):
     def predict(self, ds):
         print('predict')
         if ds.count() > 0:
-            if self._scaler is not None:
-                ds = self._scaler.transform(ds)
+            ds = self._scaler.transform(ds)
             ds = ds.materialize()
             predict_kwargs = {'features':self.kmers, 'num_estimator_cpus':-1}
             self._predictor = BatchPredictor.from_checkpoint(self._model_ckpt, SklearnTensorPredictor)
