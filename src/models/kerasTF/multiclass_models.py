@@ -257,7 +257,6 @@ class KerasTFMulticlassModels(KerasTFModels, MulticlassUtils):
         # Return decoded labels
         return self._label_decode(predictions)
 
-# TODO: Confirm how it works in Jupyter Notebook
     def _predict_proba(self, ds):
         print('_predict_proba')
         """
@@ -300,13 +299,20 @@ class KerasTFMulticlassModels(KerasTFModels, MulticlassUtils):
                 TensorflowPredictor,
                 model_definition = lambda: build_model(self.classifier, self._nb_classes, self._nb_kmers)
             )
-            predictions = self._predictor.predict(
-                data = ds,
-                feature_columns = [TENSOR_COLUMN_NAME],
-                batch_size = self.batch_size,
-                num_cpus_per_worker = self._nb_CPU_per_worker,
-                num_gpus_per_worker = self._nb_GPU_per_worker
-            )
+            if self._nb_GPU > 0:
+                predictions = self._predictor.predict(
+                    data = ds,
+                    feature_columns = [TENSOR_COLUMN_NAME],
+                    batch_size = self.batch_size,
+                    num_gpus_per_worker = self._nb_GPU_per_worker
+                )
+            else:
+                predictions = self._predictor.predict(
+                    data = ds,
+                    feature_columns = [TENSOR_COLUMN_NAME],
+                    batch_size = self.batch_size,
+                    num_cpus_per_worker = self._nb_CPU_per_worker
+                )
             return predictions
         else:
             raise ValueError('No data to predict')
