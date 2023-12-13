@@ -113,7 +113,11 @@ class SklearnBinaryModels(SklearnModels):
             self._labels_map[label] = encoded
 
         # Scaling
-        self._scaler = TensorMinMaxScaler(self._nb_kmers)
+        self._scaler = TensorTfIdfTransformer(
+            features = self.kmers,
+            file = scaler_file
+        )
+        # self._scaler = TensorMinMaxScaler(self._nb_kmers)
         self._scaler.fit(ds)
 
 

@@ -7,7 +7,6 @@ import pandas as pd
 # Preprocessing
 from models.encoders.model_label_encoder import ModelLabelEncoder
 from models.preprocessors.min_max_scaler import TensorMinMaxScaler
-from models.encoders.onesvm_label_encoder import OneClassSVMLabelEncoder
 from models.preprocessors.tfidf_transformer import TensorTfIdfTransformer
 
 # Training
@@ -120,7 +119,11 @@ class SklearnMulticlassModels(SklearnModels, MulticlassUtils):
         self._weights = self._compute_weights()
         
         # Scaling
-        self._scaler = TensorMinMaxScaler(self._nb_kmers)
+        self._scaler = TensorTfIdfTransformer(
+            features = self.kmers,
+            file = scaler_file
+        )
+        # self._scaler = TensorMinMaxScaler(self._nb_kmers)
         self._scaler.fit(ds)
         
     # Models training
