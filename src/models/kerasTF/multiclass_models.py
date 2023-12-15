@@ -137,11 +137,11 @@ class KerasTFMulticlassModels(KerasTFModels, MulticlassUtils):
         self._weights = self._compute_weights()
         
         # Scaling
-        self._scaler = TensorTfIdfTransformer(
-            features = self.kmers,
-            file = scaler_file
-        )
-        # self._scaler = TensorMinMaxScaler(self._nb_kmers)
+        # self._scaler = TensorTfIdfTransformer(
+        #     features = self.kmers,
+        #     file = scaler_file
+        # )
+        self._scaler = TensorMinMaxScaler(self._nb_kmers)
         self._scaler.fit(ds)
 
     # Models training
