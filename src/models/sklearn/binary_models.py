@@ -178,7 +178,6 @@ class SklearnBinaryModels(SklearnModels):
             self._clf = SGDClassifier()
             self._train_params = {
                 'loss' : 'hinge',
-                'penalty' : 'elasticnet',
                 'learning_rate' : 'optimal',
                 'class_weight' : self._weights,
                 'n_jobs' : -1

@@ -160,9 +160,8 @@ class SklearnMulticlassModels(SklearnModels, MulticlassUtils):
             # y_val = np.array(y_val[msk_val])
             cluster = train_data['cluster'][0]
             model = SGDClassifier(
-                learning_rate = 'optimal',
                 loss = 'modified_huber',
-                penalty = 'l2',
+                learning_rate = 'optimal',
                 class_weight = self._weights,
             )
             model.fit(X_train, y_train)
