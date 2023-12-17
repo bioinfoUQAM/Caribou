@@ -252,7 +252,7 @@ class SklearnMulticlassModels(SklearnModels, MulticlassUtils):
 
             def predict_func(data):
                 X = _unwrap_ndarray_object_type_if_needed(data[TENSOR_COLUMN_NAME])
-                pred = np.zeros((len(X), len(self._labels_map)))
+                pred = np.zeros((len(X), len(self._labels_map)-1))
                 for cluster, model_file in self._model_ckpt.items():
                     with open(model_file, 'rb') as file:
                         model = cpickle.load(file)
