@@ -149,43 +149,6 @@ class KerasTFMulticlassModels(KerasTFModels, MulticlassUtils):
 
     def fit(self, datasets):
         print('fit')
-        """
-        TODO: If Ray AIR training is too long, try using the datasets groupby / Tune for multimodel training
-        TODO: train_func per model
-        TODO: Confirm how it works in Jupyter Notebook
-        # Preprocessing loop
-        for name, ds in datasets.items():
-            # ds = ds.drop_columns(['id'])
-            ds = self._encoder.transform(ds)
-            if self._scaler is not None:
-                ds = self._scaler.transform(ds)
-            ds = ds.materialize()
-            datasets[name] = ds
-        
-        # One sub-model per artificial cluster of samples
-        ds['train'] = self._random_split_dataset(ds['train'])
-
-        # Checkpointing directory
-        model_dir = os.path.join(self._workdir, f'{self.classifier}_{self.taxa}')
-        if not os.path.isdir(model_dir):
-            os.mkdir(model_dir)
-
-        # Distributed building & training
-        if self.classifier == 'lstm_attention':
-            print('Training multiclass classifier based on Deep Neural Network hybrid between LSTM and Attention')
-            training_result = ds.map_groups(build_fit_lstm_attention, batch_format = 'numpy')
-        elif self.classifier == 'cnn':
-            print('Training multiclass classifier based on CNN Neural Network')
-            training_result = ds.map_groups(build_fit_cnn, batch_format = 'numpy')
-        elif self.classifier == 'widecnn':
-            print('Training multiclass classifier based on Wide CNN Network')
-            training_result = ds.map_groups(build_fit_widecnn, batch_format = 'numpy')
-
-        training_result = training_result.to_pandas().to_dict('records')
-        for record in training_result:
-            self._model_ckpt[record['cluster']] = record['file']
-        """
-
         # Preprocessing loop
         for name, ds in datasets.items():
             # ds = ds.drop_columns(['id'])

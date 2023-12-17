@@ -259,11 +259,17 @@ class SklearnMulticlassModels(SklearnModels, MulticlassUtils):
                     proba = model.predict_proba(X)
                     for i, cls in enumerate(model.classes_):
                         pred[:, cls] += proba[:, i]
-                # pred = pred / len(self._model_ckpt)
+                pred = pred / len(self._model_ckpt)
                 return {'predictions' : pred}
 
             probabilities = ds.map_batches(predict_func, batch_format = 'numpy')
             probabilities = _unwrap_ndarray_object_type_if_needed(probabilities.to_pandas()['predictions'])
+
+            weights = np.zeros(len(self._weights))
+            for encoded, w in self._weights.items():
+                weights[encoded] = w
+            
+            probabilities = probabilities * weights
             
             return probabilities
         else:
