@@ -22,8 +22,8 @@ def build_attention(nb_features):
     inputs = Input(shape = (nb_features,1))
     # x = Embedding(nb_features, 128)(inputs)
 
-    x = LSTM(128, return_sequences = True, dropout = 0.1, recurrent_dropout = 0.1 )(inputs)
-    x = LSTM(128, return_sequences = True, dropout = 0.1, recurrent_dropout = 0.1 )(x)
+    x = LSTM(128, return_sequences = True, dropout = 0.1)(inputs)
+    x = LSTM(128, return_sequences = True, dropout = 0.1)(x)
     x = AttentionWeightedAverage()(x)
 
     x = Dense(128, activation = "relu")(x)
@@ -46,7 +46,7 @@ def build_LSTM(nb_features):
     inputs = Input(shape = (nb_features,1))
     # x = Embedding(nb_features, 128)(inputs)
 
-    x = LSTM(128, recurrent_dropout = 0.1, dropout = 0.1)(inputs)
+    x = LSTM(128, dropout = 0.1)(inputs)
 
     x = Dense(1, activation = 'tanh')(x)
     
@@ -66,8 +66,8 @@ def build_deepLSTM(nb_features):
     inputs = Input(shape=(nb_features,1))
 
     # netA = Embedding(nb_features, 128)(inputs)
-    netA = LSTM(40, activation='tanh',recurrent_dropout=0.05,dropout=0.1,name='A_%d'%40,return_sequences=True) (inputs)
-    netA = LSTM(40, activation='tanh',recurrent_dropout=0.05,dropout=0.1,name='B_%d'%40) (netA)
+    netA = LSTM(40, activation='tanh',dropout=0.1,name='A_%d'%40,return_sequences=True) (inputs)
+    netA = LSTM(40, activation='tanh',dropout=0.1,name='B_%d'%40) (netA)
 
     netB = Dense(100, activation='tanh',name='G_%d'%40) (inputs)
     netB = Dense(100, activation='tanh',name='H_%d'%40) (netB)
