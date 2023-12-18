@@ -320,7 +320,8 @@ class ClassificationMethods():
         support = precision_recall_fscore_support(
             y_compare['y_true'],
             y_compare['y_pred'],
-            average = 'weighted'
+            average = 'weighted',
+            zero_division = np.nan
         )
 
         scores = pd.DataFrame({

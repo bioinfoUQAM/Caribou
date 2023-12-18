@@ -117,8 +117,8 @@ class SklearnBinaryModels(SklearnModels):
         #     features = self.kmers,
         #     file = scaler_file
         # )
-        self._scaler = TensorMinMaxScaler(self._nb_kmers)
-        self._scaler.fit(ds)
+        # self._scaler = TensorMinMaxScaler(self._nb_kmers)
+        # self._scaler.fit(ds)
 
 
     # Model training
@@ -131,7 +131,7 @@ class SklearnBinaryModels(SklearnModels):
         for name, ds in datasets.items():
             # ds = ds.drop_columns(['id'])
             ds = self._encoder.transform(ds)
-            ds = self._scaler.transform(ds)
+            # ds = self._scaler.transform(ds)
             datasets[name] = ray.put(ds)
         
         try:
@@ -189,7 +189,7 @@ class SklearnBinaryModels(SklearnModels):
     def predict(self, ds):
         print('predict')
         if ds.count() > 0:
-            ds = self._scaler.transform(ds)
+            # ds = self._scaler.transform(ds)
             ds = ds.materialize()
             predict_kwargs = {'features':self.kmers, 'num_estimator_cpus':-1}
             self._predictor = BatchPredictor.from_checkpoint(self._model_ckpt, SklearnTensorPredictor)
