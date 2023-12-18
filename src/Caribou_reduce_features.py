@@ -151,7 +151,7 @@ if __name__ == "__main__":
     parser.add_argument('-dt','--dataset_name', default='dataset', help='Name of the dataset used to name files')
     parser.add_argument('-l','--kmers_list', default=None, type=Path, help='PATH to a file containing a list of k-mers that will be reduced')
     # Parameters
-    parser.add_argument('-t','--taxa', default='phylum', help='The taxonomic level to use for the classification, defaults to Phylum.')
+    parser.add_argument('-t','--taxa', default='species', help='The taxonomic level to use for the classification, defaults to Phylum.')
     parser.add_argument('-o','--outdir', required=True, type=Path, help='PATH to a directory on file where outputs will be saved')
     parser.add_argument('-wd','--workdir', default='/tmp/spill', type=Path, help='Optional. Path to a working directory where tuning data will be spilled')
     args = parser.parse_args()

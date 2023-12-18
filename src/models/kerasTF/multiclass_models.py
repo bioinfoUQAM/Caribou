@@ -32,6 +32,9 @@ from ray.air.config import RunConfig
 from ray.train.tensorflow import TensorflowPredictor
 from ray.train.batch_predictor import BatchPredictor
 
+# Data
+from ray.air.util.data_batch_conversion import _unwrap_ndarray_object_type_if_needed
+
 __author__ = 'Nicolas de Montigny'
 
 __all__ = ['KerasTFModel']
@@ -195,28 +198,16 @@ class KerasTFMulticlassModels(KerasTFModels, MulticlassUtils):
 
     def predict(self, ds):
         print('predict')
-        """
-        TODO: If Ray AIR training is too long, try using the datasets groupby / Tune for multimodel training
-        probabilities = self._predict_proba(ds)
-        predictions = np.argmax(probabilities, axis = 1)
-        predictions = self._label_decode(predictions)
-        return predictions
-        """
         # Predict with model
-        predictions = self._predict_proba(ds)
+        probabilities = self._predict_proba(ds)
         # Convert predictions to labels
-        predictions = self._get_abs_pred(predictions)
+        probabilities = _unwrap_ndarray_object_type_if_needed(probabilities.to_pandas()['predictions'])
+        predictions = np.argmax(probabilities, axis = 1)
         # Return decoded labels
         return self._label_decode(predictions)
     
     def predict_proba(self, ds, threshold = 0.8):
         print('predict_proba')
-        """
-        TODO: If Ray AIR training is too long, try using the datasets groupby / Tune for multimodel training
-        probabilities = self._predict_proba(ds)
-        predictions = self._get_threshold_pred(probabilities, threshold)
-        return self._label_decode(predictions)
-        """
         # Predict with model
         predictions = self._predict_proba(ds)
         # Convert predictions to labels with threshold
@@ -226,32 +217,6 @@ class KerasTFMulticlassModels(KerasTFModels, MulticlassUtils):
 
     def _predict_proba(self, ds):
         print('_predict_proba')
-        """
-        TODO: If Ray AIR training is too long, try using the datasets groupby / Tune for multimodel training
-        if ds.count() > 0:
-            if self._scaler is not None:
-                ds = self._scaler.transform(ds)
-            # ds = ds.materialize()
-
-            def predict_func(data):
-                X = _unwrap_ndarray_object_type_if_needed(data[TENSOR_COLUMN_NAME])
-                pred = np.zeros((len(X), len(self._labels_map)))
-                for cluster, model_file in self._model_ckpt.items():
-                    with open(model_file, 'rb') as file:
-                        model = cpickle.load(file)
-                    proba = model.predict_proba(X)
-                    for i, cls in enumerate(model.classes_):
-                        pred[:, cls] += proba[:, i]
-                # pred = pred / len(self._model_ckpt)
-                return {'predictions' : pred}
-
-            probabilities = ds.map_batches(predict_func, batch_format = 'numpy')
-            probabilities = _unwrap_ndarray_object_type_if_needed(probabilities.to_pandas()['predictions'])
-            
-            return probabilities
-        else:
-            raise ValueError('Empty dataset, cannot execute predictions!')
-        """
         if ds.count() > 0:
             if len(ds.schema().names) > 1:
                 col_2_drop = [col for col in ds.schema().names if col != TENSOR_COLUMN_NAME]
@@ -284,28 +249,6 @@ class KerasTFMulticlassModels(KerasTFModels, MulticlassUtils):
         else:
             raise ValueError('No data to predict')
 
-    def _get_abs_pred(self, predictions):
-        print('_get_abs_pred')
-        def map_predicted_label(ds):
-            ds = ds['predictions']
-            pred = pd.DataFrame({
-                'best_proba': [np.max(arr) for arr in ds],
-                'predicted_label' : [np.argmax(arr) for arr in ds]
-            })
-
-            return {'predictions' : pred['predicted_label'].to_numpy(dtype = np.int32)}
-        
-        predict = []
-        predictions = predictions.map_batches(
-            lambda batch : map_predicted_label(batch),
-            batch_format = 'numpy',
-            batch_size = self.batch_size
-        )
-        for row in predictions.iter_rows():
-            predict.append(row['predictions'])
-
-        return predict
-
     def _get_threshold_pred(self, predictions, threshold):
         print('_get_threshold_pred')
         def map_predicted_label(ds, threshold):
@@ -328,19 +271,3 @@ class KerasTFMulticlassModels(KerasTFModels, MulticlassUtils):
             predict.append(row['predictions'])
 
         return predict
-
-# TODO: Confirm how it works in Jupyter Notebook
-def build_fit_lstm_attention(data):
-    """
-    LSTM-Attention NN training function
-    """
-
-def build_fit_cnn(data):
-    """
-    Convolution NN training function
-    """
-
-def build_fit_widecnn(data):
-    """
-    Wide Convolution NN training function
-    """

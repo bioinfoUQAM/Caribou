@@ -110,11 +110,6 @@ class ModelsUtils(ABC):
         """
         """
 
-    @abstractmethod
-    def _label_decode(self):
-        """
-        """
-
     def _compute_weights(self):
         """
         Set class weights depending on their abundance in data-associated classes csv
@@ -141,6 +136,7 @@ class ModelsUtils(ABC):
     
     def _label_decode(self, predict):
         print('_label_decode')
+
         decoded = pd.Series(np.empty(len(predict), dtype=object))
         for label, encoded in self._labels_map.items():
             decoded[predict == encoded] = label

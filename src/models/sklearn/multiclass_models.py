@@ -248,7 +248,6 @@ class SklearnMulticlassModels(SklearnModels, MulticlassUtils):
     def _predict_proba(self, ds):
         if ds.count() > 0:
             ds = self._scaler.transform(ds)
-            # ds = ds.materialize()
 
             def predict_func(data):
                 X = _unwrap_ndarray_object_type_if_needed(data[TENSOR_COLUMN_NAME])
@@ -264,12 +263,6 @@ class SklearnMulticlassModels(SklearnModels, MulticlassUtils):
 
             probabilities = ds.map_batches(predict_func, batch_format = 'numpy')
             probabilities = _unwrap_ndarray_object_type_if_needed(probabilities.to_pandas()['predictions'])
-
-            weights = np.zeros(len(self._weights))
-            for encoded, w in self._weights.items():
-                weights[encoded] = w
-            
-            probabilities = probabilities * weights
             
             return probabilities
         else:
@@ -289,11 +282,3 @@ class SklearnMulticlassModels(SklearnModels, MulticlassUtils):
         proba_predict.loc[proba_predict['best_proba'] < threshold, 'predicted_label'] = -1
 
         return proba_predict['predicted_label']
-    
-    def _label_decode(self, predict):
-        print('_label_decode')
-        decoded = pd.Series(np.empty(len(predict), dtype=object))
-        for label, encoded in self._labels_map.items():
-            decoded[predict == encoded] = label
-
-        return np.array(decoded)
