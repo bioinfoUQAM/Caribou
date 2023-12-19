@@ -20,7 +20,7 @@ import tensorflow as tf
 from ray.air import session
 # from ray.air.integrations.keras import Callback
 from ray.air.config import ScalingConfig
-from models.kerasTF.models import train_func, build_model
+from models.kerasTF.models import train_func_CPU, train_func_GPU, build_model
 from ray.air.integrations.keras import ReportCheckpointCallback
 from ray.train.tensorflow import TensorflowTrainer, TensorflowCheckpoint
 
@@ -93,25 +93,7 @@ class KerasTFBinaryModels(KerasTFModels):
             kmers_list,
             csv
         )
-        # Parameters
-        # Initialize hidden
-        self._nb_CPU_data = int(os.cpu_count() * 0.2)
-        self._nb_CPU_training = int(os.cpu_count() - self._nb_CPU_data)
-        self._nb_GPU = len(tf.config.list_physical_devices('GPU'))
-        # Initialize empty
         self._nb_classes = 2
-        self._nb_CPU_per_worker = 0
-        self._nb_GPU_per_worker = 0
-        # Computing variables
-        if self._nb_GPU > 0:
-            self._use_gpu = True
-            self._n_workers = self._nb_GPU
-            self._nb_CPU_per_worker = int(self._nb_CPU_training / self._n_workers)
-            self._nb_GPU_per_worker = 1
-        else:
-            self._use_gpu = False
-            self._n_workers = int(self._nb_CPU_training * 0.2)
-            self._nb_CPU_per_worker = int(int(self._nb_CPU_training * 0.8) / self._n_workers)
 
         if self.classifier == 'attention':
             print('Training bacterial / host classifier based on Attention Weighted Neural Network')
@@ -172,6 +154,11 @@ class KerasTFBinaryModels(KerasTFModels):
             'model': self.classifier,
             'weights': self._weights
         }
+
+        if self._nb_GPU > 0:
+            train_func = train_func_GPU
+        else:
+            train_func = train_func_CPU
 
         # Define trainer / tuner
         self._trainer = TensorflowTrainer(
