@@ -218,20 +218,11 @@ class KerasTFMulticlassModels(KerasTFModels, MulticlassUtils):
                 TensorflowPredictor,
                 model_definition = lambda: build_model(self.classifier, self._nb_classes, self._nb_kmers)
             )
-            if self._nb_GPU > 0:
-                predictions = self._predictor.predict(
-                    data = ds,
-                    feature_columns = [TENSOR_COLUMN_NAME],
-                    batch_size = self.batch_size,
-                    num_gpus_per_worker = self._nb_GPU_per_worker
-                )
-            else:
-                predictions = self._predictor.predict(
-                    data = ds,
-                    feature_columns = [TENSOR_COLUMN_NAME],
-                    batch_size = self.batch_size,
-                    num_cpus_per_worker = self._nb_CPU_per_worker
-                )
+            predictions = self._predictor.predict(
+                data = ds,
+                feature_columns = [TENSOR_COLUMN_NAME],
+                batch_size = self.batch_size,
+            )
             return predictions
         else:
             raise ValueError('No data to predict')
