@@ -21,7 +21,6 @@ import tensorflow as tf
 from ray.air import session
 # from ray.air.integrations.keras import Callback
 from ray.air.config import ScalingConfig
-from models.kerasTF.models import train_func_CPU, train_func_GPU, build_model
 from ray.air.integrations.keras import ReportCheckpointCallback
 from ray.train.tensorflow import TensorflowTrainer, TensorflowCheckpoint
 
@@ -29,6 +28,7 @@ from ray.train.tensorflow import TensorflowTrainer, TensorflowCheckpoint
 from ray.air.config import RunConfig
 
 # Predicting
+from tensorflow.keras.models import load_model
 from ray.train.tensorflow import TensorflowPredictor
 from ray.train.batch_predictor import BatchPredictor
 
@@ -102,6 +102,7 @@ class KerasTFMulticlassModels(KerasTFModels, MulticlassUtils):
     # Data preprocessing
     #########################################################################################################
 
+    """
     def preprocess(self, ds, scaling = False, scaler_file = None):
         print('preprocess')
         # Labels encoding
@@ -128,10 +129,11 @@ class KerasTFMulticlassModels(KerasTFModels, MulticlassUtils):
         # )
         # self._scaler = TensorMinMaxScaler(self._nb_kmers)
         # self._scaler.fit(ds)
-
+    """
     # Models training
     #########################################################################################################
 
+    """
     def fit(self, datasets):
         print('fit')
         # Preprocessing loop
@@ -142,6 +144,12 @@ class KerasTFMulticlassModels(KerasTFModels, MulticlassUtils):
             ds = ds.materialize()
             datasets[name] = ds
 
+        if self._nb_GPU > 0:
+            self._fit_GPU(datasets)
+        else:
+            self._fit_CPU(datasets)
+
+    def _fit_CPU(self, datasets):
         # Training parameters
         train_params = {
             'batch_size': self.batch_size,
@@ -152,22 +160,16 @@ class KerasTFMulticlassModels(KerasTFModels, MulticlassUtils):
             'weights': self._weights
         }
 
-        if self._nb_GPU > 0:
-            train_func = train_func_GPU
-        else:
-            train_func = train_func_CPU
-
         # Define trainer / tuner
         self._trainer = TensorflowTrainer(
-            train_loop_per_worker=train_func,
+            train_loop_per_worker=train_func_CPU,
             train_loop_config=train_params,
             scaling_config=ScalingConfig(
                 trainer_resources={'CPU': self._nb_CPU_data},
                 num_workers=self._n_workers,
                 use_gpu=self._use_gpu,
                 resources_per_worker={
-                    'CPU': self._nb_CPU_per_worker,
-                    'GPU': self._nb_GPU_per_worker
+                    'CPU': self._nb_CPU_per_worker
                 }
             ),
             run_config=RunConfig(
@@ -179,26 +181,41 @@ class KerasTFMulticlassModels(KerasTFModels, MulticlassUtils):
 
         training_result = self._trainer.fit()
         self._model_ckpt = training_result.best_checkpoints[0][0]
+    
+    def _fit_GPU(self, datasets):
+        # Training parameters
+        train_params = {
+            'batch_size': self.batch_size,
+            'epochs': self._training_epochs,
+            'size': self._nb_kmers,
+            'nb_cls': self._nb_classes,
+            'taxa': self.taxa,
+            'workdir':self._workdir,
+            'model': self.classifier,
+            'weights': self._weights
+        }
 
+        self._model_ckpt = train_func_GPU(datasets, train_params)
+        """
     # Models predicting
     #########################################################################################################
 
+    """
     def predict(self, ds):
         print('predict')
         # Predict with model
         probabilities = self._predict_proba(ds)
         # Convert predictions to labels
-        probabilities = _unwrap_ndarray_object_type_if_needed(probabilities.to_pandas()['predictions'])
-        predictions = np.argmax(probabilities, axis = 1)
+        predictions = self._get_abs_pred(probabilities)
         # Return decoded labels
         return self._label_decode(predictions)
     
     def predict_proba(self, ds, threshold = 0.8):
         print('predict_proba')
         # Predict with model
-        predictions = self._predict_proba(ds)
+        probabilities = self._predict_proba(ds)
         # Convert predictions to labels with threshold
-        predictions = self._get_threshold_pred(predictions, threshold)
+        predictions = self._get_threshold_pred(probabilities, threshold)
         # Return decoded labels
         return self._label_decode(predictions)
 
@@ -209,43 +226,54 @@ class KerasTFMulticlassModels(KerasTFModels, MulticlassUtils):
                 col_2_drop = [col for col in ds.schema().names if col != TENSOR_COLUMN_NAME]
                 ds = ds.drop_columns(col_2_drop)
 
-            # Preprocess
-            # ds = self._scaler.transform(ds)
             ds = ds.materialize()
 
-            self._predictor = BatchPredictor.from_checkpoint(
-                self._model_ckpt,
-                TensorflowPredictor,
-                model_definition = lambda: build_model(self.classifier, self._nb_classes, self._nb_kmers)
-            )
-            predictions = self._predictor.predict(
-                data = ds,
-                feature_columns = [TENSOR_COLUMN_NAME],
-                batch_size = self.batch_size,
-            )
-            return predictions
+            if self._nb_GPU > 0:
+                probabilities = self._predict_proba_GPU(ds)
+            else:
+                probabilities = self._predict_proba_CPU(ds)
+            
+            return probabilities
         else:
             raise ValueError('No data to predict')
 
+    def _predict_proba_CPU(self, ds):
+        print('_predict_proba_CPU')
+        self._predictor = BatchPredictor.from_checkpoint(
+            self._model_ckpt,
+            TensorflowPredictor,
+            model_definition = lambda: build_model(self.classifier, self._nb_classes, self._nb_kmers)
+        )
+        predictions = self._predictor.predict(
+            data = ds,
+            feature_columns = [TENSOR_COLUMN_NAME],
+            batch_size = self.batch_size,
+        )
+
+        probabilities = _unwrap_ndarray_object_type_if_needed(probabilities.to_pandas()['predictions'])
+
+        return probabilities
+    
+    def _predict_proba_GPU(self, ds):
+        print('_predict_proba_GPU')
+        model = load_model(self._model_ckpt)
+        probabilities = []
+        for batch in ds.iter_tf_batches(batch_size = self.batch_size):
+            probabilities.extend(model.predict(batch[TENSOR_COLUMN_NAME]))
+        
+        return probabilities
+    """
+    def _get_abs_pred(self, predictions):
+        print('_get_abs_pred')
+        return np.argmax(predictions, axis = 1)
+
     def _get_threshold_pred(self, predictions, threshold):
         print('_get_threshold_pred')
-        def map_predicted_label(ds, threshold):
-            ds = ds['predictions']
-            pred = pd.DataFrame({
-                'best_proba': [np.max(arr) for arr in ds],
-                'predicted_label' : [np.argmax(arr) for arr in ds]
-            })
-            pred.loc[pred['best_proba'] < threshold, 'predicted_label'] = -1
+        pred = pd.DataFrame({
+            'proba': [np.max(arr) for arr in predictions],
+            'label' : [np.argmax(arr) for arr in predictions]
+        })
+        pred.loc[pred['proba'] < threshold, 'label'] = -1
 
-            return {'predictions' : pred['predicted_label'].to_numpy(dtype = np.int32)}
+        return pred['label'].to_numpy(dtype = np.int32)
 
-        predict = []
-        predictions = predictions.map_batches(
-            lambda batch : map_predicted_label(batch, threshold),
-            batch_format = 'numpy',
-            batch_size = self.batch_size
-        )
-        for row in predictions.iter_rows():
-            predict.append(row['predictions'])
-
-        return predict

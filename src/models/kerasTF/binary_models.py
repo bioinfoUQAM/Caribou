@@ -104,7 +104,7 @@ class KerasTFBinaryModels(KerasTFModels):
         
     # Data preprocessing
     #########################################################################################################
-
+    """
     def preprocess(self, ds, scaling = False, scaler_file = None):
         print('preprocess')
         # Labels encoding
@@ -131,10 +131,11 @@ class KerasTFBinaryModels(KerasTFModels):
         # )
         # self._scaler = TensorMinMaxScaler(self._nb_kmers)
         # self._scaler.fit(ds)
-    
+    """
     # Model training
     #########################################################################################################
 
+    """
     def fit(self, datasets):
         print('fit')
         # Preprocessing loop
@@ -145,6 +146,12 @@ class KerasTFBinaryModels(KerasTFModels):
             ds = ds.materialize()
             datasets[name] = ds
 
+        if self._nb_GPU > 0:
+            self._fit_GPU(datasets)
+        else:
+            self._fit_CPU(datasets)
+
+    def _fit_CPU(self, datasets):
         # Training parameters
         train_params = {
             'batch_size': self.batch_size,
@@ -155,22 +162,16 @@ class KerasTFBinaryModels(KerasTFModels):
             'weights': self._weights
         }
 
-        if self._nb_GPU > 0:
-            train_func = train_func_GPU
-        else:
-            train_func = train_func_CPU
-
         # Define trainer / tuner
         self._trainer = TensorflowTrainer(
-            train_loop_per_worker=train_func,
+            train_loop_per_worker=train_func_CPU,
             train_loop_config=train_params,
             scaling_config=ScalingConfig(
                 trainer_resources={'CPU': self._nb_CPU_data},
                 num_workers=self._n_workers,
                 use_gpu=self._use_gpu,
                 resources_per_worker={
-                    'CPU': self._nb_CPU_per_worker,
-                    'GPU': self._nb_GPU_per_worker
+                    'CPU': self._nb_CPU_per_worker
                 }
             ),
             run_config=RunConfig(
@@ -183,24 +184,40 @@ class KerasTFBinaryModels(KerasTFModels):
         training_result = self._trainer.fit()
         self._model_ckpt = training_result.best_checkpoints[0][0]
 
+    def _fit_GPU(self, datasets):
+        # Training parameters
+        train_params = {
+            'batch_size': self.batch_size,
+            'epochs': self._training_epochs,
+            'size': self._nb_kmers,
+            'nb_cls': self._nb_classes,
+            'taxa': self.taxa,
+            'workdir':self._workdir,
+            'model': self.classifier,
+            'weights': self._weights
+        }
+
+        self._model_ckpt = train_func_GPU(datasets, train_params)
+    """
     # Model predicting
     #########################################################################################################
 
+    """
     def predict(self, ds):
         print('predict')
         # Predict with model
-        predictions = self._predict_proba(ds)
+        probabilities = self._predict_proba(ds)
         # Convert predictions to labels
-        predictions = self._get_abs_pred(predictions)
+        predictions = self._get_abs_pred(probabilities)
         # Return decoded labels
         return self._label_decode(predictions)
 
     def predict_proba(self, ds, threshold = 0.8):
         print('predict_proba')
         # Predict with model
-        predictions = self._predict_proba(ds)
+        probabilities = self._predict_proba(ds)
         # Convert predictions to labels with threshold
-        predictions = self._get_threshold_pred(predictions, threshold)
+        predictions = self._get_threshold_pred(probabilities, threshold)
         # Return decoded labels
         return self._label_decode(predictions)
     
@@ -210,69 +227,64 @@ class KerasTFBinaryModels(KerasTFModels):
                 col_2_drop = [col for col in ds.schema().names if col != TENSOR_COLUMN_NAME]
                 ds = ds.drop_columns(col_2_drop)
 
-            # Preprocess
-            # ds = self._scaler.transform(ds)
             ds = ds.materialize()
 
-            self._predictor = BatchPredictor.from_checkpoint(
-                self._model_ckpt,
-                TensorflowPredictor,
-                model_definition = lambda: build_model(self.classifier, self._nb_classes, self._nb_kmers)
-            )
-            predictions = self._predictor.predict(
-                data = ds,
-                feature_columns = [TENSOR_COLUMN_NAME],
-                batch_size = self.batch_size,
-            )
-            return predictions
+            if self._nb_GPU > 0:
+                probabilities = self._predict_proba_GPU(ds)
+            else:
+                probabilities = self._predict_proba_CPU(ds)
+            
+            return probabilities
+
         else:
             raise ValueError('No data to predict')
-        
+    def _predict_proba_CPU(self, ds):
+        print('_predict_proba_CPU')
+        self._predictor = BatchPredictor.from_checkpoint(
+            self._model_ckpt,
+            TensorflowPredictor,
+            model_definition = lambda: build_model(self.classifier, self._nb_classes, self._nb_kmers)
+        )
+        predictions = self._predictor.predict(
+            data = ds,
+            feature_columns = [TENSOR_COLUMN_NAME],
+            batch_size = self.batch_size,
+        )
+
+        probabilities = _unwrap_ndarray_object_type_if_needed(probabilities.to_pandas()['predictions'])
+
+        return predictions
+    
+    def _predict_proba_GPU(self, ds):
+        print('_predict_proba_GPU')
+        model = load_model(self._model_ckpt)
+        probabilities = []
+        for batch in ds.iter_tf_batches(batch_size = self.batch_size):
+            probabilities.extend(model.predict(batch[TENSOR_COLUMN_NAME]))
+    """
     def _get_abs_pred(self, predictions):
         print('_get_abs_pred')
-        def map_predicted_label(ds):
-            ds = np.ravel(ds['predictions'])
-            threshold = 0.5
-            predict = pd.DataFrame({
-                'proba': ds,
-                'predicted_label': np.full(len(ds), -1)
-            })
-            predict.loc[predict['proba'] > threshold, 'predicted_label'] = 1
-            predict.loc[predict['proba'] < threshold, 'predicted_label'] = 0
-            return {'predictions' : predict['predicted_label'].to_numpy(dtype = np.int32)}
-                
-        predict = []
-        predictions = predictions.map_batches(
-            lambda batch : map_predicted_label(batch),
-            batch_format = 'numpy',
-            batch_size = self.batch_size
-        )
-        for row in predictions.iter_rows():
-            predict.append(row['predictions'])
+        return np.round(np.ravel(predictions))
+        # predict = pd.DataFrame({
+        #     'proba': np.ravel(predictions),
+        #     'predicted_label' : np.full(len(predictions), -1)
+        # })
+        # predict.loc[predict['proba'] > 0.5, 'predicted_label'] = 1
+        # predict.loc[predict['proba'] < 0.5, 'predicted_label'] = 0
 
-        return predict
+        # return predict
 
     def _get_threshold_pred(self, predictions, threshold):
         print('_get_threshold_pred')
-        def map_predicted_label(ds, threshold):
-            ds = np.ravel(ds['predictions'])
-            lower_threshold = 0.5 - (threshold * 0.5)
-            upper_threshold = 0.5 + (threshold * 0.5)
-            predict = pd.DataFrame({
-                'proba': ds,
-                'predicted_label': np.full(len(ds), -1)
-            })
-            predict.loc[predict['proba'] >= upper_threshold, 'predicted_label'] = 1
-            predict.loc[predict['proba'] <= lower_threshold, 'predicted_label'] = 0
-            return {'predictions' : predict['predicted_label'].to_numpy(dtype = np.int32)}
+        lower_threshold = 0.5 - (threshold * 0.5)
+        upper_threshold = 0.5 + (threshold * 0.5)
         
-        predict = []
-        predictions = predictions.map_batches(
-            lambda batch : map_predicted_label(batch, threshold),
-            batch_format = 'numpy',
-            batch_size = self.batch_size
-        )
-        for row in predictions.iter_rows():
-            predict.append(row['predictions'])
+        predict = pd.DataFrame({
+            'proba': np.ravel(predictions),
+            'label' : np.full(len(predictions), -1)
+        })
 
-        return predict
+        predict.loc[predict['proba'] >= upper_threshold, 'label'] = 1
+        predict.loc[predict['proba'] <= lower_threshold, 'label'] = 0
+        
+        return predict['label'].to_numpy(dtype = np.int32)
