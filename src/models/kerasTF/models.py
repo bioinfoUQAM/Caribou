@@ -389,7 +389,7 @@ def train_func_GPU(datasets, config):
         validation_data = val_ds,
         callbacks = [modelckpt, early, csv],
         class_weight = weights,
-        verbose = 0
+        verbose = 1
     )
 
     # Checkpointing
