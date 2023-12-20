@@ -118,9 +118,10 @@ class SklearnMulticlassModels(SklearnModels, MulticlassUtils):
         # Class weights
         self._weights = self._compute_weights()
         
-        if self.classifier == 'mnb':
-            self._scaler = TensorMinMaxScaler(self._nb_kmers)
-            self._scaler.fit(ds)
+        # Features scaling
+        self._scaler = TensorTfIdfTransformer(features = self.kmers,file = scaler_file)
+        self._scaler.fit(ds)
+
         
     # Models training
     #########################################################################################################
@@ -131,8 +132,7 @@ class SklearnMulticlassModels(SklearnModels, MulticlassUtils):
             # ds = ds.drop_columns(['id'])
         train_ds = datasets['train']
         train_ds = self._encoder.transform(train_ds)
-        if self.classifier == 'mnb':
-            train_ds = self._scaler.transform(train_ds)
+        train_ds = self._scaler.transform(train_ds)
         # datasets[name] = ds
 
         # One sub-model per artificial cluster of samples
@@ -244,8 +244,7 @@ class SklearnMulticlassModels(SklearnModels, MulticlassUtils):
 
     def _predict_proba(self, ds):
         if ds.count() > 0:
-            if self.classifier == 'mnb':
-                ds = self._scaler.transform(ds)
+            ds = self._scaler.transform(ds)
 
             def predict_func(data):
                 X = _unwrap_ndarray_object_type_if_needed(data[TENSOR_COLUMN_NAME])
