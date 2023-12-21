@@ -12,7 +12,7 @@ from models.encoders.one_hot_tensor_encoder import OneHotTensorEncoder
 from models.preprocessors.tfidf_transformer import TensorTfIdfTransformer
 
 # Parent class / models
-from models.kerasTF.models import KerasTFModels
+from models.kerasTF.models_parallel import KerasTFModels
 from models.kerasTF.build_neural_networks import *
 
 # Training
@@ -20,7 +20,7 @@ import tensorflow as tf
 from ray.air import session
 # from ray.air.integrations.keras import Callback
 from ray.air.config import ScalingConfig
-from models.kerasTF.models import train_func_CPU, train_func_GPU, build_model
+from models.kerasTF.models_parallel import train_func_CPU, train_func_GPU, build_model
 from ray.air.integrations.keras import ReportCheckpointCallback
 from ray.train.tensorflow import TensorflowTrainer, TensorflowCheckpoint
 
