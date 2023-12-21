@@ -109,9 +109,9 @@ class KerasTFModels(ModelsUtils, ABC):
         # Computing variables
         if self._nb_GPU > 0:
             self._use_gpu = True
-            self._n_workers = int(self._nb_GPU / 2) # 3
-            self._nb_CPU_per_worker = int(self._nb_CPU_training / self._n_workers) # 8
-            self._nb_GPU_per_worker = 2
+            self._n_workers = 1 # int(self._nb_GPU / 2) # 3
+            self._nb_CPU_per_worker = self._nb_CPU_training # int(self._nb_CPU_training / self._n_workers) # 8
+            self._nb_GPU_per_worker = self._nb_GPU # 1
         else:
             self._use_gpu = False
             self._n_workers = int(self._nb_CPU_training * 0.2)
