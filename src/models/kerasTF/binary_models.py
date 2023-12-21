@@ -12,7 +12,7 @@ from models.encoders.one_hot_tensor_encoder import OneHotTensorEncoder
 from models.preprocessors.tfidf_transformer import TensorTfIdfTransformer
 
 # Parent class / models
-from models.kerasTF.models_parallel import KerasTFModels
+from models.kerasTF.models import KerasTFModels
 from models.kerasTF.build_neural_networks import *
 
 # Training
