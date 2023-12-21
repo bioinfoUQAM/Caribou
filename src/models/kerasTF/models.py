@@ -299,7 +299,7 @@ def train_func_CPU(config):
             validation_data = batch_val,
             callbacks = [ReportCheckpointCallback()],
             class_weight = weights,
-            verbose = 1
+            verbose = 0
         )
         # Checkpointing
         session.report({
