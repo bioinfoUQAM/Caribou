@@ -4,6 +4,8 @@ import warnings
 import numpy as np
 import pandas as pd
 
+from glob import glob
+
 # Class construction
 from abc import ABC, abstractmethod
 
@@ -193,8 +195,13 @@ class KerasTFModels(ModelsUtils, ABC):
         )
 
         training_result = self._trainer.fit()
-        self._model_ckpt = training_result.best_checkpoints[0][0]
-
+        # self._model_ckpt = training_result.best_checkpoints[0][0]
+        self._model_ckpt = glob(
+            os.path.join(
+                os.path.dirname(training_result.best_checkpoints[0][0].path),'checkpoint_*'
+            )
+        )
+                
     # Models predicting
     #########################################################################################################
 
@@ -219,26 +226,38 @@ class KerasTFModels(ModelsUtils, ABC):
     def _predict_proba(self, ds):
         print('_predict_proba')
         if ds.count() > 0:
-            if len(ds.schema().names) > 1:
-                col_2_drop = [col for col in ds.schema().names if col != TENSOR_COLUMN_NAME]
-                ds = ds.drop_columns(col_2_drop)
+            # if len(ds.schema().names) > 1:
+            #     col_2_drop = [col for col in ds.schema().names if col != TENSOR_COLUMN_NAME]
+            #     ds = ds.drop_columns(col_2_drop)
 
             ds = self._scaler.transform(ds)
-
             ds = ds.materialize()
 
-            self._predictor = BatchPredictor.from_checkpoint(
-                self._model_ckpt,
-                TensorflowPredictor,
-                model_definition = lambda: build_model(self.classifier, self._nb_classes, self._nb_kmers)
-            )
-            predictions = self._predictor.predict(
-                data = ds,
-                feature_columns = [TENSOR_COLUMN_NAME],
-                batch_size = self.batch_size,
-            )
-
-            probabilities = _unwrap_ndarray_object_type_if_needed(predictions.to_pandas()['predictions'])
+            def predict_func(data):
+                X = _unwrap_ndarray_object_type_if_needed(data[TENSOR_COLUMN_NAME])
+                pred = np.zeros((len(X), len(self._labels_map)-1))
+                for ckpt in self._model_ckpt:
+                    ckpt = TensorflowCheckpoint.from_directory(ckpt)
+                    predictor = TensorflowPredictor().from_checkpoint(ckpt, model_definition = lambda: build_model('cnn', self._nb_classes, self._nb_kmers))
+                    proba = predictor.predict(X)
+                    pred += proba['predictions']
+                pred = pred / len(self._model_ckpt)
+                return {'predictions' : pred}
+            
+            probabilities = ds.map_batches(predict_func, batch_format = 'numpy')
+            probabilities = _unwrap_ndarray_object_type_if_needed(probabilities.to_pandas()['predictions'])
+            
+            # self._predictor = BatchPredictor.from_checkpoint(
+            #     self._model_ckpt,
+            #     TensorflowPredictor,
+            #     model_definition = lambda: build_model(self.classifier, self._nb_classes, self._nb_kmers)
+            # )
+            # predictions = self._predictor.predict(
+            #     data = ds,
+            #     feature_columns = [TENSOR_COLUMN_NAME],
+            #     batch_size = self.batch_size,
+            # )
+            # probabilities = _unwrap_ndarray_object_type_if_needed(predictions.to_pandas()['predictions'])
             
             return probabilities
         else:
@@ -370,9 +389,9 @@ def train_func_GPU(config):
         )
         gc.collect()
         tf.keras.backend.clear_session()
-    del model
-    gc.collect()
-    tf.keras.backend.clear_session()
+    # del model
+    # gc.collect()
+    # tf.keras.backend.clear_session()
 
 def build_model(classifier, nb_cls, nb_kmers):
     if classifier == 'attention':

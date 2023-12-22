@@ -1,3 +1,4 @@
+import tensorflow as tf
 
 from keras.models import Model, Sequential
 from tensorflow.keras import mixed_precision
@@ -7,7 +8,10 @@ from keras.layers import Dense, Input, LSTM, Embedding, Dropout, Conv1D, Conv2D,
 from tensorflow.keras import mixed_precision
 from models.kerasTF.attentionLayer import AttentionWeightedAverage
 
-mixed_precision.set_global_policy('mixed_float16')
+if len(tf.config.list_physical_devices('GPU')) > 0:
+    mixed_precision.set_global_policy('mixed_float16')
+else:
+    mixed_precision.set_global_policy('mixed_bfloat16')
 
 __author__ = "Nicolas de Montigny"
 
