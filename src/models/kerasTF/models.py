@@ -328,7 +328,7 @@ def train_func_GPU(config):
     weights = config.get('weights')
 
     # Model construction
-    strategy = tf.distribute.MirroredStrategy()
+    strategy = tf.distribute.MultiWorkerMirroredStrategy()
     with strategy.scope():
         model = build_model(model, nb_cls, size)
 
