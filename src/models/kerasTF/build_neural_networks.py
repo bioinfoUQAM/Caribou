@@ -4,9 +4,10 @@ from tensorflow.keras import mixed_precision
 from tensorflow.keras.losses import BinaryCrossentropy, CategoricalCrossentropy
 from keras.layers import Dense, Input, LSTM, Embedding, Dropout, Conv1D, Conv2D, MaxPooling1D, MaxPooling2D, Concatenate, Flatten, Attention, Activation, Bidirectional, Reshape, AveragePooling1D
 
-
-
+from tensorflow.keras import mixed_precision
 from models.kerasTF.attentionLayer import AttentionWeightedAverage
+
+mixed_precision.set_global_policy('mixed_float16')
 
 __author__ = "Nicolas de Montigny"
 
@@ -28,7 +29,8 @@ def build_attention(nb_features):
 
     x = Dense(128, activation = "relu")(x)
     x = Dropout(0.1)(x)
-    x = Dense(1, activation = "sigmoid")(x)
+    x = Dense(1)(x)
+    x = Activation(activation = "sigmoid", dtype = 'float32')(x)
 
     model = Model(inputs = inputs, outputs = x)
     model.compile(loss = 'binary_crossentropy', optimizer = 'adam', metrics = ['accuracy'], jit_compile = True)
@@ -48,8 +50,9 @@ def build_LSTM(nb_features):
 
     x = LSTM(128, dropout = 0.1)(inputs)
 
-    x = Dense(1, activation = 'tanh')(x)
-    
+    x = Dense(1)(x)
+    x = Activation(activation = "tanh", dtype = 'float32')(x)
+
     model = Model(inputs = inputs, outputs = x)
     model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'], jit_compile = True)
 
@@ -82,7 +85,9 @@ def build_deepLSTM(nb_features):
     net = Dense(10, activation='relu', name='D_%d'%10)(net)
     net = Dropout(0.1,name='fr_same')(net)
 
-    outputs = Dense(1, activation='sigmoid', name='score')(net)
+    net = Dense(1)(net)
+    outputs = Activation(activation = "sigmoid", dtype = 'float32')(net)
+
     model = Model(inputs=inputs, outputs=outputs)
     model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'], jit_compile = True)
 
@@ -108,7 +113,7 @@ def build_LSTM_attention(nb_features, nb_classes):
     net = Dropout(0.2)(net)
     net = Flatten()(net)
     net = Dense(nb_classes)(net)
-    outputs = Activation('softmax')(net)
+    outputs = Activation('softmax', dtype = 'float32')(net)
     model = Model(inputs = inputs, outputs = outputs)
     model.compile(loss='sparse_categorical_crossentropy', optimizer='adam', metrics=['accuracy'], jit_compile = True)
 
@@ -135,7 +140,7 @@ def build_CNN(nb_features, nb_classes):
     model.add(Activation('relu'))
     model.add(Dropout(0.5))
     model.add(Dense(nb_classes))
-    model.add(Activation('softmax'))
+    model.add(Activation('softmax', dtype = 'float32'))
     model.compile(loss='sparse_categorical_crossentropy', optimizer='adam', metrics=['accuracy'], jit_compile = True)
 
     return model
@@ -172,7 +177,8 @@ def build_wideCNN(nb_features, nb_classes):
     net = Dropout(0.5)(net)
 
     net = Dense(nb_classes)(net)
-    outputs = Activation('softmax')(net)
+    outputs = Activation('softmax', dtype = 'float32')(net)
+    
     model = Model(inputs = inputs, outputs = outputs)
     model.compile(loss='sparse_categorical_crossentropy', optimizer='adam', metrics=['accuracy'], jit_compile = True)
 

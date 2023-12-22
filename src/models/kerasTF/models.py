@@ -47,6 +47,7 @@ LABELS_COLUMN_NAME = 'labels'
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 warnings.filterwarnings('ignore')
 
+
 class KerasTFModels(ModelsUtils, ABC):
     """
     Class used to build, train and predict models using Ray with Keras Tensorflow backend
@@ -100,17 +101,17 @@ class KerasTFModels(ModelsUtils, ABC):
         )
         # Parameters
         # Initialize hidden
-        self._nb_CPU_data = int(os.cpu_count() * 0.2) # 6
-        self._nb_CPU_training = int(os.cpu_count() - self._nb_CPU_data) # 26
-        self._nb_GPU = len(tf.config.list_physical_devices('GPU')) # 6
+        self._nb_CPU_data = int(os.cpu_count() * 0.2) # 9
+        self._nb_CPU_training = int(os.cpu_count() - self._nb_CPU_data) # 39
+        self._nb_GPU = len(tf.config.list_physical_devices('GPU')) # 4
         # Initialize empty
         self._nb_CPU_per_worker = 0
         self._nb_GPU_per_worker = 0
         # Computing variables
         if self._nb_GPU > 0:
             self._use_gpu = True
-            self._n_workers = self._nb_GPU # 6
-            self._nb_CPU_per_worker = int(self._nb_CPU_training / self._n_workers) # 4
+            self._n_workers = self._nb_GPU # 4
+            self._nb_CPU_per_worker = int(self._nb_CPU_training / self._n_workers) # 9
             self._nb_GPU_per_worker = 1
         else:
             self._use_gpu = False
