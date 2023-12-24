@@ -226,9 +226,6 @@ class KerasTFModels(ModelsUtils, ABC):
     def _predict_proba(self, ds):
         print('_predict_proba')
         if ds.count() > 0:
-            # if len(ds.schema().names) > 1:
-            #     col_2_drop = [col for col in ds.schema().names if col != TENSOR_COLUMN_NAME]
-            #     ds = ds.drop_columns(col_2_drop)
 
             ds = self._scaler.transform(ds)
             ds = ds.materialize()
@@ -246,18 +243,6 @@ class KerasTFModels(ModelsUtils, ABC):
             
             probabilities = ds.map_batches(predict_func, batch_format = 'numpy')
             probabilities = _unwrap_ndarray_object_type_if_needed(probabilities.to_pandas()['predictions'])
-            
-            # self._predictor = BatchPredictor.from_checkpoint(
-            #     self._model_ckpt,
-            #     TensorflowPredictor,
-            #     model_definition = lambda: build_model(self.classifier, self._nb_classes, self._nb_kmers)
-            # )
-            # predictions = self._predictor.predict(
-            #     data = ds,
-            #     feature_columns = [TENSOR_COLUMN_NAME],
-            #     batch_size = self.batch_size,
-            # )
-            # probabilities = _unwrap_ndarray_object_type_if_needed(predictions.to_pandas()['predictions'])
             
             return probabilities
         else:
@@ -314,6 +299,7 @@ def train_func_CPU(config):
             # local_shuffle_seed = int(np.random.randint(1,10000, size = 1))
         )
         # Training
+        # TODO: Move epochs to model.fit instead of in loop?
         history = model.fit(
             x = batch_train,
             validation_data = batch_val,
@@ -371,6 +357,7 @@ def train_func_GPU(config):
             # local_shuffle_seed = int(np.random.randint(1,10000, size = 1))
         )
         # Training
+        # TODO: Move epochs to model.fit instead of in loop?
         history = model.fit(
             x = batch_train,
             validation_data = batch_val,

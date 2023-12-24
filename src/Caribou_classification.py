@@ -108,7 +108,7 @@ if __name__ == "__main__":
     # Optional datasets
     parser.add_argument('-v','--validation', default=None, type=Path, help='PATH to a npz file containing the k-mers profile for the validation dataset')
     # Parameters
-    parser.add_argument('-model','--model_type', default='lstm_attention', choices=['sgd','mnb','lstm_attention','cnn','widecnn'], help='The type of model to train')
+    parser.add_argument('-model','--model_type', default='sgd', choices=['sgd','mnb','lstm_attention','cnn','widecnn'], help='The type of model to train')
     parser.add_argument('-tx','--taxa', default=None, help='The taxonomic level to use for the classification, defaults to species. Can be one level or a list of levels separated by commas.')
     parser.add_argument('-bs','--batch_size', default=32, type=int, help='Size of the batch size to use, defaults to 32')
     parser.add_argument('-e','--training_epochs', default=100, type=int, help='The number of training iterations for the neural networks models if one ise chosen, defaults to 100')

@@ -127,7 +127,7 @@ if __name__ == "__main__":
     parser.add_argument('-m','--merged', default=None, type=Path, help='PATH to a npz file containing the k-mers profile for the merged bacteria and host databases')
     parser.add_argument('-v','--validation', default=None, type=Path, help='PATH to a npz file containing the k-mers profile for the validation dataset')
     # Parameters
-    parser.add_argument('-model','--model_type', default=None, choices=[None,'onesvm','linearsvm','attention','lstm','deeplstm'], help='The type of model to train')
+    parser.add_argument('-model','--model_type', default='linearsvm', choices=[None,'onesvm','linearsvm','attention','lstm','deeplstm'], help='The type of model to train')
     parser.add_argument('-bs','--batch_size', default=32, type=int, help='Size of the batch size to use, defaults to 32')
     parser.add_argument('-e','--training_epochs', default=100, type=int, help='The number of training iterations for the neural networks models if one ise chosen, defaults to 100')
     parser.add_argument('-o','--outdir', required=True, type=Path, help='PATH to a directory on file where outputs will be saved')

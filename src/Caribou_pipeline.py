@@ -43,8 +43,8 @@ def caribou(opt):
     # settings
     k_length = config.getint('settings', 'k', fallback = 35)
     cv = config.getboolean('settings', 'cross_validation', fallback = True)
-    binary_classifier = config.get('settings', 'host_extractor', fallback = 'attention')
-    multi_classifier = config.get('settings', 'bacteria_classifier', fallback = 'lstm_attention')
+    binary_classifier = config.get('settings', 'host_extractor', fallback = 'linearsvm')
+    multi_classifier = config.get('settings', 'bacteria_classifier', fallback = 'sgd')
     training_batch_size = config.getint('settings', 'training_batch_size', fallback = 32)
     training_epochs = config.getint('settings','neural_network_training_iterations', fallback = 100)
     classif_threshold = config.getfloat('settings', 'classification_threshold', fallback = 0.8)
