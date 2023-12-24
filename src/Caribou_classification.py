@@ -70,7 +70,7 @@ def bacteria_classification(opt):
         outdirs = outdirs,
         db_name = opt['database_name'],
         clf_multiclass = opt['model_type'],
-        taxa = 'domain',
+        taxa = lst_taxas,
         batch_size = opt['batch_size'],
         training_epochs = opt['training_epochs'],
         scaling = scaling

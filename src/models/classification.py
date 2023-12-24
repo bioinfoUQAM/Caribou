@@ -76,7 +76,7 @@ class ClassificationMethods():
         self._valid_assign_taxas()
         self._valid_classifier()
         tax_map = self._verify_model_trained()
-        
+
         self._fit(datasets, tax_map)
         
     def predict(self, dataset):
@@ -263,12 +263,12 @@ class ClassificationMethods():
             'ids' : ids,
             'predictions' : predict
         })
-        mapping = mapping[mapping['predictions'] != -1]
+        mapping = mapping[mapping['predictions'] != 'Unknown']
         ids = mapping['ids']
         predict = mapping['predictions']
 
         def remove_unknown(df):
-            df = df[df['ids'].isin(ids)]
+            df = df[df['id'].isin(ids)]
             return df
         
         ds = ds.map_batches(remove_unknown, batch_format = 'pandas')
@@ -351,6 +351,7 @@ class ClassificationMethods():
             self._taxas = [self._taxas]
         else:
             raise ValueError("Invalid taxa option, it must either be absent/None, be a list of taxas to extract or a string identifiying a taxa to extract")
+        
         self._valid_taxas()
         self._taxas = [taxa for taxa in self._database_data['taxas'] if taxa in self._taxas]
         self._taxas.reverse()
@@ -443,7 +444,8 @@ class ClassificationMethods():
             model = self._classifier_binary
         else:
             model = self._classifier_multiclass
-        file = os.path.join(self._outdirs['results'], f'data_classified_{model}_{taxa}.parquet')
+        file = os.path.join(self._outdirs['results_dir'], f'data_classified_{model}_{taxa}')
+
         ds.write_parquet(file)
         return file
     
