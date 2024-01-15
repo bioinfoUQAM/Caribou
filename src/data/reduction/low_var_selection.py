@@ -5,6 +5,7 @@ import pandas as pd
 from typing import List
 from ray.data import Dataset
 from ray.data.preprocessor import Preprocessor
+from ray.air.util.data_batch_conversion import _unwrap_ndarray_object_type_if_needed
 
 TENSOR_COLUMN_NAME = '__value__'
 
@@ -16,103 +17,79 @@ class TensorLowVarSelection(Preprocessor):
     """
     def __init__(
         self,
-        features_list : List[str],
-        threshold: float = np.inf,
-        nb_keep : int = np.inf,
+        features : List[str],
+        threshold: float = 0.05,
     ):
-        self.features_list = features_list
-        if 'id' in self.features_list:
-            self.features_list.remove('id')
-        self.nb_features = len(self.features_list)
+        self.features = features
         self.threshold = threshold
-        self.nb_keep = nb_keep
-        self.removed_features = []
+        self._nb_features = len(features)
 
     def _fit(self, ds: Dataset) -> Preprocessor:
-        nb_records = ds.count()
-        #
-        sum_arr = np.zeros(self.nb_features)
-        mean_arr = np.zeros(self.nb_features)
-        sqr_dev_arr = np.zeros(self.nb_features)
-        var_arr = np.zeros(self.nb_features)
-        #
-        def sum_func(arr, sum_arr):
-            return np.add(sum_arr, np.sum(arr, axis=0))
+        cols_keep = []
+        nb_samples = ds.count()
+        sum_arr = np.zeros(self._nb_features)
+        mean_arr = np.zeros(self._nb_features)
+        sqr_dev_arr = np.zeros(self._nb_features)
+        var_arr = np.zeros(self._nb_features)
+        
+        # Function for parallel sum computing
+        def get_sums(batch):
+            df = batch[TENSOR_COLUMN_NAME]
+            df = _unwrap_ndarray_object_type_if_needed(df)
+            return({'sum' : [np.sum(df, axis = 0)]})
+        
+        # Sum per column
+        sums = ds.map_batches(get_sums, batch_format = 'numpy')
+        for row in sums.iter_rows():
+            sum_arr += row['sum']
+        
+        # Mean per column
+        mean_arr = sum_arr / nb_samples
+        
+        # Function for parallel squared deviation computing
+        def get_sqr_dev(batch):
+            df = batch[TENSOR_COLUMN_NAME]
+            df = _unwrap_ndarray_object_type_if_needed(df)
+            return({'sqr_dev' : [np.sum(np.power(np.subtract(df, mean_arr), 2), axis = 0)]})
+        
+        # Sum of deviation per column
+        sqr_devs = ds.map_batches(get_sqr_dev, batch_format = 'numpy')
+        for row in sqr_devs.iter_rows():
+            sqr_dev_arr += row['sqr_dev']
 
-        def mean_func(arr, nb_records):
-            return np.divide(arr, nb_records)
+        # Variance per column
+        var_arr = sqr_dev_arr / nb_samples
+        
+        # Compute the threshold from distribution of variance values
+        self.threshold = np.nanquantile(var_arr, self.threshold)
 
-        def sqr_dev_func(arr, mean_arr, sqr_dev_arr):
-            return np.add(sqr_dev_arr, np.sum(np.power(np.subtract(arr, mean_arr), 2), axis = 0))
-
-        if self.nb_keep != np.inf or self.threshold != np.inf:
-            # Get sum per column
-            for batch in ds.iter_batches(
-                batch_size = 100,
-                batch_format = 'numpy'
-            ):
-                sum_arr = sum_func(batch, sum_arr)
-            # Get mean per column
-            mean_arr = mean_func(sum_arr, nb_records)
-            # Get sum of deviation
-            for batch in ds.iter_batches(
-                batch_size = 100,
-                batch_format = 'numpy'
-            ):
-                sqr_dev_arr = sqr_dev_func(batch, mean_arr, sqr_dev_arr)
-            # Get variance per column
-            var_arr = mean_func(sqr_dev_arr, nb_records)
-            p10 = int(0.1 * self.nb_features)
-
-            if self.nb_keep != np.inf and (self.nb_keep + (p10 * 2)) < self.nb_features:
-                var_mapping = {ind : var_arr[ind] for ind in np.arange(self.nb_features)}
-                keep_arr = np.ravel(np.sort(var_arr))
-                keep_arr = keep_arr[p10:(len(keep_arr) - p10)]
-                keep_arr = np.random.choice(keep_arr, self.nb_keep)
-                remove_arr = np.ravel(np.sort(var_arr))
-                remove_arr = np.array([ind for ind in remove_arr if ind not in keep_arr])
-
-                # Switch values from keep_arr to remove if number is discordant
-                if len(keep_arr) > self.nb_keep:
-                    nb_switch = len(keep_arr) - self.nb_keep
-                    remove_arr = np.insert(remove_arr, 0, keep_arr[:nb_switch])
-                    keep_arr = keep_arr[nb_switch:]
-                elif len(keep_arr) < self.nb_keep:
-                    nb_switch = self.nb_keep - len(keep_arr)
-                    keep_arr = np.insert(keep_arr, 0, remove_arr[nb_switch:])
-                    remove_arr = remove_arr[:nb_switch]
-                # Loop to assign values to remove
-                for k, v in var_mapping.items():
-                    if v in remove_arr:
-                        pos_v = int(np.where(remove_arr == v)[0][0])
-                        remove_arr = np.delete(remove_arr, pos_v)
-                        self.stats_.append(k)
-                self.removed_features = [self.features_list[ind] for ind in self.stats_]
-
-            elif self.threshold != np.inf:
-                for ind in np.arange(self.nb_features):
-                    variance = var_arr[ind]
-                    if variance <= self.threshold:
-                        self.stats_.append(ind)
-                self.removed_features = [self.features_list[ind] for ind in self.stats_]
+        # Keep features with values higher than the threshold
+        cols_keep = [self.features[i] for i, var in enumerate(var_arr) if var > self.threshold]
+        
+        if 0 < len(cols_keep) :
+            self.stats_ = {'cols_keep' : cols_keep}
+        else:
+            self.stats_ = {'cols_keep' : self.features}
 
         return self
 
     def _transform_pandas(self, df: pd.DataFrame) -> pd.DataFrame:
-        if len(self.stats_) > 0 :
-            _validate_df(df, TENSOR_COLUMN_NAME, self.nb_features)
-            df_out = pd.DataFrame(columns = [TENSOR_COLUMN_NAME])
+        # _validate_df(df, TENSOR_COLUMN_NAME, self._nb_features)
+        cols_keep = self.stats_['cols_keep']
 
-            for ind, row in enumerate(df.iterrows()):
-                tensor = np.delete(row[1].to_numpy()[0], self.stats_, axis=0)
-                df_out.loc[ind, TENSOR_COLUMN_NAME] = tensor
-            
-            return df_out        
-        else:
-            return df
+        if len(cols_keep) < self._nb_features:
+            tensor_col = df[TENSOR_COLUMN_NAME]
+            tensor_col = _unwrap_ndarray_object_type_if_needed(tensor_col)
+            tensor_col = pd.DataFrame(tensor_col, columns = self.features)
+
+            tensor_col = tensor_col[cols_keep].to_numpy()
+
+            df[TENSOR_COLUMN_NAME] = pd.Series(list(tensor_col))        
+
+        return df
 
     def __repr__(self):
-        return (f"{self.__class__.__name__}(threshold={self.threshold!r}, nb_keep={self.nb_keep!r})")
+        return (f"{self.__class__.__name__}(features={self._nb_features!r}, threshold={self.threshold!r})")
 
 def _validate_df(df: pd.DataFrame, column: str, nb_features: int) -> None:
     if len(df.loc[0, column]) != nb_features:

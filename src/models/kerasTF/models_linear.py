@@ -4,8 +4,6 @@ import warnings
 import numpy as np
 import pandas as pd
 
-from glob import glob
-
 # Class construction
 from abc import ABC, abstractmethod
 
@@ -48,7 +46,6 @@ LABELS_COLUMN_NAME = 'labels'
 # Ignore warnings to have a more comprehensible output on stdout
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 warnings.filterwarnings('ignore')
-
 
 class KerasTFModels(ModelsUtils, ABC):
     """
@@ -103,17 +100,17 @@ class KerasTFModels(ModelsUtils, ABC):
         )
         # Parameters
         # Initialize hidden
-        self._nb_CPU_data = int(os.cpu_count() * 0.2) # 9
-        self._nb_CPU_training = int(os.cpu_count() - self._nb_CPU_data) # 39
-        self._nb_GPU = len(tf.config.list_physical_devices('GPU')) # 4
+        self._nb_CPU_data = int(os.cpu_count() * 0.2) # 6
+        self._nb_CPU_training = int(os.cpu_count() - self._nb_CPU_data) # 26
+        self._nb_GPU = len(tf.config.list_physical_devices('GPU')) # 6
         # Initialize empty
         self._nb_CPU_per_worker = 0
         self._nb_GPU_per_worker = 0
         # Computing variables
         if self._nb_GPU > 0:
             self._use_gpu = True
-            self._n_workers = self._nb_GPU # 4
-            self._nb_CPU_per_worker = int(self._nb_CPU_training / self._n_workers) # 9
+            self._n_workers = self._nb_GPU #6
+            self._nb_CPU_per_worker = int(self._nb_CPU_training / self._n_workers) # 4
             self._nb_GPU_per_worker = 1
         else:
             self._use_gpu = False
@@ -159,6 +156,12 @@ class KerasTFModels(ModelsUtils, ABC):
             ds = ds.materialize()
             datasets[name] = ds
 
+        if self._nb_GPU > 0:
+            self._fit_GPU(datasets)
+        else:
+            self._fit_CPU(datasets)
+
+    def _fit_CPU(self, datasets):
         # Training parameters
         train_params = {
             'batch_size': self.batch_size,
@@ -169,22 +172,16 @@ class KerasTFModels(ModelsUtils, ABC):
             'weights': self._weights
         }
 
-        if self._nb_GPU > 0:
-            train_func = train_func_GPU
-        else:
-            train_func = train_func_CPU
-
         # Define trainer / tuner
         self._trainer = TensorflowTrainer(
-            train_loop_per_worker=train_func,
+            train_loop_per_worker=train_func_CPU,
             train_loop_config=train_params,
             scaling_config=ScalingConfig(
                 trainer_resources={'CPU': self._nb_CPU_data},
                 num_workers=self._n_workers,
                 use_gpu=self._use_gpu,
                 resources_per_worker={
-                    'CPU': self._nb_CPU_per_worker,
-                    'GPU' : self._nb_GPU_per_worker
+                    'CPU': self._nb_CPU_per_worker
                 }
             ),
             run_config=RunConfig(
@@ -195,13 +192,23 @@ class KerasTFModels(ModelsUtils, ABC):
         )
 
         training_result = self._trainer.fit()
-        # self._model_ckpt = training_result.best_checkpoints[0][0]
-        self._model_ckpt = glob(
-            os.path.join(
-                os.path.dirname(training_result.best_checkpoints[0][0].path),'checkpoint_*'
-            )
-        )
-                
+        self._model_ckpt = training_result.best_checkpoints[0][0]
+
+    def _fit_GPU(self, datasets):
+        # Training parameters
+        train_params = {
+            'batch_size': self.batch_size,
+            'epochs': self._training_epochs,
+            'size': self._nb_kmers,
+            'nb_cls': self._nb_classes,
+            'taxa': self.taxa,
+            'workdir':self._workdir,
+            'model': self.classifier,
+            'weights': self._weights
+        }
+
+        self._model_ckpt = train_func_GPU(datasets, train_params)
+
     # Models predicting
     #########################################################################################################
 
@@ -226,27 +233,48 @@ class KerasTFModels(ModelsUtils, ABC):
     def _predict_proba(self, ds):
         print('_predict_proba')
         if ds.count() > 0:
+            if len(ds.schema().names) > 1:
+                col_2_drop = [col for col in ds.schema().names if col != TENSOR_COLUMN_NAME]
+                ds = ds.drop_columns(col_2_drop)
 
             ds = self._scaler.transform(ds)
+
             ds = ds.materialize()
 
-            def predict_func(data):
-                X = _unwrap_ndarray_object_type_if_needed(data[TENSOR_COLUMN_NAME])
-                pred = np.zeros((len(X), len(self._labels_map)-1))
-                for ckpt in self._model_ckpt:
-                    ckpt = TensorflowCheckpoint.from_directory(ckpt)
-                    predictor = TensorflowPredictor().from_checkpoint(ckpt, model_definition = lambda: build_model('cnn', self._nb_classes, self._nb_kmers))
-                    proba = predictor.predict(X)
-                    pred += proba['predictions']
-                pred = pred / len(self._model_ckpt)
-                return {'predictions' : pred}
-            
-            probabilities = ds.map_batches(predict_func, batch_format = 'numpy')
-            probabilities = _unwrap_ndarray_object_type_if_needed(probabilities.to_pandas()['predictions'])
+            if self._nb_GPU > 0:
+                probabilities = self._predict_proba_GPU(ds)
+            else:
+                probabilities = self._predict_proba_CPU(ds)
             
             return probabilities
         else:
             raise ValueError('No data to predict')
+
+    def _predict_proba_CPU(self, ds):
+        print('_predict_proba_CPU')
+        self._predictor = BatchPredictor.from_checkpoint(
+            self._model_ckpt,
+            TensorflowPredictor,
+            model_definition = lambda: build_model(self.classifier, self._nb_classes, self._nb_kmers)
+        )
+        predictions = self._predictor.predict(
+            data = ds,
+            feature_columns = [TENSOR_COLUMN_NAME],
+            batch_size = self.batch_size,
+        )
+
+        probabilities = _unwrap_ndarray_object_type_if_needed(predictions.to_pandas()['predictions'])
+
+        return probabilities
+    
+    def _predict_proba_GPU(self, ds):
+        print('_predict_proba_GPU')
+        model = load_model(self._model_ckpt)
+        probabilities = []
+        for batch in ds.iter_tf_batches(batch_size = self.batch_size):
+            probabilities.extend(model.predict(batch[TENSOR_COLUMN_NAME]))
+
+        return probabilities
 
     @abstractmethod
     def _get_abs_pred(self):
@@ -288,18 +316,17 @@ def train_func_CPU(config):
             feature_columns = TENSOR_COLUMN_NAME,
             label_columns = LABELS_COLUMN_NAME,
             batch_size = batch_size,
-            # local_shuffle_buffer_size = batch_size,
-            # local_shuffle_seed = int(np.random.randint(1,10000, size = 1))
+            local_shuffle_buffer_size = batch_size,
+            local_shuffle_seed = int(np.random.randint(1,10000, size = 1))
         )
         batch_val = val_data.to_tf(
             feature_columns = TENSOR_COLUMN_NAME,
             label_columns = LABELS_COLUMN_NAME,
             batch_size = batch_size,
-            # local_shuffle_buffer_size = batch_size,
-            # local_shuffle_seed = int(np.random.randint(1,10000, size = 1))
+            local_shuffle_buffer_size = batch_size,
+            local_shuffle_seed = int(np.random.randint(1,10000, size = 1))
         )
         # Training
-        # TODO: Move epochs to model.fit instead of in loop?
         history = model.fit(
             x = batch_train,
             validation_data = batch_val,
@@ -322,63 +349,62 @@ def train_func_CPU(config):
     gc.collect()
     tf.keras.backend.clear_session()
 
-
-def train_func_GPU(config):
+def train_func_GPU(datasets, config):
     # Parameters
     batch_size = config.get('batch_size', 128)
     epochs = config.get('epochs', 10)
     size = config.get('size')
     nb_cls = config.get('nb_cls')
+    taxa = config.get('taxa')
+    workdir = config.get('workdir')
     model = config.get('model')
     weights = config.get('weights')
 
-    # Model construction
-    strategy = tf.distribute.MirroredStrategy()
-    with strategy.scope():
-        model = build_model(model, nb_cls, size)
+    checkpoint = os.path.join(workdir, model)
 
     # Data
-    train_data = session.get_dataset_shard('train')
-    val_data = session.get_dataset_shard('validation')
+    train_ds = datasets['train']
+    val_ds = datasets['validation']
 
-    for _ in range(epochs):
-        batch_train = train_data.to_tf(
-            feature_columns = TENSOR_COLUMN_NAME,
-            label_columns = LABELS_COLUMN_NAME,
-            batch_size = batch_size,
-            # local_shuffle_buffer_size = batch_size,
-            # local_shuffle_seed = int(np.random.randint(1,10000, size = 1))
-        )
-        batch_val = val_data.to_tf(
-            feature_columns = TENSOR_COLUMN_NAME,
-            label_columns = LABELS_COLUMN_NAME,
-            batch_size = batch_size,
-            # local_shuffle_buffer_size = batch_size,
-            # local_shuffle_seed = int(np.random.randint(1,10000, size = 1))
-        )
-        # Training
-        # TODO: Move epochs to model.fit instead of in loop?
-        history = model.fit(
-            x = batch_train,
-            validation_data = batch_val,
-            callbacks = [ReportCheckpointCallback()],
-            class_weight = weights,
-            verbose = 0
-        )
-        # Checkpointing
-        session.report({
-            'accuracy': history.history['accuracy'][0],
-            'loss': history.history['loss'][0],
-            'val_accuracy': history.history['val_accuracy'][0],
-            'val_loss': history.history['val_loss'][0],
-        },
-            checkpoint=TensorflowCheckpoint.from_model(model)
-        )
-        gc.collect()
-        tf.keras.backend.clear_session()
-    # del model
-    # gc.collect()
-    # tf.keras.backend.clear_session()
+    # Convert datasets to tensorflow ds & generator
+    train_ds = train_ds.iterator().to_tf(
+        feature_columns = TENSOR_COLUMN_NAME,
+        label_columns = LABELS_COLUMN_NAME,
+        batch_size = batch_size
+    )
+    val_ds = val_ds.to_tf(
+        feature_columns = TENSOR_COLUMN_NAME,
+        label_columns = LABELS_COLUMN_NAME,
+        batch_size = batch_size
+    )
+
+    # Model construction
+    model = build_model(model, nb_cls, size)
+
+    # Callbacks
+    model_file = os.path.join(checkpoint, taxa, '{epoch:03d}.hdf5')
+    model_csv = os.path.join(checkpoint, taxa, 'training_log.csv')
+    modelckpt = ModelCheckpoint(filepath=model_file, monitor='val_loss', save_best_only=True, mode='auto')
+    early = EarlyStopping(monitor='val_loss', mode='auto', patience=10)
+    csv = CSVLogger(model_csv)
+
+    # Training
+    hist = model.fit(
+        train_ds,
+        epochs = epochs,
+        validation_data = val_ds,
+        callbacks = [modelckpt, early, csv],
+        class_weight = weights,
+        verbose = 1
+    )
+
+    # Checkpointing
+    best_model = np.argmin(hist.history['val_loss']) + 1
+    best_model = f'{best_model:03d}.hdf5'
+    best_model = os.path.join(checkpoint, taxa, best_model)
+    
+    return best_model
+
 
 def build_model(classifier, nb_cls, nb_kmers):
     if classifier == 'attention':

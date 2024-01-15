@@ -2,13 +2,17 @@ import os
 import ray
 import json
 import logging
+
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+import pyarrow.parquet as pq
 
+from glob import glob
 from pathlib import Path
 from warnings import warn
 from psutil import virtual_memory
+from tensorflow.config import list_physical_devices
 
 __author__ = "Nicolas de Montigny"
 
@@ -16,6 +20,7 @@ __all__ = [
     'init_ray_cluster',
     'load_Xy_data',
     'save_Xy_data',
+    'read_parquet_files',
     'verify_file',
     'verify_fasta',
     'verify_data_path',
@@ -32,62 +37,120 @@ __all__ = [
     'verify_kmers_list_length',
     'verify_load_data',
     'verify_concordance_klength',
+    'verify_need_scaling',
     'verify_taxas',
     'verify_load_preclassified',
     'merge_save_data',
     'zip_X_y',
-    'ensure_length_ds'
+    'ensure_length_ds',
+    'convert_archaea_bacteria',
+    'verify_load_metagenome',
+    'verify_load_db',
+    'verify_load_host_merge',
+    'merge_db_host'
 ]
+
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+
+# Constants
+#########################################################################################################
+
+TENSOR_COLUMN_NAME = '__value__'
 
 # System
 #########################################################################################################
 
 # Initialize ray cluster
 def init_ray_cluster(workdir):
-    mem = virtual_memory().total
-    frac = 0.8
-    while not ray.is_initialized():
-        try:
-            ray.init(
-                object_store_memory = mem * frac,
-                _temp_dir = str(workdir),
-            )
-            ray.data.DataContext.get_current().execution_options.verbose_progress = True
-            logging.getLogger("ray").setLevel(logging.WARNING)
-        except ValueError :
-            ray.shutdown()
-            frac -= 0.05
+    """
+    1. Get physical material available
+        Number of available CPUs and GPUs
+    2. Get host IP from OS if available
+        Defaults to 172.24.94.34
+    3. Start the ray cluster with parameters
+    """
+    nb_CPU = os.cpu_count()
+    nb_GPU = len(list_physical_devices('GPU'))
 
-# Data handling
+    mem = ray._private.utils.get_shared_memory_bytes() - 10
+
+    if 'HOST_IP' in list(os.environ.keys()):
+        ray.init(address = f"{os.environ['HOST_IP']}:{os.environ['RAY_PORT']}", _node_ip_address = os.environ['HOST_IP'])
+    else:
+        ray.init(
+            num_cpus = nb_CPU,
+            num_gpus = nb_GPU,
+            _temp_dir = str(workdir),
+            object_store_memory = mem,
+            _system_config={
+                "object_spilling_config": json.dumps({
+                    "type": "filesystem",
+                    "params": {
+                        "directory_path": str(workdir)
+                    },
+                })
+            },
+        )
+
+    logging.getLogger("ray").setLevel(logging.WARNING)
+    ray.data.DataContext.get_current().execution_options.verbose_progress = True
+    # mem = virtual_memory().total
+    # frac = 0.8
+    # while not ray.is_initialized():
+    #     try:
+    #         ray.init(
+    #             object_store_memory = mem * frac,
+    #             _temp_dir = str(workdir),
+    #         )
+    #         logging.getLogger("ray").setLevel(logging.WARNING)
+    #         ray.data.DataContext.get_current().execution_options.verbose_progress = True
+    #     except ValueError :
+    #         ray.shutdown()
+    #         frac -= 0.05
+
+# Data I/O
 #########################################################################################################
 
 # Load data from file
 def load_Xy_data(Xy_file):
-    with np.load(Xy_file, allow_pickle=True) as f:
-        return f['data'].tolist()
+    with np.load(Xy_file, allow_pickle=True) as handle:
+        return handle['data'].tolist()
 
 # Save data to file
-def save_Xy_data(df, Xy_file):
-    np.savez(Xy_file, data = df)
+def save_Xy_data(data, Xy_file):
+    np.savez(Xy_file, data = data)
+
+# Read parquet files and handle FileSystem build ImportError
+def read_parquet_files(profile):
+    files_lst = glob(os.path.join(profile, '*.parquet'))
+    try:
+        ds = ray.data.read_parquet_bulk(files_lst, parallelism = len(files_lst))
+    except ImportError:
+        tables_lst = []
+        for file in files_lst:
+            tables_lst.append(pq.read_table(file))
+        ds = ray.data.from_arrow(tables_lst)
+    
+    return ds
 
 # User arguments verification
 #########################################################################################################
 
 def verify_file(file : Path):
-    if file is not None and not os.path.exists(file):
+    if file is not None and not os.path.isfile(file):
         raise ValueError(f'Cannot find file {file} !')
 
 def verify_fasta(file : Path):
-    if not os.path.isfile(file) and not os.path.isdir(file):
+    if not os.path.exists(file):
         raise ValueError('Fasta must be an interleaved fasta file or a directory containing fasta files.')
 
 def verify_data_path(dir : Path):
-    if not os.path.exists(dir):
+    if not os.path.isdir(dir):
         raise ValueError(f"Cannot find data folder {dir} ! Exiting")
 
 def verify_saving_path(dir : Path):
     path, folder = os.path.split(dir)
-    if not os.path.exists(path):
+    if not os.path.isdir(path):
         raise ValueError("Cannot find where to create output folder !")
 
 def verify_host(host : str):
@@ -151,6 +214,9 @@ def verify_concordance_klength(klen1 : int, klen2 : int):
         raise ValueError("K length between datasets is inconsistent ! Exiting\n" +
                 f"K length of bacteria dataset is {klen1} while K length from host is {klen2}")
 
+def verify_need_scaling(data : dict):
+    return False if 'decomposed' in data['profile'] else True
+
 # Verif + handling
 #########################################################################################################
 
@@ -188,10 +254,6 @@ def verify_load_data(data_file: Path):
     verify_file(data_file)
     data = load_Xy_data(data_file)
     verify_data_path(data['profile'])
-    if not isinstance(data['ids'], list):
-        raise ValueError("Invalid data file !")
-    elif not isinstance(data['kmers'], list):
-        raise ValueError("Invalid data file !")
     return data
 
 def verify_taxas(taxas : str, db_taxas : list):
@@ -238,7 +300,7 @@ def merge_classified_data(
     clf_ids.extend(clf_data['unknown_ids'])
     clf_data['unknown_ids'] = list(np.unique(clf_ids))
     # classes
-    dct_diff = {k : v for k,v in db_data.items() if k not in clf_data.keys()}
+    dct_diff = {k : v for k, v in db_data.items() if k not in clf_data.keys()}
     clf_data = {**clf_data,**dct_diff}
 
     return clf_data
@@ -282,3 +344,76 @@ def ensure_length_ds(len_x, len_y):
     if len_x != len_y:
         raise ValueError(
             'X and y have different lengths: {} and {}'.format(len_x, len_y))
+
+# Datasets handling
+#########################################################################################################
+
+def convert_archaea_bacteria(df):
+    df.loc[df['domain'].str.lower() == 'archaea', 'domain'] = 'Bacteria'
+    return df
+
+def verify_load_metagenome(data):
+    """
+    Wrapper function for verifying and loading the metagenome dataset
+    """
+    data = verify_load_data(data)
+    ds = read_parquet_files(data['profile'])
+    
+    return data, ds
+
+
+def verify_load_db(db_data):
+    """
+    Wrapper function for verifying and loading the db dataset
+    """
+    db_data = verify_load_data(db_data)
+    db_ds = read_parquet_files(db_data['profile'])
+    db_ds = db_ds.map_batches(convert_archaea_bacteria, batch_format = 'pandas')
+    
+    return db_data, db_ds
+
+def verify_load_host_merge(db_data, host_data):
+    """
+    Wrapper function for verifying, loading and merging both datasets
+    """
+    db_data = verify_load_data(db_data)
+    host_data = verify_load_data(host_data)
+    verify_concordance_klength(len(db_data['kmers'][0]), len(host_data['kmers'][0]))
+    merged_data, merged_ds = merge_db_host(db_data, host_data)
+    
+    return merged_data, merged_ds
+
+def merge_db_host(db_data, host_data):
+    """
+    Merge the two databases along the rows axis
+    """
+    merged_db_host = {}
+    merged_db_host_file = f"{db_data['profile']}_host_merged.npz"
+
+    if os.path.isfile(merged_db_host_file):
+        merged_db_host = load_Xy_data(merged_db_host_file)
+        merged_ds = read_parquet_files(merge_db_host['profile'])
+    else:
+        merged_db_host['profile'] = f"{db_data['profile']}_host_merged"
+        db_ds = read_parquet_files(db_data['profile'])
+        host_ds = read_parquet_files(host_data['profile'])
+
+        cols2drop = [col for col in db_ds.schema().names if col not in ['id','domain',TENSOR_COLUMN_NAME]]
+        db_ds = db_ds.drop_columns(cols2drop)
+
+        cols2drop = [col for col in host_ds.schema().names if col not in ['id','domain',TENSOR_COLUMN_NAME]]
+        host_ds = host_ds.drop_columns(cols2drop)
+
+        merged_ds = db_ds.union(host_ds)
+        merged_ds = merged_ds.map_batches(convert_archaea_bacteria, batch_format = 'pandas')
+        merged_ds.write_parquet(merged_db_host['profile'])
+    
+    merged_db_host['ids'] = np.concatenate((db_data["ids"], host_data["ids"]))  # IDs
+    merged_db_host['kmers'] = db_data['kmers']  # Features
+    merged_db_host['taxas'] = ['domain']  # Known taxas for classification
+    merged_db_host['fasta'] = (db_data['fasta'], host_data['fasta'])  # Fasta file needed for reads simulation
+    merged_db_host['csv'] = (db_data['csv'], host_data['csv'])  # csv file needed for classes weights
+        
+    save_Xy_data(merged_db_host, merged_db_host_file)
+
+    return merged_db_host, merged_ds

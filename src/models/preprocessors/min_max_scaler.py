@@ -4,6 +4,7 @@ import pandas as pd
 
 from ray.data.dataset import Dataset
 from ray.data.preprocessor import Preprocessor
+from ray.air.util.data_batch_conversion import _unwrap_ndarray_object_type_if_needed
 
 TENSOR_COLUMN_NAME = '__value__'
 
@@ -12,9 +13,9 @@ class TensorMinMaxScaler(Preprocessor):
     Custom implementation of Ray's MinMax Scaler for usage with tensor column in ray.data.dataset.Dataset.
     """
     
-    def __init__(self, features_list):
+    def __init__(self, nb_features):
         # Parameters
-        self._features_list = features_list
+        self._nb_features = nb_features
         
     def _fit(self, ds: Dataset) -> Preprocessor:
         """
@@ -22,16 +23,15 @@ class TensorMinMaxScaler(Preprocessor):
         """
         min = []
         max = []
-        nb_features = len(self._features_list)
 
         def Min(dct):
             arr = dct[TENSOR_COLUMN_NAME]
-            min = np.array([arr[:,i].min() for i in range(nb_features)])
+            min = np.array([arr[:,i].min() for i in range(self._nb_features)])
             return min
 
         def Max(dct):
             arr = dct[TENSOR_COLUMN_NAME]
-            max = np.array([arr[:,i].max() for i in range(nb_features)])
+            max = np.array([arr[:,i].max() for i in range(self._nb_features)])
             return max
 
         for batch in ds.iter_batches(batch_format = 'numpy'):
@@ -41,8 +41,8 @@ class TensorMinMaxScaler(Preprocessor):
         min = np.array(min)
         max = np.array(max)
 
-        min = np.array([min[:,i].min() for i in range(nb_features)])
-        max = np.array([max[:,i].max() for i in range(nb_features)])
+        min = np.array([min[:,i].min() for i in range(self._nb_features)])
+        max = np.array([max[:,i].max() for i in range(self._nb_features)])
                 
         self.stats_ = {'min' : min, 'max' : max}
 
@@ -54,7 +54,8 @@ class TensorMinMaxScaler(Preprocessor):
         """
         min = self.stats_['min']
         max = self.stats_['max']
-        df = np.vstack(batch[TENSOR_COLUMN_NAME].to_numpy())
+        df = batch[TENSOR_COLUMN_NAME]
+        df = _unwrap_ndarray_object_type_if_needed(df)
 
         diff = max - min
         diff[diff == 0] = 1
@@ -78,4 +79,4 @@ class TensorMinMaxScaler(Preprocessor):
         return batch
 
     def __repr__(self):
-        return f"{self.__class__.__name__}(columns={self._features_list!r})"
+        return f"{self.__class__.__name__}(columns={self._nb_features!r})"

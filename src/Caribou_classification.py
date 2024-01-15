@@ -6,26 +6,21 @@ import argparse
 from utils import *
 from time import time
 from pathlib import Path
+from models.reads_simulation import split_sim_dataset
 from models.classification import ClassificationMethods
 
 __author__ = "Nicolas de Montigny"
 
 __all__ = ['bacteria_classification_train_cv']
 
+TRAINING_DATASET_NAME = 'train'
+VALIDATION_DATASET_NAME = 'validation'
+
 # Initialisation / validation of parameters from CLI
 ################################################################################
 def bacteria_classification(opt):
-    # Verify existence of files and load data
-    data_bacteria = verify_load_data(opt['data_bacteria'])
-    data_metagenome = verify_load_data(opt['data_metagenome'])
-    k_length = len(data_bacteria['kmers'][0])
     
-    if opt['preclassified_data'] is not None:
-        preclassified_data = verify_load_preclassified(opt['preclassified_data'])
-    else:
-        preclassified_data = None
-
-    # Verify that model type is valid / choose default depending on host presence
+    # Verify that model type is valid / choose default
     if opt['model_type'] is None:
         opt['model_type'] = 'cnn'
 
@@ -35,72 +30,88 @@ def bacteria_classification(opt):
     
     outdirs = define_create_outdirs(opt['outdir'])
 
+    # Initialize cluster
+    init_ray_cluster(opt['workdir'])
+
+# Data loading
+################################################################################
+
+    db_data, db_ds = verify_load_db(opt['data_bacteria'])
+
     # Validate and extract list of taxas
     if opt['taxa'] is not None:
-        lst_taxas = verify_taxas(opt['taxa'], data_bacteria['taxas'])
+        lst_taxas = verify_taxas(opt['taxa'], db_data['taxas'])
     else:
-        lst_taxas = data_bacteria['taxas'].copy()
+        lst_taxas = db_data['taxas'].copy()
     
     if 'domain' in lst_taxas:
         lst_taxas.remove('domain')
 
-    # Initialize cluster
-    init_ray_cluster(opt['workdir'])
+    # Verify need for scaling
+    scaling = verify_need_scaling(db_data)
 
-# Definition of model for bacteria taxonomic classification + training
+    if opt['validation'] is not None:
+        val_data, val_ds = verify_load_metagenome(opt['validation'])
+    else:
+        val_data, val_ds = split_sim_dataset(db_ds, db_data, f"{VALIDATION_DATASET_NAME}_{opt['database_name']}")
+
+    datasets = {
+        TRAINING_DATASET_NAME : db_ds,
+        VALIDATION_DATASET_NAME : val_ds
+    }
+
+    metagenome_data, metagenome_ds = verify_load_metagenome(opt['data_metagenome'])
+
+# Definition of model for bacteria taxonomic classification
 ################################################################################
+    
     clf = ClassificationMethods(
-        database_k_mers = data_bacteria,
-        k = k_length,
+        db_data = db_data,
         outdirs = outdirs,
-        database = opt['database_name'],
-        classifier_multiclass = opt['model_type'],
+        db_name = opt['database_name'],
+        clf_multiclass = opt['model_type'],
         taxa = lst_taxas,
         batch_size = opt['batch_size'],
         training_epochs = opt['training_epochs'],
-        verbose = opt['verbose'],
-        cv = False
+        scaling = scaling
     )
     
 # Execution of bacteria taxonomic classification on metagenome + save results
 ################################################################################
     
-    t_start = time()
-    end_taxa = clf.execute_training_prediction(data_metagenome)
-    t_end = time()
-    t_classif = t_end - t_start
-    clf_data = merge_save_data(
-        clf.classified_data,
-        data_metagenome,
-        end_taxa,
-        outdirs['results_dir'],
-        opt['metagenome_name'],
-        preclassified = preclassified_data,
-    )
-    if opt['taxa'] is None:
-        opt['taxa'] = 'all'
-    clf_data['classification'].to_csv(os.path.join(outdirs['results_dir'], f"classification_K{k_length}_{opt['taxa']}_{opt['model_type']}.csv"))
-    if end_taxa is None:
-        print(f"Caribou finished training the {opt['model_type']} model and classifying bacterial sequences at {opt['taxa']} taxonomic level with it. \
-            \nThe training and classification steps took {t_classif} seconds to execute.")
-    else:
-        print(f"Caribou finished training the {opt['model_type']} model and classifying bacterial sequences at {opt['taxa']} taxonomic level until {end_taxa} because there were no more sequences to classify. \
-            \nThe training and classification steps took {t_classif} seconds to execute.")
+    t_s = time()
+    clf.fit(datasets)
+    t_fit = time() - t_s
+
+    t_s = time()
+    predictions = clf.predict(metagenome_ds)
+    t_clf = time() - t_s
+
+    Xy_file = os.path.join(outdirs['results_dir'], f"extracted_bacteria_{opt['metagenome_name']}_{opt['model_type']}.npz")
+    save_Xy_data(predictions, Xy_file)
+
+    print(f"""
+          Caribou finished training the {opt['model_type']} model in {t_fit} seconds.
+          Classification of bacteria from {opt['metagenome_name']} dataset was then executed in {t_clf} seconds.
+          """)
 
 # Argument parsing from CLI
 ################################################################################
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='This script trains a model and classifies bacteria sequences iteratively over known taxonomic levels.')
+    # Database
     parser.add_argument('-db','--data_bacteria', required=True, type=Path, help='PATH to a npz file containing the data corresponding to the k-mers profile for the bacteria database')
-    parser.add_argument('-mg','--data_metagenome', required=True, type=Path, help='PATH to a npz file containing the data corresponding to the k-mers profile for the metagenome to classify')
     parser.add_argument('-dt','--database_name', required=True, help='Name of the bacteria database used to name files')
+    # Dataset
+    parser.add_argument('-mg','--data_metagenome', required=True, type=Path, help='PATH to a npz file containing the data corresponding to the k-mers profile for the metagenome to classify')
     parser.add_argument('-mn','--metagenome_name', required=True, help='Name of the metagenome to classify used to name files')
-    parser.add_argument('-pc','--preclassified_data', default=None, type=Path,help='Optional. PATH to a .npz file contianing classified data at another taxonomic level than the ones in the current analysis')
-    parser.add_argument('-model','--model_type', default='lstm_attention', choices=['sgd','mnb','lstm_attention','cnn','widecnn'], help='The type of model to train')
-    parser.add_argument('-t','--taxa', default=None, help='The taxonomic level to use for the classification, defaults to species. Can be one level or a list of levels separated by commas.')
+    # Optional datasets
+    parser.add_argument('-v','--validation', default=None, type=Path, help='PATH to a npz file containing the k-mers profile for the validation dataset')
+    # Parameters
+    parser.add_argument('-model','--model_type', default='sgd', choices=['sgd','mnb','lstm_attention','cnn','widecnn'], help='The type of model to train')
+    parser.add_argument('-tx','--taxa', default=None, help='The taxonomic level to use for the classification, defaults to species. Can be one level or a list of levels separated by commas.')
     parser.add_argument('-bs','--batch_size', default=32, type=int, help='Size of the batch size to use, defaults to 32')
     parser.add_argument('-e','--training_epochs', default=100, type=int, help='The number of training iterations for the neural networks models if one ise chosen, defaults to 100')
-    parser.add_argument('-v','--verbose', action='store_true', help='Should the program be verbose')
     parser.add_argument('-o','--outdir', required=True, type=Path, help='PATH to a directory on file where outputs will be saved')
     parser.add_argument('-wd','--workdir', default='/tmp/spill', type=Path, help='Optional. Path to a working directory where Ray Tune will output and spill tuning data')
     args = parser.parse_args()

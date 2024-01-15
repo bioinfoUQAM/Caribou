@@ -14,8 +14,8 @@ class TensorPowerTransformer(Preprocessor):
     """
     Custom implementation of Ray's PowerTransformer for usage with tensor column in ray.data.dataset.Dataset.
     """
-    def __init__(self, features_list: List[str]):
-        self._features_list = features_list
+    def __init__(self, features: List[str]):
+        self._features = features
         self.method = "yeo-johnson"
         self.stats_ = {}
 
@@ -25,7 +25,7 @@ class TensorPowerTransformer(Preprocessor):
         """
         nb_samples = ds.count()
         dct_values = {}
-        for feature in self._features_list:
+        for feature in self._features:
             dct_values[feature] = np.zeros(nb_samples, dtype = np.int32)
         
         previous_pos = 0
@@ -33,7 +33,7 @@ class TensorPowerTransformer(Preprocessor):
         for batch in ds.iter_batches(batch_format = 'numpy'):
             batch = batch[TENSOR_COLUMN_NAME]
             batch_size = len(batch)
-            for i, feature in enumerate(self._features_list):
+            for i, feature in enumerate(self._features):
                 dct_values[feature][previous_pos:(previous_pos+batch_size)] = batch[:,i]
             previous_pos = previous_pos + batch_size
         
@@ -49,7 +49,7 @@ class TensorPowerTransformer(Preprocessor):
         """
         Transform the given dataset to pandas dataframe.
         """
-        df = pd.DataFrame(np.vstack(batch[TENSOR_COLUMN_NAME]), columns = self._features_list)
+        df = pd.DataFrame(np.vstack(batch[TENSOR_COLUMN_NAME]), columns = self._features)
         for feature, transformer in self.stats_.items():
             transformed = df[feature].to_numpy().reshape(-1,1)
             transformed = transformer.transform(transformed)

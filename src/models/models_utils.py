@@ -1,12 +1,13 @@
 import os
 import warnings
+import numpy as np
 import pandas as pd
 
 # Class construction
 from abc import ABC, abstractmethod
 
-# CV metrics
-from sklearn.metrics import precision_recall_fscore_support
+# Class weights
+from sklearn.utils.class_weight import compute_class_weight
 
 __author__ = 'Nicolas de Montigny'
 
@@ -18,7 +19,7 @@ warnings.filterwarnings('ignore')
 
 class ModelsUtils(ABC):
     """
-    Utilities for preprocessing data and doing cross validation using ray
+    Abstract class for both frameworks to initialize their attributes.
 
     ----------
     Attributes
@@ -43,14 +44,11 @@ class ModelsUtils(ABC):
     Methods
     ----------
 
-    train : only train or cross-validate training of classifier
+    fit : only train or cross-validate training of classifier
         X : ray.data.Dataset
             Dataset containing the K-mers profiles of sequences for learning
         y : ray.data.Dataset
             Dataset containing the classes of sequences for learning
-        cv : boolean
-            Should cross-validation be verified or not.
-            Defaults to True.
 
     predict : abstract method to predict the classes of a dataset
 
@@ -58,85 +56,49 @@ class ModelsUtils(ABC):
     def __init__(
         self,
         classifier,
-        dataset,
         outdir_model,
-        outdir_results,
         batch_size,
         training_epochs,
-        k,
         taxa,
         kmers_list,
-        verbose
+        csv
     ):
         # Parameters
         self.classifier = classifier
-        self.dataset = dataset
-        self.outdir_results = outdir_results
         self.batch_size = batch_size
-        self.k = k
         self.taxa = taxa
         self.kmers = kmers_list
-        self.verbose = verbose
         # Initialize hidden
+        self._csv = csv
         self._nb_kmers = len(kmers_list)
         self._training_epochs = training_epochs
         # Initialize empty
-        self._labels_map = None
-        self._predict_ids = []
-        # Initialize Ray variables
+    # TODO: remove the variable that are not required to be kept throughout the classes
         self._clf = None
-        self._preprocessor = None
-        self._model_ckpt = None
+        self._weights = {}
+        self._scaler = None
+        self._encoded = []
+        self._encoder = None
         self._trainer = None
-        self._train_params = {}
+        self._reductor = None
         self._predictor = None
+        self._labels_map = {}
+        self._model_ckpt = None
+        self._train_params = {}
+        self._preprocessor = None
         self._workdir = outdir_model
-        # Files
-        self._cv_csv = os.path.join(self.outdir_results,'{}_{}_K{}_cv_scores.csv'.format(self.classifier, self.taxa, self.k))
+
+
 
     @abstractmethod
-    def preprocess(self, df):
-        """
-        """
-
-    @abstractmethod
-    def train(self):
+    def preprocess(self, ds):
         """
         """
 
     @abstractmethod
-    def _fit_model(self):
+    def fit(self):
         """
         """
-
-    @abstractmethod
-    def _cross_validation(self):
-        """
-        """
-
-    def _cv_score(self, y_true, y_pred):
-        print('_cv_score')
-
-        y_compare = pd.DataFrame({
-            'y_true': y_true,
-            'y_pred': y_pred
-        })
-        y_compare['y_true'] = y_compare['y_true'].str.lower()
-        y_compare['y_pred'] = y_compare['y_pred'].str.lower()
-        y_compare.to_csv(os.path.join(self._workdir, f'y_compare_{self.dataset}_{self.classifier}.csv'))
-
-        support = precision_recall_fscore_support(
-            y_compare['y_true'],
-            y_compare['y_pred'],
-            average = 'weighted'
-        )
-
-        scores = pd.DataFrame(
-            {self.classifier : [support[0],support[1],support[2]]},
-            index = ['Precision','Recall','F-score']
-        )
-
-        scores.to_csv(self._cv_csv, index = True)
 
     @abstractmethod
     def predict(self):
@@ -144,11 +106,39 @@ class ModelsUtils(ABC):
         """
 
     @abstractmethod
-    def _prob_2_cls(self):
+    def _get_threshold_pred(self):
         """
         """
 
-    @abstractmethod
-    def _label_decode(self):
+    def _compute_weights(self):
         """
+        Set class weights depending on their abundance in data-associated classes csv
         """
+        weights = {}
+        if isinstance(self._csv, tuple):
+            cls = pd.concat([pd.read_csv(self._csv[0]),pd.read_csv(self._csv[1])], axis = 0, join = 'inner', ignore_index = True)
+        else:
+            cls = pd.read_csv(self._csv)
+        if self.taxa == 'domain':
+            cls.loc[cls['domain'].str.lower() == 'archaea', 'domain'] = 'Bacteria'
+        classes = list(cls[self.taxa].unique())
+        cls_weights = compute_class_weight(
+            class_weight = 'balanced',
+            classes = classes,
+            y = cls[self.taxa]
+        )
+        
+        for lab, encoded in self._labels_map.items():
+            if lab.lower() != 'unknown':
+                weights[int(encoded)] = cls_weights[classes.index(lab)]
+        
+        return weights
+    
+    def _label_decode(self, predict):
+        print('_label_decode')
+
+        decoded = pd.Series(np.empty(len(predict), dtype=object))
+        for label, encoded in self._labels_map.items():
+            decoded[predict == encoded] = label
+
+        return np.array(decoded)

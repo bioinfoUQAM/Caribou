@@ -26,6 +26,9 @@ from ray.train.sklearn._sklearn_utils import _set_cpu_params
 
 from ray.train.sklearn import SklearnTrainer
 
+TENSOR_COLUMN_NAME = '__value__'
+LABELS_COLUMN_NAME = 'labels'
+
 simplefilter(action='ignore', category=FutureWarning)
 
 class SklearnPartialTrainer(SklearnTrainer):
@@ -38,7 +41,6 @@ class SklearnPartialTrainer(SklearnTrainer):
         *,
         estimator,
         datasets,
-        label_column = None,
         labels_list = None,
         features_list = None,
         params = None,
@@ -57,7 +59,7 @@ class SklearnPartialTrainer(SklearnTrainer):
         super().__init__(
         estimator = estimator,
         datasets = datasets,
-        label_column = label_column,
+        label_column = LABELS_COLUMN_NAME,
         params = params,
         scoring = scoring,
         cv = cv,
@@ -205,16 +207,19 @@ class SklearnPartialTrainer(SklearnTrainer):
                 for batch_X, batch_y in zip(
                     epoch_X.iter_batches(
                         batch_size = self._batch_size,
+                        # batch_size = 1,
                         batch_format = 'numpy'
                     ),
                     epoch_y.iter_batches(
                         batch_size = self._batch_size,
+                        # batch_size = 1,
                         batch_format = 'numpy'
                     )
                 ):  
                     if isinstance(batch_X, dict):
-                        batch_X = batch_X['__value__']
-                        
+                        batch_X = batch_X[TENSOR_COLUMN_NAME]
+                    
+                    """    
                     try:
                         batch_X = pd.DataFrame(batch_X, columns = self._features_list)
                     except ValueError:
@@ -224,6 +229,7 @@ class SklearnPartialTrainer(SklearnTrainer):
                                     Removing the last {} additionnal values, this may influence training.\
                                         If this persists over multiple samples, please rerun the K-mers extraction".format(len(batch_X[i]) - len(self._features_list)))
                                 batch_X[i] = batch_X[i][:len(self._features_list)]
+                    """
                     batch_y = np.ravel(batch_y[self.label_column])
                     try:
                         self.estimator.partial_fit(batch_X, batch_y, classes = self._labels, **self.fit_params)
@@ -231,26 +237,29 @@ class SklearnPartialTrainer(SklearnTrainer):
                         self.estimator.partial_fit(batch_X, batch_y, **self.fit_params)
                 fit_time = time() - start_time
 
-        if len(self._labels) > 2:
-            with parallel_backend("ray", n_jobs=num_cpus):
-                X_calib_df = np.empty((X_calib.count(), len(self._features_list)))
-                for ind, batch in enumerate(X_calib.iter_batches(
-                    batch_size = 1,
-                    batch_format = 'numpy'
-                )):
-                    X_calib_df[ind] = batch['__value__']
+        # Calibrated classifier was meant to give the predict_proba method but all used models implement it and learning should be faster without it
+        # if len(self._labels) > 2:
+        #     with parallel_backend("ray", n_jobs=num_cpus):
+        #         X_calib_df = np.empty((X_calib.count(), len(self._features_list)))
+        #         for ind, batch in enumerate(X_calib.iter_batches(
+        #             batch_size = 1,
+        #             batch_format = 'numpy'
+        #         )):
+                    # X_calib_df[ind] = batch[TENSOR_COLUMN_NAME]
 
-                X_calib = pd.DataFrame(X_calib_df, columns = self._features_list)
-                y_calib = y_calib.to_pandas()
-                self.estimator = CalibratedClassifierCV(
-                    estimator = self.estimator,
-                    method = 'sigmoid',
-                    cv = 'prefit',
-                )
-                self.estimator.fit(
-                    X_calib,
-                    y_calib,
-                )
+        #         """
+        #         X_calib = pd.DataFrame(X_calib_df, columns = self._features_list)
+        #         """
+        #         y_calib = y_calib.to_pandas().to_numpy()
+        #         self.estimator = CalibratedClassifierCV(
+        #             estimator = self.estimator,
+        #             method = 'sigmoid',
+        #             cv = 'prefit',
+        #         )
+        #         self.estimator.fit(
+        #             X_calib_df,
+        #             y_calib,
+        #         )
         
         with tune.checkpoint_dir(step=1) as checkpoint_dir:
             with open(os.path.join(checkpoint_dir, MODEL_KEY), "wb") as f:
@@ -300,16 +309,19 @@ class SklearnPartialTrainer(SklearnTrainer):
 
             start_time = time()
             for batch, labels in zip(X_test.iter_batches(
-                    batch_size = self._batch_size,
+                    # batch_size = self._batch_size,
+                    batch_size = 1,
                     batch_format = 'numpy'
                 ), y_test.iter_batches(
-                    batch_size=self._batch_size,
+                    # batch_size = self._batch_size,
+                    batch_size = 1,
                     batch_format = 'numpy'
                 )
             ):
                 if isinstance(batch, dict):
-                    batch = batch['__value__']
+                    batch = batch[TENSOR_COLUMN_NAME]
 
+                """
                 try:
                     batch = pd.DataFrame(batch, columns = self._features_list)
                 except ValueError:
@@ -319,9 +331,9 @@ class SklearnPartialTrainer(SklearnTrainer):
                                 Removing the last {} additionnal values, this may influence training.\
                                     If this persists over multiple samples, please rerun the K-mers extraction".format(len(batch[i]) - len(self._features_list)))
                             batch[i] = batch[i][:len(self._features_list)]
+                """
+                
                 labels = np.ravel(labels[self.label_column])
-
-                print(batch)
 
                 try:
                     test_scores.append(_score(estimator, batch, labels, scorers))

@@ -4,18 +4,22 @@ import numpy as np
 import pandas as pd
 
 import os
+import ray
 import gzip
+import warnings
 
+from utils import *
 from Bio import SeqIO
 from glob import glob
 from pathlib import Path
+from shutil import rmtree
 from warnings import warn
 from data.build_data import build_load_save_data
 from joblib import Parallel, delayed, parallel_backend
 
 __author__ = "Nicolas de Montigny"
 
-__all__ = ['ReadsSimulation']
+__all__ = ['ReadsSimulation','split_sim_dataset','sim_dataset']
 
 # Reduce number of cpus used to reduce nb of tmp files
 # reduce number of reads generated
@@ -75,7 +79,7 @@ class readsSimulation():
             self._fasta_host = None
         self._cls_in = cls
         self._genomes = genomes
-        self._nb_reads = len(genomes) * 5
+        self._nb_reads = len(genomes) * 3
         self._sequencing = sequencing
         self._path = outdir
         self._tmp_path = os.path.join(outdir,'tmp')
@@ -89,7 +93,11 @@ class readsSimulation():
         self._cls_out = os.path.join(outdir, f'sim_{self._name}_class.csv')
         # Dataset variables
         self.kmers_data = {}
-        os.mkdir(self._tmp_path)
+        try:
+            os.mkdir(self._tmp_path)
+        except FileExistsError:
+            rmtree(self._tmp_path)
+            os.mkdir(self._tmp_path)
 
     def simulation(self, k = None, kmers_list = None):
         k, kmers_list = self._verify_sim_arguments(k, kmers_list)
@@ -204,3 +212,37 @@ class readsSimulation():
             warn("K is provided but k-mers list is None, k-mers list will be generated")
             raise ValueError("k value was provided but not k-mers list, please provide a k-mers list or no k value")
         return k, kmers_list
+
+# Helper functions
+#########################################################################################################
+
+def split_sim_dataset(ds, data, name):
+    splitted_path = os.path.join(os.path.dirname(data['profile']), f'Xy_genome_simulation_{name}_data_K{len(data["kmers"][0])}.npz')
+    if os.path.isfile(splitted_path):
+        warnings.warn(f'The {name} dataset already exists, skipping simulation and loading the dataset')
+        splitted_data = load_Xy_data(splitted_path)
+        splitted_ds = read_parquet_files(splitted_data['profile'])
+        return splitted_ds, splitted_data
+    else:
+        splitted_ds = ds.random_sample(0.1)
+        if splitted_ds.count() == 0:
+            nb_samples = round(ds.count() * 0.1)
+            splitted_ds = ds.random_shuffle().limit(nb_samples)
+        splitted_data, splitted_ds = sim_dataset(splitted_ds, data, name)
+        return splitted_data, splitted_ds 
+
+def sim_dataset(ds, data, name):
+    """
+    Simulate the dataset from the database and generate its data
+    """
+    k = len(data['kmers'][0])
+    cols = ['id']
+    cols.extend(data['taxas'])
+    cls = pd.DataFrame(columns = cols)
+    for batch in ds.iter_batches(batch_format = 'pandas'):
+        cls = pd.concat([cls, batch[cols]], axis = 0, ignore_index = True)
+    sim_outdir = os.path.dirname(data['profile'])
+    cv_sim = readsSimulation(data['fasta'], cls, list(cls['id']), 'miseq', sim_outdir, name)
+    sim_data = cv_sim.simulation(k, data['kmers'])
+    sim_ds = read_parquet_files(sim_data['profile'])
+    return sim_data, sim_ds

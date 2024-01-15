@@ -15,10 +15,6 @@ from os.path import splitext
 from data.extraction.seen_kmers_vectorizer import SeenKmersVectorizer
 from data.extraction.given_kmers_vectorizer import GivenKmersVectorizer
 
-# Features selection
-from data.reduction.chi2_selection import TensorChi2Selection
-from data.reduction.occurence_exclusion import TensorPercentOccurenceExclusion
-
 __author__ = ['Amine Remita', 'Nicolas de Montigny']
 
 __all__ = ['KmersCollection']
@@ -323,7 +319,7 @@ class KmersCollection():
                 self.df = self.df.repartition(int(self.df.count()/10))
         else:
             self._files_list = glob(os.path.join(self._tmp_dir, '*.parquet'))
-            self.df = ray.data.read_parquet_bulk(self._files_list, parallelism = len(self._files_list))
+            self.df = ray.data.read_parquet_bulk(self._files_list, parallelism = len(files_lst))
 
     def _kmers_tokenization(self):
         print('_kmers_tokenization')
@@ -342,27 +338,7 @@ class KmersCollection():
         self.df = tokenizer.transform(self.df)
         if self.method == 'seen':
             self.kmers_list = tokenizer.stats_['tokens(sequence)']
-            self._kmers_reduction()
-
-    def _kmers_reduction(self):
-        # Exclusion of columns occuring in less 5% / more 95% of the samples
-        excluder = TensorPercentOccurenceExclusion(
-            features = self.kmers_list,
-            percent = 0.05
-        )
-        self.df = excluder.fit_transform(self.df)
-        
-        self.kmers_list = excluder.stats_['cols_keep']
-
-        # Chi2 evaluation of dependance between features and classes
-        selector = TensorChi2Selection(
-            features = self.kmers_list,
-            threshold = 0.05
-        )
-        self.df = selector.fit_transform(self.df)
-        
-        self.kmers_list = selector.stats_['cols_keep']
-
+ 
     def _write_dataset(self):
         self.df.write_parquet(self.Xy_file)
         rmtree(self._tmp_dir)

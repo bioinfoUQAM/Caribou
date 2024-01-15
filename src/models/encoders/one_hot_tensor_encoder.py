@@ -23,11 +23,14 @@ class OneHotTensorEncoder(Preprocessor):
             [self.column],
             encode_lists = False,
         )
-
+            
         return self
 
     def _transform_pandas(self, df: pd.DataFrame) -> pd.DataFrame:
         df = _validate_df(df, self.column)
+
+        values = self.stats_[f"unique_values({self.column})"]
+        nb_unique = len(values.keys())
 
         def tensor_col_encoding(label, nb_unique):
             tensor = np.zeros(nb_unique, dtype = np.int32)
@@ -36,9 +39,6 @@ class OneHotTensorEncoder(Preprocessor):
                 tensor[label] = 1
             
             return tensor
-
-        values = self.stats_[f"unique_values({self.column})"]
-        nb_unique = len(values.keys())
 
         df = df.assign(labels = lambda x: TensorArray([tensor_col_encoding(x.loc[ind,self.column], nb_unique) for ind in df.index]))
 

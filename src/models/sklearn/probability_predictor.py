@@ -41,7 +41,7 @@ class SklearnTensorProbaPredictor(SklearnPredictor):
         if TENSOR_COLUMN_NAME in data:
             data = data[TENSOR_COLUMN_NAME]
             data = _unwrap_ndarray_object_type_if_needed(data)
-            data = pd.DataFrame(data, columns = features)
+            # data = pd.DataFrame(data, columns = features)
 
         with parallel_backend("ray", n_jobs=num_estimator_cpus):
             df = pd.DataFrame(self.estimator.predict_proba(data, **predict_kwargs))
