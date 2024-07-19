@@ -11,6 +11,7 @@ import warnings
 from utils import *
 from Bio import SeqIO
 from glob import glob
+from tqdm import tqdm
 from pathlib import Path
 from shutil import rmtree
 from warnings import warn
@@ -109,7 +110,7 @@ class readsSimulation():
         if k is not None and kmers_list is not None:
             self._kmers_dataset(k, kmers_list)
             generated_files = glob(f'{self._prefix}*')
-            for file in generated_files:
+            for file in tqdm(generated_files, desc = 'Removing files: '):
                 os.remove(file)
             return self.kmers_data
             
@@ -124,7 +125,7 @@ class readsSimulation():
                 elif os.path.isdir(file):
                     self._add_tmp_fasta_dir(file)
             elif isinstance(file, list):
-                for f in file:
+                for f in tqdm(file, desc = 'Fasta files tmp copy: '):
                     if os.path.splitext(f)[1] == '.gz':
                         self._add_tmp_fasta_gz(f)
                     else:
@@ -132,13 +133,13 @@ class readsSimulation():
 
     def _add_tmp_fasta_fa(self, file):
         with open(file, 'rt') as handle_in, open(self._fasta_tmp, 'at') as handle_out:
-            for record in SeqIO.parse(handle_in, 'fasta'):
+            for record in tqdm(SeqIO.parse(handle_in, 'fasta'), desc = 'Genomes in fasta file: '):
                 if record.id in self._genomes:
                     SeqIO.write(record, handle_out, 'fasta')
 
     def _add_tmp_fasta_gz(self, file):
         with gzip.open(file, 'rt') as handle_in, open(self._fasta_tmp, 'at') as handle_out:
-            for record in SeqIO.parse(handle_in, 'fasta'):
+            for record in tqdm(SeqIO.parse(handle_in, 'fasta'), desc = 'Genomes in fasta.gz file: '):
                 if record.id in self._genomes:
                     SeqIO.write(record, handle_out, 'fasta')
 
@@ -150,10 +151,10 @@ class readsSimulation():
         with parallel_backend('threading'):
             fastas_to_write = Parallel(n_jobs = -1, prefer = 'threads', verbose = 1)(
                 delayed(self._parallel_fasta_to_write)
-                (file) for file in files_lst)
+                (file) for file in tqdm(files_lst, desc = 'Parallel fasta writing: '))
         
         with open(self._fasta_tmp, 'at') as handle:
-            for record in fastas_to_write:
+            for record in tqdm(fastas_to_write, desc = 'Fasta writing: '):
                 SeqIO.write(record, handle, 'fasta')
 
     def _parallel_fasta_to_write(self, fasta):
@@ -164,13 +165,13 @@ class readsSimulation():
             
     def _parallel_read_gz(self, file):
         with gzip.open(file, 'rt') as handle:
-            for record in SeqIO.parse(handle, 'fasta'):
+            for record in tqdm(SeqIO.parse(handle, 'fasta'), desc = 'Parallel fasta.gz reading: '):
                 if record.id in self._genomes:
                     return record
     
     def _parallel_read_fa(self, file):
         with open(file, 'rt') as handle:
-            for record in SeqIO.parse(handle, 'fasta'):
+            for record in tqdm(SeqIO.parse(handle, 'fasta'), desc = 'Parallel fasta reading: '):
                 if record.id in self._genomes:
                     return record
 
