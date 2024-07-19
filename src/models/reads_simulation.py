@@ -102,7 +102,7 @@ class readsSimulation():
     def simulation(self, k = None, kmers_list = None):
         k, kmers_list = self._verify_sim_arguments(k, kmers_list)
         self._make_tmp_fasta()
-        cmd = f"iss generate -g {self._fasta_tmp} -n {self._nb_reads} --abundance halfnormal --model {self._sequencing} --output {self._prefix} --cpus {os.cpu_count()}"
+        cmd = f"iss generate -g {self._fasta_tmp} -n {self._nb_reads} --abundance uniform --model {self._sequencing} --output {self._prefix} --cpus {os.cpu_count()}"
         os.system(cmd)
         self._fastq2fasta()
         self._write_cls_file()
