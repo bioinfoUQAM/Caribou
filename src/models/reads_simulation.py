@@ -80,7 +80,16 @@ class readsSimulation():
             self._fasta_host = None
         self._cls_in = cls
         self._genomes = genomes
-        self._nb_reads = len(genomes) * 3
+        if len(genomes) < 250000:
+            self._nb_reads = len(genomes) * 2
+        elif len(genomes) < 150000:
+            self._nb_reads = len(genomes) * 3
+        elif len(genomes) < 125000:
+            self._nb_reads = len(genomes) * 4
+        elif len(genomes) < 100000:
+            self._nb_reads = len(genomes) * 5
+        else:
+            self._nb_reads = len(genomes)
         self._sequencing = sequencing
         self._path = outdir
         self._tmp_path = os.path.join(outdir,'tmp')
