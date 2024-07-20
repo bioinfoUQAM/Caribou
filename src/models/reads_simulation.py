@@ -78,6 +78,8 @@ class readsSimulation():
         else:
             self._fasta_in = fasta
             self._fasta_host = None
+        if os.path.isfile(cls):
+            cls = pd.read_csv(cls)
         self._cls_in = cls
         self._genomes = genomes
         if len(genomes) < 250000:
