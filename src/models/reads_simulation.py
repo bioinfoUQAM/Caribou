@@ -82,14 +82,12 @@ class readsSimulation():
             cls = pd.read_csv(cls)
         self._cls_in = cls
         self._genomes = genomes
-        if len(genomes) < 250000:
-            self._nb_reads = len(genomes) * 2
-        elif len(genomes) < 150000:
-            self._nb_reads = len(genomes) * 3
-        elif len(genomes) < 125000:
-            self._nb_reads = len(genomes) * 4
+        if len(genomes) < 50000:
+            self._nb_reads = len(genomes) * 10
         elif len(genomes) < 100000:
             self._nb_reads = len(genomes) * 5
+        elif len(genomes) < 250000:
+            self._nb_reads = len(genomes) * 2
         else:
             self._nb_reads = len(genomes)
         self._sequencing = sequencing
