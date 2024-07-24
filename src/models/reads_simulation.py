@@ -1,20 +1,22 @@
 #!/usr/bin python3
 
-import numpy as np
-import pandas as pd
 
 import os
+import re
 import ray
 import gzip
 import warnings
+
+import numpy as np
+import pandas as pd
 
 from utils import *
 from Bio import SeqIO
 from glob import glob
 from tqdm import tqdm
 from pathlib import Path
-from shutil import rmtree
 from warnings import warn
+from shutil import rmtree, copyfileobj
 from data.build_data import build_load_save_data
 from joblib import Parallel, delayed, parallel_backend
 
@@ -114,7 +116,11 @@ class readsSimulation():
         self._make_tmp_fasta()
         cmd = f"iss generate -g {self._fasta_tmp} -n {self._nb_reads} --abundance uniform --model {self._sequencing} --output {self._prefix} --cpus {os.cpu_count()}"
         os.system(cmd)
-        self._fastq2fasta()
+        try:
+            self._fastq2fasta()
+        except FileNotFoundError:
+            self._concatenate_tmp_fastq()
+            self._fastq2fasta()
         self._write_cls_file()
         if k is not None and kmers_list is not None:
             self._kmers_dataset(k, kmers_list)
@@ -191,6 +197,17 @@ class readsSimulation():
                 record_R2.id = record_R2.id.replace('/','_')
                 SeqIO.write(record_R1, handle_out, 'fasta')
                 SeqIO.write(record_R2, handle_out, 'fasta')
+
+    def _concatenate_tmp_fastq(self):
+        for fastq in [self._R1_fastq,self._R1_fastq]:
+            if not os.path.isfile(fastq):
+                start, end = re.match(r'_R\d{1}.fastq', fastq).span()
+                pattern = fastq[start : end]
+                files_lst = glob(os.path.join(self._tmp_path,f'*{pattern}'))
+                with open(fastq,'wb') as handle_out:
+                    for file in files_lst:
+                        with open(file,'rb') as f:
+                            copyfileobj(f, handle_out)
 
     def _write_cls_file(self):
         with gzip.open(self._fasta_out, 'rt') as handle:
