@@ -1,19 +1,22 @@
 #!/usr/bin python3
 
-import numpy as np
-import pandas as pd
 
 import os
+import re
 import ray
 import gzip
 import warnings
 
+import numpy as np
+import pandas as pd
+
 from utils import *
 from Bio import SeqIO
 from glob import glob
+from tqdm import tqdm
 from pathlib import Path
-from shutil import rmtree
 from warnings import warn
+from shutil import rmtree, copyfileobj
 from data.build_data import build_load_save_data
 from joblib import Parallel, delayed, parallel_backend
 
@@ -77,9 +80,18 @@ class readsSimulation():
         else:
             self._fasta_in = fasta
             self._fasta_host = None
+        if os.path.isfile(cls):
+            cls = pd.read_csv(cls)
         self._cls_in = cls
         self._genomes = genomes
-        self._nb_reads = len(genomes) * 3
+        if len(genomes) < 50000:
+            self._nb_reads = len(genomes) * 10
+        elif len(genomes) < 100000:
+            self._nb_reads = len(genomes) * 5
+        elif len(genomes) < 250000:
+            self._nb_reads = len(genomes) * 2
+        else:
+            self._nb_reads = len(genomes)
         self._sequencing = sequencing
         self._path = outdir
         self._tmp_path = os.path.join(outdir,'tmp')
@@ -102,14 +114,18 @@ class readsSimulation():
     def simulation(self, k = None, kmers_list = None):
         k, kmers_list = self._verify_sim_arguments(k, kmers_list)
         self._make_tmp_fasta()
-        cmd = f"iss generate -g {self._fasta_tmp} -n {self._nb_reads} --abundance halfnormal --model {self._sequencing} --output {self._prefix} --cpus {os.cpu_count()}"
+        cmd = f"iss generate -g {self._fasta_tmp} -n {self._nb_reads} --abundance uniform --model {self._sequencing} --output {self._prefix} --cpus {os.cpu_count()}"
         os.system(cmd)
-        self._fastq2fasta()
+        try:
+            self._fastq2fasta()
+        except FileNotFoundError:
+            self._concatenate_tmp_fastq()
+            self._fastq2fasta()
         self._write_cls_file()
         if k is not None and kmers_list is not None:
             self._kmers_dataset(k, kmers_list)
             generated_files = glob(f'{self._prefix}*')
-            for file in generated_files:
+            for file in tqdm(generated_files, desc = 'Removing files: '):
                 os.remove(file)
             return self.kmers_data
             
@@ -124,7 +140,7 @@ class readsSimulation():
                 elif os.path.isdir(file):
                     self._add_tmp_fasta_dir(file)
             elif isinstance(file, list):
-                for f in file:
+                for f in tqdm(file, desc = 'Fasta files tmp copy: '):
                     if os.path.splitext(f)[1] == '.gz':
                         self._add_tmp_fasta_gz(f)
                     else:
@@ -132,13 +148,13 @@ class readsSimulation():
 
     def _add_tmp_fasta_fa(self, file):
         with open(file, 'rt') as handle_in, open(self._fasta_tmp, 'at') as handle_out:
-            for record in SeqIO.parse(handle_in, 'fasta'):
+            for record in tqdm(SeqIO.parse(handle_in, 'fasta'), desc = 'Genomes in fasta file: '):
                 if record.id in self._genomes:
                     SeqIO.write(record, handle_out, 'fasta')
 
     def _add_tmp_fasta_gz(self, file):
         with gzip.open(file, 'rt') as handle_in, open(self._fasta_tmp, 'at') as handle_out:
-            for record in SeqIO.parse(handle_in, 'fasta'):
+            for record in tqdm(SeqIO.parse(handle_in, 'fasta'), desc = 'Genomes in fasta.gz file: '):
                 if record.id in self._genomes:
                     SeqIO.write(record, handle_out, 'fasta')
 
@@ -150,10 +166,10 @@ class readsSimulation():
         with parallel_backend('threading'):
             fastas_to_write = Parallel(n_jobs = -1, prefer = 'threads', verbose = 1)(
                 delayed(self._parallel_fasta_to_write)
-                (file) for file in files_lst)
+                (file) for file in tqdm(files_lst, desc = 'Parallel fasta writing: '))
         
         with open(self._fasta_tmp, 'at') as handle:
-            for record in fastas_to_write:
+            for record in tqdm(fastas_to_write, desc = 'Fasta writing: '):
                 SeqIO.write(record, handle, 'fasta')
 
     def _parallel_fasta_to_write(self, fasta):
@@ -164,13 +180,13 @@ class readsSimulation():
             
     def _parallel_read_gz(self, file):
         with gzip.open(file, 'rt') as handle:
-            for record in SeqIO.parse(handle, 'fasta'):
+            for record in tqdm(SeqIO.parse(handle, 'fasta'), desc = 'Parallel fasta.gz reading: '):
                 if record.id in self._genomes:
                     return record
     
     def _parallel_read_fa(self, file):
         with open(file, 'rt') as handle:
-            for record in SeqIO.parse(handle, 'fasta'):
+            for record in tqdm(SeqIO.parse(handle, 'fasta'), desc = 'Parallel fasta reading: '):
                 if record.id in self._genomes:
                     return record
 
@@ -181,6 +197,17 @@ class readsSimulation():
                 record_R2.id = record_R2.id.replace('/','_')
                 SeqIO.write(record_R1, handle_out, 'fasta')
                 SeqIO.write(record_R2, handle_out, 'fasta')
+
+    def _concatenate_tmp_fastq(self):
+        for fastq in [self._R1_fastq,self._R1_fastq]:
+            if not os.path.isfile(fastq):
+                start, end = re.match(r'_R\d{1}.fastq', fastq).span()
+                pattern = fastq[start : end]
+                files_lst = glob(os.path.join(self._tmp_path,f'*{pattern}'))
+                with open(fastq,'wb') as handle_out:
+                    for file in files_lst:
+                        with open(file,'rb') as f:
+                            copyfileobj(f, handle_out)
 
     def _write_cls_file(self):
         with gzip.open(self._fasta_out, 'rt') as handle:
