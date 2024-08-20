@@ -17,11 +17,9 @@ pip install path/to/Caribou/
 
 ### Dependencies
 The Caribou analysis pipeline is packed with executables for all dependencies that cannot be installed through the python wheel. These dependencies are:
-- [faSplit](https://github.com/ucscGenomeBrowser/kent/blob/8b379e58f89d4a779e768f8c41b042bda714d101/src/utils/faSplit/faSplit.c)
-- [KMC](https://github.com/refresh-bio/KMC)
 - [KronaTools](https://github.com/marbl/Krona/tree/master/KronaTools)
 
-### [Recommanded] Containers
+<!-- ### [Recommended] Containers
 Containers with the Caribou package and all dependencies already installed can be found in the folder `Caribou/containers`.
 It is recommended to execute the Caribou pipeline inside a container to ease usage and reproductibility.
 
@@ -64,20 +62,20 @@ As with docker, the environment can be used in two ways :
 ```
 singularity shell --nv -B a/folder/containing/data/to/bind/in/the/environment path/to/Caribou/containers/Caribou_singularity.sif
 ```
-- Process : Execute instructions scripts when using the container for production on a compute cluster managed by schedulers (ex: Slurm, Torque, PBS, etc.). Instructions for usage of the exec command are provided in the [documentation.](https://apptainer.org/docs/user/main/cli/apptainer_exec.html) and applied example on Compute Canada clusters using Slurm Workload Manager can be found on their [wiki.](https://docs.computecanada.ca/wiki/Singularity#Running_a_single_command). Usage may differ slightly depending on the HPC clusters and Workload Managers used.
+- Process : Execute instructions scripts when using the container for production on a compute cluster managed by schedulers (ex: Slurm, Torque, PBS, etc.). Instructions for usage of the exec command are provided in the [documentation.](https://apptainer.org/docs/user/main/cli/apptainer_exec.html) and applied example on Compute Canada clusters using Slurm Workload Manager can be found on their [wiki.](https://docs.computecanada.ca/wiki/Singularity#Running_a_single_command). Usage may differ slightly depending on the HPC clusters and Workload Managers used. -->
 
-### [Optional] GPU acceleration
-Usage of machine learning models can be accelerated by using a GPU but it is not necessary.
-If using a container, these dependencies are already installed. Otherwise they should be installed prior to analysis accelerated by GPU.
+### [Recommended] GPU acceleration
+The learning process of machine learning models can be accelerated by using a GPU especially for Neural Networks and is strongly recommended should the user want to retrain a model.
+<!-- If using a container, these dependencies are already installed. Otherwise they should be installed prior to analysis accelerated by GPU. -->
 
 To install GPU dependencies on your machine, refer to following tutorials for installation :
 - [CUDA](https://developer.nvidia.com/cuda-downloads)
 - [cudnn](https://docs.nvidia.com/deeplearning/cudnn/install-guide/index.html)
 - [GPU for tensorflow](https://www.tensorflow.org/install/gpu)
 
-### [Optional] Python virtual environment
-If not using a container, it is recommended to use the analysis pipeline in a virtual environment to be sure that no other installed package can interfere. \
-Here is an example of Unix-like command shell to install Caribou in a new virtual environment by modifying the paths:
+### [Recommended] Python virtual environment
+It is recommended to use the analysis pipeline in a virtual environment to be sure that no other installed package can interfere. \
+Here is an example of linux command shell to install Caribou in a new virtual environment by modifying the paths:
 
 ```
 python3 -m venv /path/to/your/environment/folder
@@ -99,23 +97,23 @@ source /path/to/your/environment/folder/bin/activate
 Caribou was developed having in mind that the models should be trained on the [GTDB taxonomy database](https://gtdb.ecogenomic.org/). \
 Theoritically, any database could be used to train and classify using Caribou but a certain structure should be used for feeding to the program. The specific structure of the database files necessary for training is explained in more details in the [database section of the wiki](https://github.com/bioinfoUQAM/Caribou/wiki/Building-database).
 
-### GTDB pre-extracted K-mers
-Extracted K-mers profile files for the [GTDB representatives version 202](https://data.gtdb.ecogenomic.org/releases/release202/202.0/) with a length of k = 20 can be found on Canada's [FRDR]().
+<!-- ### GTDB pre-extracted K-mers -->
+<!-- Extracted K-mers profile files for the [GTDB representatives version 202](https://data.gtdb.ecogenomic.org/releases/release202/202.0/) with a length of k = 6 can be found on Canada's [FRDR](). -->
 
-### Building GTDB from another release
-Should the user want to use a more recent release of the GTDB taxonomy, this can be done using the template script to build data in one large fasta file and extract classes into a csv file. This template must be modified by the user to insert filepaths and comment the host section if there is no host to be used.
+### Building GTDB database
+Should the user want to build the training database from the GTDB taxonomy, this can be done using the template script to build data in one large fasta file and extract classes into a csv file. This template must be modified by the user to insert filepaths and comment the host section if there is no host to be used.
 
 The modified template can be submitted to an HPC cluster managed by Slurm (ex: Compute Canada) using the following command :
 ```
 sbatch Caribou/data/build_data_scripts/template_slurm_datagen.sh
 ```
 
-The modified template can also be ran in a Unix-like command shell by running the following command :
+The modified template can also be ran in a linux command shell by running the following command :
 ```
 sh Caribou/data/build_data_scripts/template_slurm_datagen.sh
 ```
 
-Finally each script used by the template can be used alone in Unix-like command shell by running the following commands :
+Finally each script used by the template can be used alone in linux command shell by running the following commands :
 ```
 # Generate a list of all fastas to be merged
 sh Caribou/data/build_data_scripts/generateFastaList.sh -d [directory] -o [outputFile]
