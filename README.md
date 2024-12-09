@@ -1,167 +1,46 @@
 # Caribou
 Alignment-free bacterial identification and classification in metagenomics sequencing data using machine learning.
 
-## Proof of Concept
-The jupyter notebook `workflow_example.ipynb` shows the workflow and it's output using example data. In this notebook, the steps are identified for better understanding.
+## Concept
+A recurrent problem in metagenomics studies is the lack of valorization of the data collected when analysing it, as ~30-50% can be classified to a taxonomy. Depending on the methods and algorithms used, it can also be a fastidious method that requires a lot of memory and/or time to compute.
 
-Data used in the `workflow_example.ipynb` is located in the `example_data/` folder.
+Caribou was designed having these problems in mind. Therefore, it leverages machine learning algorithms and neural networks to classify metagenomics sequencing data to multiple taxonomic levels without requiring alignment methods.
 
-This data was also used to test and debug the Caribou analysis pipeline.
+To do so, the workflow consists of 4 steps:
+1. K-mers representation of genetic sequences
+2. Bacterial sequences identification or host sequences exclusion
+3. Top-down bacterial sequences classification
+4. Output to user
+
+![image](https://user-images.githubusercontent.com/61320660/156250025-f7c08bd6-b15e-4e5c-9949-e9f1afe56296.png)
+> [Proof of concept is supplied in the wiki](https://github.com/bioinfoUQAM/Caribou/wiki/Proof-of-concept) should users want to see how the Caribou package works
+
+## Data
+
+**Analysis**
+
+To use the Caribou pipeline for analysis, only a fasta file is required. It can either be gzipped or raw.
+
+**Training**
+
+The models used by the pipeline can be retrained should the user want to use more specialized datasets or a newer version of the database.
+To do so, a new database should be built as described in the [*building database* section of the wiki](https://github.com/bioinfoUQAM/Caribou/wiki/Building-database).
+
+**Data used for training & benchmarking**
+
+The models used by Caribou in steps 2 & 3 were trained on a curated version of the [GTDB v.202 representatives](https://data.gtdb.ecogenomic.org/releases/release202/202.0/).
+A benchmark was also executed to compare the performances of the Caribou pipeline with state-of-the-art tools.
+
+The data used for training and benchmarking the models is further described in the [*training & benchmark datasets* section of the wiki](https://github.com/bioinfoUQAM/Caribou/wiki/Training-&-benchmark-datasets).
 
 ## Installation
-The Caribou analysis pipeline was developped in python3 and can be easily installed through the python wheel. The repo must be cloned first and then the package can be installed using the following commands lines in the desired folder :
-```
-git clone https://github.com/bioinfoUQAM/Caribou.git
-pip install path/to/Caribou/
-```
+The Caribou pipeline is built using Python3 and requires some dependencies to be installed.
 
-### Dependencies
-The Caribou analysis pipeline is packed with executables for all dependencies that cannot be installed through the python wheel. These dependencies are:
-- [KronaTools](https://github.com/marbl/Krona/tree/master/KronaTools)
-
-<!-- ### [Recommended] Containers
-Containers with the Caribou package and all dependencies already installed can be found in the folder `Caribou/containers`.
-It is recommended to execute the Caribou pipeline inside a container to ease usage and reproductibility.
-
-The Caribou containers are modified versions of Tensorflow containers and require to have the following dependencies installed prior to use:
-- [Docker](https://www.docker.com/) or [Singularity / Apptainer](https://apptainer.org/docs/user/main/index.html) depending on the version used.
-- [NVIDIA GPU Drivers](https://docs.nvidia.com/datacenter/tesla/tesla-installation-notes/index.html) which are platform specific.
-- [NVIDIA Container Toolkit](https://github.com/NVIDIA/nvidia-docker)
-
-#### Docker
-[Docker](https://www.docker.com/) is a container virtual environment that can be run on any desktop or cloud.
-It can be installed on any system following the [instructions provided in the Docker documentation](https://www.docker.com/get-started/).
-
-The Docker container is built on top of the [official Tensorflow container available on docker hub](https://hub.docker.com/r/tensorflow/tensorflow) with dependencies and Caribou installed in a python virtual environment.
-
-It must be imported from the tar archive included in this repo before being able to use it.
-Assuming that docker is already installed in command line :
-```
-docker load path/to/Caribou/containers/caribou_docker.tar
-```
-
-After having imported the container, it can be used in two ways:
-- Shell : Use the environment in a shell interface and run commands as described later in this document.
-```
-docker run --gpus all -it caribou_docker
-```
-- Process : Execute  in the background commands described later in this document. Replace [command] with the script that should be executed followed by it's options.
-```
-docker run --gpus all -d caribou_docker  [command].py
-```
-
-#### Singularity / Apptainer
-[Singularity / Apptainer](https://apptainer.org/docs/user/main/index.html) is an HPC optimized container system and should be used instead of Docker if the user wants to use a container on an HPC cluster.
-It is often already installed on HPC clusters, but should the user need to install it, [instructions can be found here.](https://apptainer.org/docs/user/main/quick_start.html)
-
-The Singularity / apptainer container is a [Tensorflow container optimised for HPC by NVIDIA](https://catalog.ngc.nvidia.com/orgs/nvidia/containers/tensorflow) with dependencies and Caribou installed in a python virtual environment.
-
-As with docker, the environment can be used in two ways :
-- Shell : Use the environment in a shell interface and run commands as described later in this document.
-
-```
-singularity shell --nv -B a/folder/containing/data/to/bind/in/the/environment path/to/Caribou/containers/Caribou_singularity.sif
-```
-- Process : Execute instructions scripts when using the container for production on a compute cluster managed by schedulers (ex: Slurm, Torque, PBS, etc.). Instructions for usage of the exec command are provided in the [documentation.](https://apptainer.org/docs/user/main/cli/apptainer_exec.html) and applied example on Compute Canada clusters using Slurm Workload Manager can be found on their [wiki.](https://docs.computecanada.ca/wiki/Singularity#Running_a_single_command). Usage may differ slightly depending on the HPC clusters and Workload Managers used. -->
-
-### [Recommended] GPU acceleration
-The learning process of machine learning models can be accelerated by using a GPU especially for Neural Networks and is strongly recommended should the user want to retrain a model.
-<!-- If using a container, these dependencies are already installed. Otherwise they should be installed prior to analysis accelerated by GPU. -->
-
-To install GPU dependencies on your machine, refer to following tutorials for installation :
-- [CUDA](https://developer.nvidia.com/cuda-downloads)
-- [cudnn](https://docs.nvidia.com/deeplearning/cudnn/install-guide/index.html)
-- [GPU for tensorflow](https://www.tensorflow.org/install/gpu)
-
-### [Recommended] Python virtual environment
-It is recommended to use the analysis pipeline in a virtual environment to be sure that no other installed package can interfere. \
-Here is an example of linux command shell to install Caribou in a new virtual environment by modifying the paths:
-
-```
-python3 -m venv /path/to/your/environment/folder
-
-source /path/to/your/environment/folder/bin/activate
-
-pip install --no-index --upgrade pip
-
-pip install /path/to/downloaded/Caribou/folder
-```
-
-To access it's virtual environment later on, the user will only need to run the following two commands:
-
-```
-source /path/to/your/environment/folder/bin/activate
-```
-
-## Building database
-Caribou was developed having in mind that the models should be trained on the [GTDB taxonomy database](https://gtdb.ecogenomic.org/). \
-Theoritically, any database could be used to train and classify using Caribou but a certain structure should be used for feeding to the program. The specific structure of the database files necessary for training is explained in more details in the [database section of the wiki](https://github.com/bioinfoUQAM/Caribou/wiki/Building-database).
-
-<!-- ### GTDB pre-extracted K-mers -->
-<!-- Extracted K-mers profile files for the [GTDB representatives version 202](https://data.gtdb.ecogenomic.org/releases/release202/202.0/) with a length of k = 6 can be found on Canada's [FRDR](). -->
-
-### Building GTDB database
-Should the user want to build the training database from the GTDB taxonomy, this can be done using the template script to build data in one large fasta file and extract classes into a csv file. This template must be modified by the user to insert filepaths and comment the host section if there is no host to be used.
-
-The modified template can be submitted to an HPC cluster managed by Slurm (ex: Compute Canada) using the following command :
-```
-sbatch Caribou/data/build_data_scripts/template_slurm_datagen.sh
-```
-
-The modified template can also be ran in a linux command shell by running the following command :
-```
-sh Caribou/data/build_data_scripts/template_slurm_datagen.sh
-```
-
-Finally each script used by the template can be used alone in linux command shell by running the following commands :
-```
-# Generate a list of all fastas to be merged
-sh Caribou/data/build_data_scripts/generateFastaList.sh -d [directory] -o [outputFile]
-
-# Extract classes for each bacterial genome fasta using the GTDB taxonomy
-sh Caribou/data/build_data_scripts/fasta2class_bact.sh -d [directory] -i [inputFile] -c [classesFile] -o [outputDirectory]
-
-# Extract classes for each host fasta
-sh Caribou/data/build_data_scripts/fasta2class_host.sh -d [directory] -i [inputFile] -o [outputDirectory]
-```
+For further information on how to install the package ses the [*installation* section of the wiki](https://github.com/bioinfoUQAM/Caribou/wiki/Installation).
 
 ## Usage
-The Caribou analysis pipeline requires only a [configuration file](https://github.com/bioinfoUQAM/Caribou/wiki/Configuration-file) to be executed. \
-All the informations required by the program are located in this configuration file and are described in the [wiki](https://github.com/bioinfoUQAM/Caribou/wiki). \
-There is a template config file which can be found here `Caribou/configs/template_config.ini`.
+The Caribou pipeline can be executed in it's entirety by supplying a config file from the linux command line.
 
-Once the installation is done and the configuration file is ready, the following command can be used to launch the pipeline:
-```
-Caribou_pipeline.py -c path/to/your/config.ini
-```
+Each step can also be executed by itself by using the corresponding scripts from the linux command line.
 
-## Partial analysis scripts
-There are also partial steps scripts that can be used should the user want to.
-
-* Caribou_pipeline.py
-> This script runs the entire Caribou analysis Pipeline
-> Usage : Caribou_pipeline.py [-c CONFIG_FILE]
-
-* Caribou_kmers.py
-> This script extracts K-mers of the given dataset using the available ressources on the computer before saving it to drive. \
-> usage: Caribou_kmers.py [-h] [-s SEQ_FILE] [-c CLS_FILE] [-dt DATASET_NAME] [-sh SEQ_FILE_HOST] [-ch CLS_FILE_HOST] [-dh HOST_NAME] -k K_LENGTH [-l KMERS_LIST] -o OUTDIR
-
-* Caribou_extraction.py
-> This script trains a model and extracts bacteria / host sequences. \
-> usage: Caribou_extraction.py [-h] -db DATA_BACTERIA [-dh DATA_HOST] -mg DATA_METAGENOME -dt DATABASE_NAME [-ds HOST_NAME] -mn METAGENOME_NAME [-model {None,onesvm,linearsvm,attention,lstm,deeplstm}] [-bs BATCH_SIZE] [-e TRAINING_EPOCHS] [-v] -o OUTDIR [-wd WORKDIR]
-
-* Caribou_classification.py
-> This script trains a model and classifies bacteria sequences iteratively over known taxonomic levels. \
-> usage: Caribou_classification.py [-h] -db DATA_BACTERIA -mg DATA_METAGENOME -dt DATABASE_NAME -mn METAGENOME_NAME [-model {sgd,mnb,lstm_attention,cnn,widecnn}] [-t TAXA] [-bs BATCH_SIZE] [-e TRAINING_EPOCHS] [-v] -o OUTDIR [-wd WORKDIR]
-
-* Caribou_outputs.py
-> This script produces outputs from the results of classified data by Caribou. \
-> usage: Caribou_outputs.py [-h] -db DATA_BACTERIA -clf CLASSIFIED_DATA -model {sgd,mnb,lstm_attention,cnn,widecnn} -dt DATASET_NAME [-ds HOST_NAME] [-a] [-k] [-r] [-f]
-
-* Caribou_extraction_train_cv.py
-> This script trains and cross-validates a model for the bacteria extraction / host removal step. \
-> usage: Caribou_extraction_train_cv.py [-h] -db DATA_BACTERIA [-dh DATA_HOST] -dt DATABASE_NAME [-ds HOST_NAME] [-model {None,onesvm,linearsvm,attention,lstm,deeplstm}] [-bs BATCH_SIZE] [-e TRAINING_EPOCHS] [-v] -o OUTDIR [-wd WORKDIR]
-
-* Caribou_classification_train_cv.py
-> This script trains and cross-validates a model for the bacteria classification step. \
-> usage: Caribou_classification_train_cv.py [-h] -db DATA_BACTERIA -dt DATABASE_NAME [-model {sgd,mnb,lstm_attention,cnn,widecnn}] [-bs BATCH_SIZE] [-e TRAINING_EPOCHS] [-v] -o OUTDIR [-wd WORKDIR]
+More details on scripts usage and options are discussed in the [*usage* section of the wiki](https://github.com/bioinfoUQAM/Caribou/wiki/Usage).
