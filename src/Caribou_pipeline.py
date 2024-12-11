@@ -9,7 +9,7 @@ from time import time
 from pathlib import Path
 from outputs.out import Outputs
 from data.build_data import build_load_save_data
-from models.classification_old import ClassificationMethods
+from models.classification import ClassificationMethods
 
 __author__ = 'Nicolas de Montigny'
 

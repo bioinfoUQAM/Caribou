@@ -8,7 +8,7 @@ Caribou was designed having these problems in mind. Therefore, it leverages mach
 
 To do so, the workflow consists of 4 steps:
 1. K-mers representation of genetic sequences
-2. Bacterial sequences identification or host sequences exclusion
+2. Bacterial sequences identification and host sequences exclusion
 3. Top-down bacterial sequences classification
 4. Output to user
 
@@ -19,7 +19,7 @@ To do so, the workflow consists of 4 steps:
 
 **Analysis**
 
-To use the Caribou pipeline for analysis, only a fasta file is required. It can either be gzipped or raw.
+To use the Caribou pipeline for analysis, only a ``fasta`` file is required. It can either be gzipped or raw.
 
 **Training**
 
@@ -41,6 +41,6 @@ For further information on how to install the package ses the [*installation* se
 ## Usage
 The Caribou pipeline can be executed in it's entirety by supplying a config file from the linux command line.
 
-Each step can also be executed by itself by using the corresponding scripts from the linux command line.
+Each step can also be executed by itself using the corresponding scripts from the linux command line.
 
 More details on scripts usage and options are discussed in the [*usage* section of the wiki](https://github.com/bioinfoUQAM/Caribou/wiki/Usage).
